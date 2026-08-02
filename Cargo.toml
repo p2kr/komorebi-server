@@ -1,0 +1,23 @@
+[package]
+name = "komorebi-server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = { version = "0.8.9", features = ["default"] }
+chrono = "0.4.45"
+directories = "6.0.0"
+reqwest = "0.13.4"
+sea-orm = { version = "2.0.0", features = [
+    "sqlx-sqlite",
+    "runtime-tokio",
+    "macros",
+] }
+serde = "1.0.229"
+serde_json = "1.0.151"
+tokio = { version = "1.53.1", features = ["full"] }
+tower = { version = "0.5.3", features = ["util"] }
+tower-http = { version = "0.7.0", features = ["trace", "normalize-path"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["fmt", "env-filter"] }
+uuid = "1.24.0"
