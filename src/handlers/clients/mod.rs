@@ -1,4 +1,5 @@
 pub mod anilist_client;
+pub mod anilist_models;
 pub mod mal_client;
 pub mod mal_models;
 
@@ -20,6 +21,18 @@ pub struct MedialClientParams {
     pub limit: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub offset: Option<i32>,
+}
+
+impl Default for MedialClientParams {
+    fn default() -> Self {
+        Self {
+            user_id: Default::default(),
+            status: None,
+            sort: None,
+            limit: Some(20),
+            offset: Some(0),
+        }
+    }
 }
 
 pub trait MediaClient {

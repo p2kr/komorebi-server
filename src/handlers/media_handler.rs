@@ -20,10 +20,10 @@ pub struct Params {
 }
 
 pub async fn get_user_anime_list(Query(params): Query<Params>) -> Response {
-    let provider = params.provider.as_ref().unwrap_or(&MediaProvider::MAL);
+    let provider = params.provider.as_ref().unwrap_or(&MediaProvider::Mal);
     let anime_list = match provider {
-        MediaProvider::MAL => MalClient::get_anime_list(&params.params).await,
-        MediaProvider::ANILIST => AnilistClient::get_anime_list(&params.params).await,
+        MediaProvider::Mal => MalClient::get_anime_list(&params.params).await,
+        MediaProvider::Anilist => AnilistClient::get_anime_list(&params.params).await,
         _ => MalClient::get_anime_list(&params.params).await,
     };
 
@@ -42,10 +42,10 @@ pub async fn get_user_anime_list(Query(params): Query<Params>) -> Response {
 }
 
 pub async fn get_user_manga_list(Query(params): Query<Params>) -> Response {
-    let provider = params.provider.as_ref().unwrap_or(&MediaProvider::MAL);
+    let provider = params.provider.as_ref().unwrap_or(&MediaProvider::Mal);
     let manga_list = match provider {
-        MediaProvider::MAL => MalClient::get_manga_list(&params.params).await,
-        MediaProvider::ANILIST => AnilistClient::get_manga_list(&params.params).await,
+        MediaProvider::Mal => MalClient::get_manga_list(&params.params).await,
+        MediaProvider::Anilist => AnilistClient::get_manga_list(&params.params).await,
         _ => MalClient::get_manga_list(&params.params).await,
     };
 
