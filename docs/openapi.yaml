@@ -1,0 +1,636 @@
+openapi: 3.1.0
+info:
+  title: Komorebi Server API
+  description: |
+    Unified REST API server for aggregating, syncing, and managing anime and manga media lists across providers like MyAnimeList and AniList.
+  version: 1.0.0
+servers:
+  - url: /
+    description: Root Server
+  - url: /api/v1
+    description: API v1 Base Endpoint
+
+paths:
+  /:
+    get:
+      summary: Root health status check (Failure response)
+      description: Returns a 400 Bad Request pointing to the API v1 base path.
+      operationId: getRoot
+      tags:
+        - System
+      responses:
+        '400':
+          description: Default root endpoint response pointing to `/api/v1`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailureResponse'
+              examples:
+                default:
+                  summary: Default root failure response
+                  value:
+                    success: false
+                    error:
+                      code: base_api_url
+                      msg: /api/v1
+
+  /api/v1:
+    get:
+      summary: API v1 Health Check
+      description: Returns the health status, uptime, and version of the server.
+      operationId: getHealthCheckV1
+      tags:
+        - System
+      responses:
+        '200':
+          description: Health check information.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckResponse'
+              examples:
+                default:
+                  summary: Health check response
+                  value:
+                    success: true
+                    data:
+                      base_url: /api/v1
+                      uptime: 3600
+                      version: 1.0.0
+
+  /api/v1/health:
+    get:
+      summary: API Health Check Endpoint
+      description: Returns the health status, uptime, and version of the server.
+      operationId: getHealthCheck
+      tags:
+        - System
+      responses:
+        '200':
+          description: Health check information.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckResponse'
+              examples:
+                default:
+                  summary: Health check response
+                  value:
+                    success: true
+                    data:
+                      base_url: /api/v1
+                      uptime: 3600
+                      version: 1.0.0
+
+  /api/v1/media/anime:
+    get:
+      summary: Get User Anime List
+      description: Retrieves the paginated anime list for a given user from the specified provider.
+      operationId: getUserAnimeList
+      tags:
+        - Media
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          description: Unique identifier (UUID) of the user.
+          schema:
+            type: string
+            format: uuid
+            examples:
+              - 018f3a5e-7b12-7000-8000-123456789abc
+        - name: provider
+          in: query
+          required: false
+          description: Media provider source. Defaults to `mal`.
+          schema:
+            $ref: '#/components/schemas/MediaProvider'
+        - name: status
+          in: query
+          required: false
+          description: Filter list items by watching status.
+          schema:
+            $ref: '#/components/schemas/ListStatus'
+        - name: sort
+          in: query
+          required: false
+          description: Sorting strategy for the media list.
+          schema:
+            type: string
+            examples:
+              - score_desc
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of records to return (default is 20).
+          schema:
+            type: integer
+            default: 20
+            examples:
+              - 20
+        - name: offset
+          in: query
+          required: false
+          description: Number of records to skip for pagination (default is 0).
+          schema:
+            type: integer
+            default: 0
+            examples:
+              - 0
+      responses:
+        '200':
+          description: Successfully retrieved user anime list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMediaResponse'
+        '400':
+          description: Failed to fetch anime list or invalid input parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailureResponse'
+              examples:
+                default:
+                  summary: Fetch anime list failed
+                  value:
+                    success: false
+                    error:
+                      code: FETCH_ANIME_FAILED
+                      msg: "Failed to fetch user anime list"
+
+  /api/v1/media/manga:
+    get:
+      summary: Get User Manga List
+      description: Retrieves the paginated manga list for a given user from the specified provider.
+      operationId: getUserMangaList
+      tags:
+        - Media
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          description: Unique identifier (UUID) of the user.
+          schema:
+            type: string
+            format: uuid
+            examples:
+              - 018f3a5e-7b12-7000-8000-123456789abc
+        - name: provider
+          in: query
+          required: false
+          description: Media provider source. Defaults to `mal`.
+          schema:
+            $ref: '#/components/schemas/MediaProvider'
+        - name: status
+          in: query
+          required: false
+          description: Filter list items by reading status.
+          schema:
+            $ref: '#/components/schemas/ListStatus'
+        - name: sort
+          in: query
+          required: false
+          description: Sorting strategy for the media list.
+          schema:
+            type: string
+            examples:
+              - score_desc
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of records to return (default is 20).
+          schema:
+            type: integer
+            default: 20
+            examples:
+              - 20
+        - name: offset
+          in: query
+          required: false
+          description: Number of records to skip for pagination (default is 0).
+          schema:
+            type: integer
+            default: 0
+            examples:
+              - 0
+      responses:
+        '200':
+          description: Successfully retrieved user manga list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMediaResponse'
+        '400':
+          description: Failed to fetch manga list or invalid input parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailureResponse'
+              examples:
+                default:
+                  summary: Fetch manga list failed
+                  value:
+                    success: false
+                    error:
+                      code: FETCH_MANGA_FAILED
+                      msg: "Failed to fetch user manga list"
+
+components:
+  schemas:
+    HealthCheckData:
+      type: object
+      required:
+        - base_url
+        - uptime
+        - version
+      properties:
+        base_url:
+          type: string
+          examples:
+            - /api/v1
+        uptime:
+          type: integer
+          description: Server uptime in seconds.
+          examples:
+            - 3600
+        version:
+          type: string
+          examples:
+            - 1.0.0
+
+    HealthCheckResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          examples:
+            - true
+        data:
+          $ref: '#/components/schemas/HealthCheckData'
+
+    ErrorDetail:
+      type: object
+      required:
+        - code
+        - msg
+      properties:
+        code:
+          type: string
+          examples:
+            - FETCH_ANIME_FAILED
+        msg:
+          type: string
+          examples:
+            - Could not fetch anime list from provider
+
+    FailureResponse:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          examples:
+            - false
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+
+    MediaProvider:
+      type: string
+      enum:
+        - mal
+        - anilist
+        - sandbox
+      default: mal
+      description: Supported third-party media providers.
+
+    MediaType:
+      type: string
+      enum:
+        - anime
+        - manga
+      default: anime
+      description: Type of media.
+
+    MediaFormat:
+      type: string
+      enum:
+        - unknown
+        - tv
+        - tv_short
+        - movie
+        - special
+        - ova
+        - ona
+        - music
+        - manga
+        - novel
+        - one_shot
+        - doujinshi
+        - manhwa
+        - manhua
+        - oel
+      default: unknown
+      description: Format/medium of media release.
+
+    ReleaseStatus:
+      type: string
+      enum:
+        - unknown
+        - releasing
+        - finished
+        - not_yet_released
+        - cancelled
+        - hiatus
+      default: unknown
+      description: Airing or publication status of the media itself.
+
+    ListStatus:
+      type: string
+      enum:
+        - current
+        - planning
+        - completed
+        - dropped
+        - paused
+        - repeating
+      default: current
+      description: User's personal watch/read status.
+
+    NsfwLevel:
+      type: string
+      enum:
+        - safe
+        - gray
+        - nsfw
+      default: safe
+      description: Content maturity rating.
+
+    MediaTitle:
+      type: object
+      properties:
+        romanized:
+          type:
+            - string
+            - "null"
+          description: Romanized title (e.g. Romaji).
+          examples:
+            - Shingeki no Kyojin
+        english:
+          type:
+            - string
+            - "null"
+          description: English localized title.
+          examples:
+            - Attack on Titan
+        native:
+          type:
+            - string
+            - "null"
+          description: Native language title.
+          examples:
+            - 進撃の巨人
+        user_preferred:
+          type:
+            - string
+            - "null"
+          description: User preferred title choice.
+          examples:
+            - Attack on Titan
+
+    CoverImage:
+      type: object
+      properties:
+        extra_large:
+          type:
+            - string
+            - "null"
+          description: High-resolution cover image URL.
+        large:
+          type:
+            - string
+            - "null"
+          description: Large cover image URL.
+        medium:
+          type:
+            - string
+            - "null"
+          description: Medium cover image URL.
+        color:
+          type:
+            - string
+            - "null"
+          description: Hex color code associated with cover image.
+          examples:
+            - "#e4a15d"
+
+    Media:
+      type: object
+      required:
+        - id
+        - provider_id
+        - provider
+        - media_type
+        - format
+        - release_status
+        - title
+        - cover
+        - genres
+        - nsfw
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique internal ID (UUID v7).
+          examples:
+            - 018f3a5e-7b12-7000-8000-123456789abc
+        provider_id:
+          type: string
+          description: External provider ID.
+          examples:
+            - "16498"
+        provider:
+          $ref: '#/components/schemas/MediaProvider'
+        media_type:
+          $ref: '#/components/schemas/MediaType'
+        format:
+          $ref: '#/components/schemas/MediaFormat'
+        release_status:
+          $ref: '#/components/schemas/ReleaseStatus'
+        title:
+          $ref: '#/components/schemas/MediaTitle'
+        cover:
+          $ref: '#/components/schemas/CoverImage'
+        synopsis:
+          type:
+            - string
+            - "null"
+          description: Synopsis or summary of the media.
+        mean_score:
+          type:
+            - number
+            - "null"
+          format: float
+          description: Normalized community mean score (0.0 to 10.0 scale).
+          examples:
+            - 8.54
+        popularity:
+          type:
+            - integer
+            - "null"
+          description: Total user popularity count.
+          examples:
+            - 2500000
+        episodes:
+          type:
+            - integer
+            - "null"
+          description: Total episode count (anime only).
+          examples:
+            - 25
+        duration:
+          type:
+            - integer
+            - "null"
+          description: Episode duration in seconds (anime only).
+          examples:
+            - 1440
+        chapters:
+          type:
+            - integer
+            - "null"
+          description: Total chapter count (manga only).
+        volumes:
+          type:
+            - integer
+            - "null"
+          description: Total volume count (manga only).
+        genres:
+          type: array
+          items:
+            type: string
+          examples:
+            - ["Action", "Drama", "Fantasy"]
+        nsfw:
+          $ref: '#/components/schemas/NsfwLevel'
+
+    ListEntry:
+      type: object
+      required:
+        - status
+        - is_repeating
+        - tags
+      properties:
+        status:
+          $ref: '#/components/schemas/ListStatus'
+        score:
+          type:
+            - number
+            - "null"
+          format: float
+          description: User score normalized on a 0.0 to 10.0 scale.
+          examples:
+            - 9.0
+        progress:
+          type:
+            - integer
+            - "null"
+          description: Episodes watched (anime) or chapters read (manga).
+          examples:
+            - 25
+        progress_volumes:
+          type:
+            - integer
+            - "null"
+          description: Volumes read (manga only).
+        is_repeating:
+          type: boolean
+          description: Whether the user is currently re-watching or re-reading.
+          examples:
+            - false
+        repeat_count:
+          type:
+            - integer
+            - "null"
+          description: Number of times re-watched or re-read.
+          examples:
+            - 0
+        tags:
+          type: array
+          items:
+            type: string
+          examples:
+            - ["favorite", "masterpiece"]
+        notes:
+          type:
+            - string
+            - "null"
+          description: Personal user notes/comments.
+        updated_at:
+          type:
+            - string
+            - "null"
+          description: ISO timestamp of last entry update.
+
+    MediaEntry:
+      type: object
+      required:
+        - media
+        - list_entry
+      properties:
+        media:
+          $ref: '#/components/schemas/Media'
+        list_entry:
+          $ref: '#/components/schemas/ListEntry'
+
+    Paging:
+      type: object
+      required:
+        - has_next
+      properties:
+        next_cursor:
+          type:
+            - string
+            - "null"
+          description: Cursor for fetching the next page.
+        prev_cursor:
+          type:
+            - string
+            - "null"
+          description: Cursor for fetching the previous page.
+        has_next:
+          type: boolean
+          description: Indicates whether another page of results exists.
+          examples:
+            - true
+
+    PaginatedResponse:
+      type: object
+      required:
+        - data
+        - paging
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaEntry'
+        paging:
+          $ref: '#/components/schemas/Paging'
+
+    PaginatedMediaResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          examples:
+            - true
+        data:
+          $ref: '#/components/schemas/PaginatedResponse'
