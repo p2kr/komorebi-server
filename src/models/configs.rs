@@ -5,11 +5,11 @@ use serde::Deserialize;
 #[derive(Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Configs {
-    mal_client_id: Option<String>,
-    mal_client_secret: Option<String>,
+    pub mal_client_id: Option<String>,
+    pub mal_client_secret: Option<String>,
 
-    anilist_client_id: Option<String>,
-    anilist_client_secret: Option<String>,
+    pub anilist_client_id: Option<String>,
+    pub anilist_client_secret: Option<String>,
 }
 
 pub static ENV_CONFIGS: LazyLock<Configs> = LazyLock::new(|| Configs {

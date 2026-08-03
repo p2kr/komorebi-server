@@ -1,0 +1,238 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MangaListResponse",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "title": {
+                "type": "string"
+              },
+              "main_picture": {
+                "type": ["object", "null"],
+                "properties": {
+                  "large": {
+                    "type": ["string", "null"],
+                    "format": "uri"
+                  },
+                  "medium": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                }
+              },
+              "alternative_titles": {
+                "type": ["object", "null"],
+                "description": "\"synonyms\" or ISO 639-1",
+                "properties": {
+                  "synonyms": {
+                    "type": ["array", "null"],
+                    "items": {
+                      "type": ["string", "null"]
+                    }
+                  },
+                  "en": {
+                    "type": ["string", "null"]
+                  },
+                  "ja": {
+                    "type": ["string", "null"]
+                  }
+                }
+              },
+              "start_date": {
+                "type": ["string", "null"]
+              },
+              "end_date": {
+                "type": ["string", "null"]
+              },
+              "synopsis": {
+                "type": ["string", "null"],
+                "description": "Synopsis. The API strips BBCode tags from the result."
+              },
+              "mean": {
+                "type": ["number", "null"],
+                "description": "Mean score. When the mean can not be calculated, such as when the number of user scores is small, the result does not include this field."
+              },
+              "rank": {
+                "type": ["integer", "null"],
+                "description": "When the rank can not be calculated, such as when the number of user scores is small, the result does not include this field."
+              },
+              "popularity": {
+                "type": ["integer", "null"]
+              },
+              "num_list_users": {
+                "type": "integer",
+                "description": "Number of users who have this work in their list."
+              },
+              "num_scoring_users": {
+                "type": "integer"
+              },
+              "nsfw": {
+                "type": ["string", "null"],
+                "enum": ["white", "gray", "black", null],
+                "description": "white: safe for work, gray: may be not safe for work, black: not safe for work"
+              },
+              "genres": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "media_type": {
+                "type": "string",
+                "enum": [
+                  "unknown",
+                  "manga",
+                  "novel",
+                  "one_shot",
+                  "doujinshi",
+                  "manhwa",
+                  "manhua",
+                  "oel"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "description": "Publishing status.",
+                "enum": [
+                  "finished",
+                  "currently_publishing",
+                  "not_yet_published"
+                ]
+              },
+              "my_list_status": {
+                "description": "Status of user's manga list. If there is no access token, the API excludes this field.",
+                "oneOf": [
+                  { "$ref": "#/definitions/MangaListStatus" },
+                  { "type": "null" }
+                ]
+              },
+              "num_volumes": {
+                "type": "integer",
+                "description": "If unknown, it is 0."
+              },
+              "num_chapters": {
+                "type": "integer",
+                "description": "If unknown, it is 0."
+              },
+              "authors": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "node": {
+                      "type": "object",
+                      "title": "PersonBase"
+                    },
+                    "role": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "list_status": {
+            "$ref": "#/definitions/MangaListStatus"
+          }
+        }
+      }
+    },
+    "paging": {
+      "type": "object"
+    }
+  },
+  "definitions": {
+    "MangaListStatus": {
+      "type": "object",
+      "title": "MangaListStatus",
+      "properties": {
+        "status": {
+          "type": ["string", "null"],
+          "enum": [
+            "reading",
+            "completed",
+            "on_hold",
+            "dropped",
+            "plan_to_read",
+            null
+          ]
+        },
+        "score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "0-10"
+        },
+        "num_volumes_read": {
+          "type": "integer",
+          "description": "0 or the number of read volumes."
+        },
+        "num_chapters_read": {
+          "type": "integer",
+          "description": "0 or the number of read chapters."
+        },
+        "is_rereading": {
+          "type": "boolean",
+          "description": "If authorized user reads an manga again after completion, this field value is true. In this case, MyAnimeList treats the manga as 'reading' in the user's manga list."
+        },
+        "start_date": {
+          "type": ["string", "null"],
+          "format": "date"
+        },
+        "finish_date": {
+          "type": ["string", "null"],
+          "format": "date"
+        },
+        "priority": {
+          "type": "integer"
+        },
+        "num_times_reread": {
+          "type": "integer"
+        },
+        "reread_value": {
+          "type": "integer"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "comments": {
+          "type": "string",
+          "description": "You cannot contain this field in a list."
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

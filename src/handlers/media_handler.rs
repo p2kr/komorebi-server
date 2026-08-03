@@ -32,7 +32,7 @@ pub async fn get_user_anime_list(Query(params): Query<Params>) -> Response {
         Ok(v) => {
             debug!(
                 "found {:?} animes for {:?} from {:?}",
-                v.len(),
+                v.data.len(),
                 &params,
                 provider
             );
@@ -54,7 +54,7 @@ pub async fn get_user_manga_list(Query(params): Query<Params>) -> Response {
         Ok(v) => {
             debug!(
                 "found {:?} mangas for {:?} from {:?}",
-                v.len(),
+                v.data.len(),
                 &params,
                 provider
             );

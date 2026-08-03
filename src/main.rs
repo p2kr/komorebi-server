@@ -1,15 +1,9 @@
-mod db;
-mod handlers;
-mod models;
-mod utils;
-
 use axum::serve;
-use tracing::{error, info};
-
-use crate::utils::{
+use komorebi_server::utils::{
     SERVER_START_TIME,
     setup::{get_axum_app, get_tokio_listener, init, shutdown_signal},
 };
+use tracing::{error, info};
 
 #[tokio::main]
 async fn main() {

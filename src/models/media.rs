@@ -1,89 +1,94 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+use crate::models::user::User;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum MediaProvider {
     MAL,
     ANILIST,
+    #[default]
     SANDBOX,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum MediaType {
+    #[default]
     ANIME,
     MANGA,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 /// Contains title variants harmonized across MAL and AniList.
 pub struct MediaTitle {
-    romanized: String,
-    english: String,
-    native: String,
-    user_preferred: String,
+    pub romanized: String,
+    pub english: String,
+    pub native: String,
+    pub user_preferred: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 /// Contains image URL variants and optional accent color code.
 pub struct MediaCoverImage {
-    extra_large: String,
-    large: String,
-    medium: String,
-    color: Option<String>,
+    pub extra_large: String,
+    pub large: String,
+    pub medium: String,
+    pub color: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 /// Represents user library status details.
 pub struct MediaListStatus {
-    status: Option<String>,
-    score: Option<f32>,
-    progress: Option<f32>,
-    progress_volumes: Option<i32>,
-    is_rewatching: bool,
-    repeat_count: Option<i32>,
-    tags: Vec<String>,
-    comments: Option<String>,
-    updated_at: Option<String>,
+    pub status: Option<String>,
+    pub score: Option<f32>,
+    pub progress: Option<f32>,
+    pub progress_volumes: Option<i32>,
+    pub is_rewatching: bool,
+    pub repeat_count: Option<i32>,
+    pub tags: Vec<String>,
+    pub comments: Option<String>,
+    pub updated_at: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 /// Represents a harmonized anime or manga entry.
 pub struct MediaItem {
-    id: Uuid,
-    provider_id: Option<String>,
-    provider: MediaProvider,
-    title: MediaTitle,
-    cover_img: MediaCoverImage,
-    synopsis: Option<String>,
-    status: MediaListStatus,
-    media_type: MediaType,
-    mean_score: Option<f32>,
-    rank: Option<i32>,
-    popularity: Option<i32>,
-    episodes: Option<i32>,
-    chapters: Option<i32>,
-    volumes: Option<i32>,
-    seasons: Option<i32>,
-    current_season: Option<i32>,
-    duration: Option<i32>,
-    genres: Vec<String>,
-    is_nsfw: bool,
+    pub id: Uuid,
+    pub provider_id: Option<String>,
+    pub provider: MediaProvider,
+    pub user: User,
+    pub title: MediaTitle,
+    pub cover_img: MediaCoverImage,
+    pub synopsis: Option<String>,
+    pub status: MediaListStatus,
+    pub media_type: MediaType,
+    pub mean_score: Option<f32>,
+    pub rank: Option<i32>,
+    pub popularity: Option<i32>,
+    pub episodes: Option<i32>,
+    pub chapters: Option<i32>,
+    pub volumes: Option<i32>,
+    pub seasons: Option<i32>,
+    pub current_season: Option<i32>,
+    pub duration: Option<i32>,
+    pub genres: Vec<String>,
+    pub is_nsfw: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 /// Describes pagination metadata.
 pub struct PagingInfo {
-    prev: Option<String>,
-    next: Option<String>,
-    has_next: bool,
-    page: i32,
-    per_page: i32,
-    max_pages: i32,
+    pub prev: Option<String>,
+    pub next: Option<String>,
+    pub has_next: bool,
+    pub page: i32,
+    pub per_page: i32,
+    pub max_pages: i32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 /// Pagination wrapper for media item lists.
 pub struct PaginatedResponse {
-    data: Vec<MediaItem>,
-    paging_info: PagingInfo,
+    pub data: Vec<MediaItem>,
+    pub paging_info: PagingInfo,
 }
