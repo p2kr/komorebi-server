@@ -9,8 +9,9 @@ use tracing::info;
 const DB_NAME: &str = "server_db.sqlite";
 const APP_NAME: &str = "komorebi-server";
 const ORG_NAME: &str = "com.github.p2kr";
+const LOG_FILE_NAME: &str = "server_logs.log";
 
-static SERVER_START_TIME: LazyLock<Instant> = LazyLock::new(Instant::now);
+pub static SERVER_START_TIME: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 pub fn get_app_dir() -> PathBuf {
     let app_dir = match ProjectDirs::from("", ORG_NAME, APP_NAME) {
@@ -53,6 +54,6 @@ pub fn get_server_uptime() -> String {
                 v.num_seconds() % 60,
             )
         }
-        Err(_) => String::from(format!("up since {:?}", SERVER_START_TIME)),
+        Err(_) => format!("up since {:?}", SERVER_START_TIME),
     }
 }

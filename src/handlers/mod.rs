@@ -1,9 +1,21 @@
-use axum::{Json, Router, http::StatusCode, response::IntoResponse, routing::get};
+pub mod clients;
+pub mod media_handler;
+
+use axum::{
+    Json, Router,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::get,
+};
 use serde::Serialize;
 use serde_json::json;
 use tower_http::trace::TraceLayer;
+use tracing::debug;
 
-use crate::utils::get_server_uptime;
+use crate::{
+    handlers::media_handler::{get_user_anime_list, get_user_manga_list},
+    utils::get_server_uptime,
+};
 
 #[derive(Serialize)]
 struct SuccessResponse<T> {
@@ -23,7 +35,7 @@ struct FailureResponse {
     error: ErrorDetail,
 }
 
-pub fn success<T: Serialize>(data: T) -> impl IntoResponse {
+pub fn success<T: Serialize>(data: T) -> Response {
     (
         StatusCode::OK,
         Json(SuccessResponse {
@@ -31,13 +43,10 @@ pub fn success<T: Serialize>(data: T) -> impl IntoResponse {
             data,
         }),
     )
+        .into_response()
 }
 
-pub fn fail(
-    status_code: Option<StatusCode>,
-    error_code: &str,
-    error_msg: &str,
-) -> impl IntoResponse {
+pub fn fail(status_code: Option<StatusCode>, error_code: &str, error_msg: &str) -> Response {
     (
         status_code.unwrap_or(StatusCode::BAD_REQUEST),
         Json(FailureResponse {
@@ -48,6 +57,7 @@ pub fn fail(
             },
         }),
     )
+        .into_response()
 }
 
 pub async fn health_check() -> impl IntoResponse {
@@ -64,12 +74,21 @@ pub async fn health_check_bad() -> impl IntoResponse {
 
 /// Add all routes here
 pub fn make_routes() -> Router {
+    let media = Router::new()
+        .route("/anime", get(get_user_anime_list))
+        .route("/manga", get(get_user_manga_list));
+
     let v1 = Router::new()
         .route("/", get(health_check))
-        .route("/health", get(health_check));
+        .route("/health", get(health_check))
+        .nest("/media", media);
 
-    Router::new()
+    let router = Router::new()
         .route("/", get(health_check_bad))
         .nest("/api/v1", v1)
-        .layer(TraceLayer::new_for_http())
+        .layer(TraceLayer::new_for_http());
+
+    debug!("registered routes: {:?}", router);
+
+    router
 }
