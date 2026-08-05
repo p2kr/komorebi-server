@@ -1,4 +1,4 @@
-use komorebi_server::handlers::clients::anilist_models::AnilistResponse;
+use komorebi_server::handlers::clients::anilist_models::AniListResponse;
 use komorebi_server::models::media::{
     ListStatus, MediaFormat, MediaProvider, MediaType, NsfwLevel, PaginatedResponse, ReleaseStatus,
 };
@@ -60,7 +60,7 @@ fn test_parse_anilist_response_json() {
         }
     });
 
-    let parsed: PaginatedResponse = serde_json::from_value::<AnilistResponse>(sample)
+    let parsed: PaginatedResponse = serde_json::from_value::<AniListResponse>(sample)
         .expect("failed to parse anilist response")
         .into();
 
@@ -68,7 +68,7 @@ fn test_parse_anilist_response_json() {
     let entry = &parsed.data[0];
 
     assert_eq!(entry.media.provider_id, "9999");
-    assert_eq!(entry.media.provider, MediaProvider::Anilist);
+    assert_eq!(entry.media.provider, MediaProvider::ANILIST);
     assert_eq!(entry.media.media_type, MediaType::Anime);
     assert_eq!(entry.media.format, MediaFormat::Tv);
     assert_eq!(entry.media.release_status, ReleaseStatus::Finished);
@@ -161,7 +161,7 @@ fn test_parse_anilist_manga_response_json() {
         }
     });
 
-    let parsed: PaginatedResponse = serde_json::from_value::<AnilistResponse>(sample)
+    let parsed: PaginatedResponse = serde_json::from_value::<AniListResponse>(sample)
         .expect("failed to parse anilist manga response")
         .into();
 
@@ -169,7 +169,7 @@ fn test_parse_anilist_manga_response_json() {
     let entry = &parsed.data[0];
 
     assert_eq!(entry.media.provider_id, "30013");
-    assert_eq!(entry.media.provider, MediaProvider::Anilist);
+    assert_eq!(entry.media.provider, MediaProvider::ANILIST);
     assert_eq!(entry.media.media_type, MediaType::Manga);
     assert_eq!(entry.media.format, MediaFormat::Manga);
     assert_eq!(entry.media.release_status, ReleaseStatus::Releasing);

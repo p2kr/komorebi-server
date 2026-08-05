@@ -95,12 +95,14 @@ impl TryFrom<(&str, bool)> for MalStatus {
 
     fn try_from((status, is_manga): (&str, bool)) -> Result<Self, Self::Error> {
         match (status.to_lowercase().as_str(), is_manga) {
-            ("current" | "watching" | "reading" | "repeating" | "rewatching" | "rereading", true) => {
-                Ok(Self::Reading)
-            }
-            ("current" | "watching" | "reading" | "repeating" | "rewatching" | "rereading", false) => {
-                Ok(Self::Watching)
-            }
+            (
+                "current" | "watching" | "reading" | "repeating" | "rewatching" | "rereading",
+                true,
+            ) => Ok(Self::Reading),
+            (
+                "current" | "watching" | "reading" | "repeating" | "rewatching" | "rereading",
+                false,
+            ) => Ok(Self::Watching),
             ("planning" | "plan_to_watch" | "plan_to_read", true) => Ok(Self::PlanToRead),
             ("planning" | "plan_to_watch" | "plan_to_read", false) => Ok(Self::PlanToWatch),
             ("paused" | "on_hold", _) => Ok(Self::OnHold),
@@ -245,7 +247,7 @@ impl TryFrom<MalItem> for MediaEntry {
         let media = Media {
             id: Uuid::now_v7(),
             provider_id,
-            provider: MediaProvider::Mal,
+            provider: MediaProvider::MAL,
             media_type,
             format,
             release_status: parse_mal_release_status(node.status.as_deref()),

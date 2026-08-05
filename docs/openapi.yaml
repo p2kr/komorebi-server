@@ -303,10 +303,9 @@ components:
     MediaProvider:
       type: string
       enum:
-        - mal
-        - anilist
-        - sandbox
-      default: mal
+        - MAL
+        - ANILIST
+      default: MAL
       description: Supported third-party media providers.
 
     MediaType:

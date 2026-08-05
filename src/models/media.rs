@@ -6,12 +6,11 @@ use uuid::Uuid;
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "UPPERCASE")]
 pub enum MediaProvider {
-    Mal,
-    Anilist,
     #[default]
-    Sandbox,
+    MAL,
+    ANILIST,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

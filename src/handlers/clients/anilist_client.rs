@@ -5,7 +5,7 @@ use tracing::debug;
 
 use crate::{
     db::user_repo::fetch_user_by_id,
-    handlers::clients::{MediaClient, MedialClientParams, anilist_models::AnilistResponse},
+    handlers::clients::{MediaClient, MedialClientParams, anilist_models::AniListResponse},
     models::{configs::ENV_CONFIGS, media::PaginatedResponse},
 };
 
@@ -77,9 +77,9 @@ fn normalize_anilist_status(status: Option<&str>) -> Option<&'static str> {
 }
 
 #[derive(Default)]
-pub struct AnilistClient {}
+pub struct AniListClient {}
 
-impl AnilistClient {
+impl AniListClient {
     async fn fetch_list(
         params: &MedialClientParams,
         media_type: &str,
@@ -128,7 +128,7 @@ impl AnilistClient {
             bail!("failed due to status code {:?}", resp.status());
         }
 
-        let res = resp.json::<AnilistResponse>().await?;
+        let res = resp.json::<AniListResponse>().await?;
 
         if let Some(ref errors) = res.errors {
             if let Some(err) = errors.first() {
@@ -140,7 +140,7 @@ impl AnilistClient {
     }
 }
 
-impl MediaClient for AnilistClient {
+impl MediaClient for AniListClient {
     async fn get_anime_list(params: &MedialClientParams) -> Result<PaginatedResponse> {
         Self::fetch_list(params, "ANIME").await
     }

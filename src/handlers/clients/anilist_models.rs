@@ -8,33 +8,33 @@ use crate::models::media::{
 
 /// AniList GraphQL API response wrapper.
 #[derive(Debug, Deserialize)]
-pub struct AnilistResponse {
-    pub data: Option<AnilistData>,
-    pub errors: Option<Vec<AnilistGraphqlError>>,
+pub struct AniListResponse {
+    pub data: Option<AniListData>,
+    pub errors: Option<Vec<AniListGraphqlError>>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AnilistGraphqlError {
+pub struct AniListGraphqlError {
     pub message: String,
     pub status: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AnilistData {
+pub struct AniListData {
     #[serde(rename = "Page")]
-    pub page: Option<AnilistPage>,
+    pub page: Option<AniListPage>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AnilistPage {
+pub struct AniListPage {
     #[serde(rename = "pageInfo")]
-    pub page_info: Option<AnilistPageInfo>,
+    pub page_info: Option<AniListPageInfo>,
     #[serde(rename = "mediaList")]
-    pub media_list: Option<Vec<AnilistMediaListEntry>>,
+    pub media_list: Option<Vec<AniListMediaListEntry>>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AnilistPageInfo {
+pub struct AniListPageInfo {
     pub total: Option<i32>,
     #[serde(rename = "perPage")]
     pub per_page: Option<i32>,
@@ -47,7 +47,7 @@ pub struct AnilistPageInfo {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AnilistMediaListEntry {
+pub struct AniListMediaListEntry {
     pub id: Option<i64>,
     pub status: Option<String>,
     pub score: Option<f64>,
@@ -58,11 +58,11 @@ pub struct AnilistMediaListEntry {
     pub notes: Option<String>,
     #[serde(rename = "updatedAt")]
     pub updated_at: Option<i64>,
-    pub media: Option<AnilistMedia>,
+    pub media: Option<AniListMedia>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AnilistMedia {
+pub struct AniListMedia {
     pub id: Option<i64>,
     #[serde(rename = "idMal")]
     pub id_mal: Option<i64>,
@@ -70,9 +70,9 @@ pub struct AnilistMedia {
     pub media_type: Option<String>,
     pub format: Option<String>,
     pub status: Option<String>,
-    pub title: Option<AnilistTitle>,
+    pub title: Option<AniListTitle>,
     #[serde(rename = "coverImage")]
-    pub cover_image: Option<AnilistCoverImage>,
+    pub cover_image: Option<AniListCoverImage>,
     pub description: Option<String>,
     #[serde(rename = "meanScore")]
     pub mean_score: Option<f64>,
@@ -87,7 +87,7 @@ pub struct AnilistMedia {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AnilistTitle {
+pub struct AniListTitle {
     pub romaji: Option<String>,
     pub english: Option<String>,
     pub native: Option<String>,
@@ -96,7 +96,7 @@ pub struct AnilistTitle {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AnilistCoverImage {
+pub struct AniListCoverImage {
     #[serde(rename = "extraLarge")]
     pub extra_large: Option<String>,
     pub large: Option<String>,
@@ -151,8 +151,8 @@ fn parse_anilist_release_status(status_str: Option<&str>) -> ReleaseStatus {
     }
 }
 
-impl From<AnilistMediaListEntry> for ListEntry {
-    fn from(entry: AnilistMediaListEntry) -> Self {
+impl From<AniListMediaListEntry> for ListEntry {
+    fn from(entry: AniListMediaListEntry) -> Self {
         let status = parse_anilist_list_status(entry.status.as_deref());
         let is_repeating = status == ListStatus::Repeating || entry.repeat.unwrap_or(0) > 0;
 
@@ -170,10 +170,10 @@ impl From<AnilistMediaListEntry> for ListEntry {
     }
 }
 
-impl TryFrom<AnilistMediaListEntry> for MediaEntry {
+impl TryFrom<AniListMediaListEntry> for MediaEntry {
     type Error = ();
 
-    fn try_from(mut entry: AnilistMediaListEntry) -> Result<Self, Self::Error> {
+    fn try_from(mut entry: AniListMediaListEntry) -> Result<Self, Self::Error> {
         let media_node = entry.media.take().ok_or(())?;
         let provider_id = media_node.id.ok_or(())?.to_string();
 
@@ -202,7 +202,7 @@ impl TryFrom<AnilistMediaListEntry> for MediaEntry {
         let media = Media {
             id: Uuid::now_v7(),
             provider_id,
-            provider: MediaProvider::Anilist,
+            provider: MediaProvider::ANILIST,
             media_type: parse_anilist_media_type(media_node.media_type.as_deref()),
             format: parse_anilist_media_format(media_node.format.as_deref()),
             release_status: parse_anilist_release_status(media_node.status.as_deref()),
@@ -230,8 +230,8 @@ impl TryFrom<AnilistMediaListEntry> for MediaEntry {
     }
 }
 
-impl From<AnilistResponse> for PaginatedResponse {
-    fn from(res: AnilistResponse) -> Self {
+impl From<AniListResponse> for PaginatedResponse {
+    fn from(res: AniListResponse) -> Self {
         let (data_entries, page_info) = match res.data.and_then(|d| d.page) {
             Some(page) => (page.media_list.unwrap_or_default(), page.page_info),
             None => (Vec::new(), None),

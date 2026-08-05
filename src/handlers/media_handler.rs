@@ -5,7 +5,7 @@ use tracing::debug;
 use crate::{
     handlers::{
         clients::{
-            MediaClient, MedialClientParams, anilist_client::AnilistClient, mal_client::MalClient,
+            MediaClient, MedialClientParams, anilist_client::AniListClient, mal_client::MalClient,
         },
         fail, success,
     },
@@ -20,11 +20,10 @@ pub struct Params {
 }
 
 pub async fn get_user_anime_list(Query(params): Query<Params>) -> Response {
-    let provider = params.provider.as_ref().unwrap_or(&MediaProvider::Mal);
+    let provider = params.provider.as_ref().unwrap_or(&MediaProvider::MAL);
     let anime_list = match provider {
-        MediaProvider::Mal => MalClient::get_anime_list(&params.params).await,
-        MediaProvider::Anilist => AnilistClient::get_anime_list(&params.params).await,
-        _ => MalClient::get_anime_list(&params.params).await,
+        MediaProvider::MAL => MalClient::get_anime_list(&params.params).await,
+        MediaProvider::ANILIST => AniListClient::get_anime_list(&params.params).await,
     };
 
     match anime_list {
@@ -42,11 +41,10 @@ pub async fn get_user_anime_list(Query(params): Query<Params>) -> Response {
 }
 
 pub async fn get_user_manga_list(Query(params): Query<Params>) -> Response {
-    let provider = params.provider.as_ref().unwrap_or(&MediaProvider::Mal);
+    let provider = params.provider.as_ref().unwrap_or(&MediaProvider::MAL);
     let manga_list = match provider {
-        MediaProvider::Mal => MalClient::get_manga_list(&params.params).await,
-        MediaProvider::Anilist => AnilistClient::get_manga_list(&params.params).await,
-        _ => MalClient::get_manga_list(&params.params).await,
+        MediaProvider::MAL => MalClient::get_manga_list(&params.params).await,
+        MediaProvider::ANILIST => AniListClient::get_manga_list(&params.params).await,
     };
 
     match manga_list {

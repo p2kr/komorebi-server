@@ -5,8 +5,8 @@ use tracing::debug;
 use crate::{
     db::user_repo::fetch_user_by_id,
     handlers::clients::{
-        mal_models::{MalResponse, MalStatus},
         MediaClient, MedialClientParams,
+        mal_models::{MalResponse, MalStatus},
     },
     models::{configs::ENV_CONFIGS, media::PaginatedResponse},
 };
