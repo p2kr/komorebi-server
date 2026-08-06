@@ -114,11 +114,19 @@ CREATE TABLE IF NOT EXISTS users (
 
 ### 6.1 Route Registration (`src/handlers/mod.rs`)
 
-- `GET /` -> `health_check_bad` (Returns 400 Bad Request redirecting clients to `/api/v1`).
-- `GET /api/v1` -> `health_check` (Returns uptime, version `1.0.0`, and base URL).
-- `GET /api/v1/health` -> `health_check`.
-- `GET /api/v1/media/anime` -> `get_user_anime_list`.
-- `GET /api/v1/media/manga` -> `get_user_manga_list`.
+- `POST /` -> `health_check_bad` (Returns 400 Bad Request redirecting clients to `/api/v1`).
+- `POST /api/v1` -> `health_check` (Returns uptime, version `1.0.0`, and base URL).
+- `POST /api/v1/health` -> `health_check`.
+- `POST /api/v1/media/anime` -> `get_user_anime_list`.
+- `POST /api/v1/media/manga` -> `get_user_manga_list`.
+- `POST /api/v1/user/add` -> `save_user`.
+- `POST /api/v1/user/all` -> `get_all_users`.
+- `POST /api/v1/user/one` -> `get_user_by_id`.
+- `POST /api/v1/user/delete` -> `delete_user`.
+
+
+
+
 
 ### 6.2 Standardized Response Envelopes
 

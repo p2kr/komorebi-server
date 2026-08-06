@@ -17,6 +17,10 @@ pub fn init() {
     load_env();
 }
 
+pub fn cleanup() {
+    todo!()
+}
+
 /// Loads environment variables from the `.env` file.
 fn load_env() {
     match dotenv() {

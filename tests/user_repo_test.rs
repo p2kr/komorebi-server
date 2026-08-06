@@ -25,10 +25,10 @@ async fn test_user_repo_crud_and_upsert_operations() {
     // 1. Save User (Insert)
     let saved_user = repo
         .save_user(
-            "test_username",
-            Some("https://example.com/avatar.png"),
+            "test_username".to_string(),
+            Some("https://example.com/avatar.png".to_string()),
             MediaProvider::MAL,
-            Some("secret_token_123"),
+            Some("secret_token_123".to_string()),
         )
         .await
         .expect("failed to save user");
@@ -52,7 +52,7 @@ async fn test_user_repo_crud_and_upsert_operations() {
 
     // 3. Fetch User by Username & Provider
     let fetched_by_name = repo
-        .fetch_user_by_username("test_username", MediaProvider::MAL)
+        .fetch_user_by_username("test_username".to_string(), MediaProvider::MAL)
         .await
         .expect("failed to fetch user by username")
         .expect("user not found by username");
@@ -61,10 +61,10 @@ async fn test_user_repo_crud_and_upsert_operations() {
     // 4. Upsert User on (username, provider) conflict
     let upserted_user = repo
         .save_user(
-            "test_username",
-            Some("https://example.com/new_avatar.png"),
+            "test_username".to_string(),
+            Some("https://example.com/new_avatar.png".to_string()),
             MediaProvider::MAL,
-            Some("new_secret_token_456"),
+            Some("new_secret_token_456".to_string()),
         )
         .await
         .expect("failed to upsert user");

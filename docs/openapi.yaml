@@ -12,7 +12,7 @@ servers:
 
 paths:
   /:
-    get:
+    post:
       summary: Root health status check (Failure response)
       description: Returns a 400 Bad Request pointing to the API v1 base path.
       operationId: getRoot
@@ -35,7 +35,7 @@ paths:
                       msg: /api/v1
 
   /api/v1:
-    get:
+    post:
       summary: API v1 Health Check
       description: Returns the health status, uptime, and version of the server.
       operationId: getHealthCheckV1
@@ -59,7 +59,7 @@ paths:
                       version: 1.0.0
 
   /api/v1/health:
-    get:
+    post:
       summary: API Health Check Endpoint
       description: Returns the health status, uptime, and version of the server.
       operationId: getHealthCheck
@@ -83,60 +83,41 @@ paths:
                       version: 1.0.0
 
   /api/v1/media/anime:
-    get:
+    post:
       summary: Get User Anime List
       description: Retrieves the paginated anime list for a given user from the specified provider.
       operationId: getUserAnimeList
       tags:
         - Media
-      parameters:
-        - name: user_id
-          in: query
-          required: true
-          description: Unique identifier (UUID) of the user.
-          schema:
-            type: string
-            format: uuid
-            examples:
-              - 018f3a5e-7b12-7000-8000-123456789abc
-        - name: provider
-          in: query
-          required: false
-          description: Media provider source. Defaults to `mal`.
-          schema:
-            $ref: '#/components/schemas/MediaProvider'
-        - name: status
-          in: query
-          required: false
-          description: Filter list items by watching status.
-          schema:
-            $ref: '#/components/schemas/ListStatus'
-        - name: sort
-          in: query
-          required: false
-          description: Sorting strategy for the media list.
-          schema:
-            type: string
-            examples:
-              - score_desc
-        - name: limit
-          in: query
-          required: false
-          description: Maximum number of records to return (default is 20).
-          schema:
-            type: integer
-            default: 20
-            examples:
-              - 20
-        - name: offset
-          in: query
-          required: false
-          description: Number of records to skip for pagination (default is 0).
-          schema:
-            type: integer
-            default: 0
-            examples:
-              - 0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+                  description: Unique identifier (UUID) of the user.
+                  example: 018f3a5e-7b12-7000-8000-123456789abc
+                provider:
+                  $ref: '#/components/schemas/MediaProvider'
+                status:
+                  $ref: '#/components/schemas/ListStatus'
+                sort:
+                  type: string
+                  example: score_desc
+                limit:
+                  type: integer
+                  default: 20
+                  example: 20
+                offset:
+                  type: integer
+                  default: 0
+                  example: 0
       responses:
         '200':
           description: Successfully retrieved user anime list.
@@ -160,60 +141,41 @@ paths:
                       msg: "Failed to fetch user anime list"
 
   /api/v1/media/manga:
-    get:
+    post:
       summary: Get User Manga List
       description: Retrieves the paginated manga list for a given user from the specified provider.
       operationId: getUserMangaList
       tags:
         - Media
-      parameters:
-        - name: user_id
-          in: query
-          required: true
-          description: Unique identifier (UUID) of the user.
-          schema:
-            type: string
-            format: uuid
-            examples:
-              - 018f3a5e-7b12-7000-8000-123456789abc
-        - name: provider
-          in: query
-          required: false
-          description: Media provider source. Defaults to `mal`.
-          schema:
-            $ref: '#/components/schemas/MediaProvider'
-        - name: status
-          in: query
-          required: false
-          description: Filter list items by reading status.
-          schema:
-            $ref: '#/components/schemas/ListStatus'
-        - name: sort
-          in: query
-          required: false
-          description: Sorting strategy for the media list.
-          schema:
-            type: string
-            examples:
-              - score_desc
-        - name: limit
-          in: query
-          required: false
-          description: Maximum number of records to return (default is 20).
-          schema:
-            type: integer
-            default: 20
-            examples:
-              - 20
-        - name: offset
-          in: query
-          required: false
-          description: Number of records to skip for pagination (default is 0).
-          schema:
-            type: integer
-            default: 0
-            examples:
-              - 0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+                  description: Unique identifier (UUID) of the user.
+                  example: 018f3a5e-7b12-7000-8000-123456789abc
+                provider:
+                  $ref: '#/components/schemas/MediaProvider'
+                status:
+                  $ref: '#/components/schemas/ListStatus'
+                sort:
+                  type: string
+                  example: score_desc
+                limit:
+                  type: integer
+                  default: 20
+                  example: 20
+                offset:
+                  type: integer
+                  default: 0
+                  example: 0
       responses:
         '200':
           description: Successfully retrieved user manga list.
@@ -232,9 +194,234 @@ paths:
                   summary: Fetch manga list failed
                   value:
                     success: false
+        '404':
+          description: User not found in database.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailureResponse'
+              examples:
+                default:
+                  summary: User not found
+                  value:
+                    success: false
                     error:
-                      code: FETCH_MANGA_FAILED
-                      msg: "Failed to fetch user manga list"
+                      code: USER_NOT_FOUND
+                      msg: "User with ID '018f3a5e-7b12-7000-8000-123456789abc' not found"
+        '502':
+          description: Upstream provider API failure.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailureResponse'
+              examples:
+                default:
+                  summary: Upstream error
+                  value:
+                    success: false
+                    error:
+                      code: UPSTREAM_API_ERROR
+                      msg: "Upstream provider error (MAL): Network error"
+
+  /api/v1/user/add:
+    post:
+      summary: Add / Save User
+      description: Creates a new user or updates an existing user record with media provider details.
+      operationId: saveUser
+      tags:
+        - User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - provider
+              properties:
+                username:
+                  type: string
+                  description: External provider username or handle.
+                  example: octocat
+                provider:
+                  $ref: '#/components/schemas/MediaProvider'
+                avatar_url:
+                  type: string
+                  description: Profile avatar image URL.
+                  example: https://example.com/avatar.png
+                access_token:
+                  type: string
+                  description: OAuth access token for authenticating provider API requests. If omitted, user runs in sandbox mode.
+                  example: token123456
+      responses:
+        '200':
+          description: User saved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaveUserResponse'
+        '400':
+          description: Invalid input parameters or missing required parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailureResponse'
+              examples:
+                default:
+                  summary: Invalid parameters
+                  value:
+                    success: false
+                    error:
+                      code: INVALID_PARAMS
+                      msg: "Missing required parameter: username"
+        '500':
+          description: Database or internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailureResponse'
+              examples:
+                default:
+                  summary: Database error
+                  value:
+                    success: false
+                    error:
+                      code: DATABASE_ERROR
+                      msg: "Database error: Failed to insert user"
+
+  /api/v1/user/all:
+    post:
+      summary: Get All Users
+      description: Retrieves all registered users from the database.
+      operationId: getAllUsers
+      tags:
+        - User
+      responses:
+        '200':
+          description: Successfully retrieved all users.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserListResponse'
+        '500':
+          description: Database or internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailureResponse'
+              examples:
+                default:
+                  summary: Database error
+                  value:
+                    success: false
+                    error:
+                      code: DATABASE_ERROR
+                      msg: "Database error: Failed to fetch users"
+
+  /api/v1/user/one:
+    post:
+      summary: Get User By ID
+      description: Retrieves a single registered user by UUID.
+      operationId: getUserById
+      tags:
+        - User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+                  description: Unique identifier (UUID) of the user.
+                  example: 018f3a5e-7b12-7000-8000-123456789abc
+      responses:
+        '200':
+          description: Successfully retrieved user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetUserResponse'
+        '404':
+          description: User not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailureResponse'
+              examples:
+                default:
+                  summary: User not found
+                  value:
+                    success: false
+                    error:
+                      code: USER_NOT_FOUND
+                      msg: "User with ID '018f3a5e-7b12-7000-8000-123456789abc' not found"
+
+  /api/v1/user/delete:
+    post:
+      summary: Delete User
+      description: Deletes a user account from the database by UUID.
+      operationId: deleteUser
+      tags:
+        - User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+                  description: Unique identifier (UUID) of the user to delete.
+                  example: 018f3a5e-7b12-7000-8000-123456789abc
+      responses:
+        '200':
+          description: User deleted successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteUserResponse'
+        '404':
+          description: User not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailureResponse'
+              examples:
+                default:
+                  summary: User not found
+                  value:
+                    success: false
+                    error:
+                      code: USER_NOT_FOUND
+                      msg: "User with ID '018f3a5e-7b12-7000-8000-123456789abc' not found"
+        '500':
+          description: Database or internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailureResponse'
+              examples:
+                default:
+                  summary: Database error
+                  value:
+                    success: false
+                    error:
+                      code: DATABASE_ERROR
+                      msg: "Database error: Failed to delete user"
+
+
+
+
 
 components:
   schemas:
@@ -681,3 +868,67 @@ components:
             - true
         data:
           $ref: '#/components/schemas/PaginatedResponse'
+
+    GetUserResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          examples:
+            - true
+        data:
+          $ref: '#/components/schemas/User'
+
+    SaveUserResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          examples:
+            - true
+        data:
+          $ref: '#/components/schemas/User'
+
+
+    UserListResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          examples:
+            - true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+
+    DeleteUserResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          examples:
+            - true
+        data:
+          type: object
+          required:
+            - deleted
+          properties:
+            deleted:
+              type: boolean
+              examples:
+                - true
+
+

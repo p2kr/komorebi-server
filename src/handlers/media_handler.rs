@@ -1,12 +1,9 @@
-use axum::{
-    extract::{Query, State},
-    response::Response,
-};
+use axum::{Json, extract::State};
 use serde::Deserialize;
 
 use crate::{
     adapters::MediaClientParams,
-    core::{AppError, AppState},
+    core::{ApiResult, AppState},
     handlers::success,
     models::media::MediaProvider,
     services::media_service::MediaService,
@@ -21,8 +18,8 @@ pub struct Params {
 
 pub async fn get_user_anime_list(
     State(state): State<AppState>,
-    Query(params): Query<Params>,
-) -> Result<Response, AppError> {
+    Json(params): Json<Params>,
+) -> ApiResult {
     let provider = params.provider.unwrap_or(MediaProvider::MAL);
     let anime_list = MediaService::get_user_anime_list(&state, &provider, &params.params).await?;
     Ok(success(anime_list))
@@ -30,8 +27,8 @@ pub async fn get_user_anime_list(
 
 pub async fn get_user_manga_list(
     State(state): State<AppState>,
-    Query(params): Query<Params>,
-) -> Result<Response, AppError> {
+    Json(params): Json<Params>,
+) -> ApiResult {
     let provider = params.provider.unwrap_or(MediaProvider::MAL);
     let manga_list = MediaService::get_user_manga_list(&state, &provider, &params.params).await?;
     Ok(success(manga_list))

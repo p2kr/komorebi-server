@@ -18,10 +18,10 @@ impl UserRepo {
     /// and lets SQLite handle `created_at` & `updated_at` defaults & triggers automatically.
     pub async fn save_user(
         &self,
-        username: &str,
-        avatar_url: Option<&str>,
+        username: String,
+        avatar_url: Option<String>,
         provider: MediaProvider,
-        access_token: Option<&str>,
+        access_token: Option<String>,
     ) -> Result<User, sqlx::Error> {
         let id = Uuid::now_v7();
         let is_sandbox = access_token.is_none();
@@ -73,9 +73,10 @@ impl UserRepo {
         .await
     }
 
+
     pub async fn fetch_user_by_username(
         &self,
-        username: &str,
+        username: String,
         provider: MediaProvider,
     ) -> Result<Option<User>, sqlx::Error> {
         sqlx::query_as!(
@@ -95,6 +96,12 @@ impl UserRepo {
         )
         .fetch_optional(&self.db)
         .await
+    }
+
+    pub async fn fetch_all_users(&self) -> Result<Vec<User>, sqlx::Error> {
+        sqlx::query_as::<_, User>("SELECT * FROM users")
+            .fetch_all(&self.db)
+            .await
     }
 
     pub async fn delete_user(&self, user_id: Uuid) -> Result<(), sqlx::Error> {

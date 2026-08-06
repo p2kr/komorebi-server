@@ -7,6 +7,8 @@ use serde::Serialize;
 use thiserror::Error;
 use uuid::Uuid;
 
+pub type ApiResult<T = Response> = Result<T, AppError>;
+
 #[derive(Debug, Serialize)]
 struct ErrorDetail {
     code: String,

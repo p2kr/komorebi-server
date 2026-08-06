@@ -1,19 +1,26 @@
 pub mod media_handler;
+pub mod user_handler;
 
 use axum::{
     Json, Router,
-    http::StatusCode,
+    http::{HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::post,
 };
 use serde::Serialize;
 use serde_json::json;
-use tower_http::trace::TraceLayer;
+use tower_http::{
+    cors::{Any, CorsLayer},
+    trace::TraceLayer,
+};
 use tracing::debug;
 
 use crate::{
-    core::{get_server_uptime, load_app_state},
-    handlers::media_handler::{get_user_anime_list, get_user_manga_list},
+    core::{ENV_CONFIGS, get_server_uptime, load_app_state},
+    handlers::{
+        media_handler::{get_user_anime_list, get_user_manga_list},
+        user_handler::{delete_user, get_all_users, get_user_by_id, save_user},
+    },
 };
 
 #[derive(Serialize)]
@@ -71,21 +78,47 @@ pub async fn health_check_bad() -> impl IntoResponse {
     fail(None, "base_api_url", "/api/v1")
 }
 
+fn get_cors_layer() -> CorsLayer {
+    if !ENV_CONFIGS.cors_origins.is_empty() {
+        let origins = ENV_CONFIGS
+            .cors_origins
+            .clone()
+            .iter()
+            .map(|x| x.parse().unwrap())
+            .collect::<Vec<HeaderValue>>();
+
+        CorsLayer::new()
+            .allow_origin(origins)
+            .allow_methods(Any)
+            .allow_headers(Any)
+    } else {
+        CorsLayer::permissive()
+    }
+}
+
 /// Add all routes here
 pub async fn make_routes() -> Router {
     let media = Router::new()
-        .route("/anime", get(get_user_anime_list))
-        .route("/manga", get(get_user_manga_list));
+        .route("/anime", post(get_user_anime_list))
+        .route("/manga", post(get_user_manga_list));
+
+    let user = Router::new()
+        .route("/add", post(save_user))
+        .route("/all", post(get_all_users))
+        .route("/one", post(get_user_by_id))
+        .route("/delete", post(delete_user));
 
     let v1 = Router::new()
-        .route("/", get(health_check))
-        .route("/health", get(health_check))
-        .nest("/media", media);
+        .route("/", post(health_check))
+        .route("/health", post(health_check))
+        .nest("/media", media)
+        .nest("/user", user);
 
     let router = Router::new()
-        .route("/", get(health_check_bad))
+        .route("/", post(health_check_bad))
         .nest("/api/v1", v1)
         .layer(TraceLayer::new_for_http())
+        .layer(get_cors_layer())
         .with_state(load_app_state().await);
 
     debug!("registered routes: {:?}", router);

@@ -5,7 +5,7 @@ pub mod state;
 pub mod telemetry;
 
 pub use config::{Configs, ENV_CONFIGS};
-pub use error::AppError;
+pub use error::{ApiResult, AppError};
 pub use startup::{
     SERVER_START_TIME, get_axum_app, get_server_port, get_server_uptime, get_tokio_listener, init,
     shutdown_signal,
