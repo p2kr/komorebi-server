@@ -209,11 +209,10 @@ impl TryFrom<AniListMediaListEntry> for MediaEntry {
             title,
             cover,
             synopsis: media_node.description,
-            // AniList meanScore is 0-100, normalize to 0.0-10.0 scale
             mean_score: media_node.mean_score.map(|s| (s / 10.0) as f32),
             popularity: media_node.popularity,
             episodes: media_node.episodes,
-            duration: media_node.duration.map(|mins| mins * 60), // convert minutes to seconds
+            duration: media_node.duration.map(|mins| mins * 60),
             chapters: media_node.chapters,
             volumes: media_node.volumes,
             genres: media_node.genres.unwrap_or_default(),

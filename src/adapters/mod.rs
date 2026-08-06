@@ -3,14 +3,17 @@ pub mod anilist_models;
 pub mod mal_client;
 pub mod mal_models;
 
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::future::Future;
 use uuid::Uuid;
 
-use crate::models::media::PaginatedResponse;
+use crate::{
+    core::AppError,
+    models::{media::PaginatedResponse, user::User},
+};
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MedialClientParams {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MediaClientParams {
     #[serde(skip_serializing)]
     pub user_id: Uuid,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -23,7 +26,9 @@ pub struct MedialClientParams {
     pub offset: Option<i32>,
 }
 
-impl Default for MedialClientParams {
+pub type MedialClientParams = MediaClientParams;
+
+impl Default for MediaClientParams {
     fn default() -> Self {
         Self {
             user_id: Default::default(),
@@ -37,10 +42,14 @@ impl Default for MedialClientParams {
 
 pub trait MediaClient {
     fn get_anime_list(
-        params: &MedialClientParams,
-    ) -> impl Future<Output = Result<PaginatedResponse>>;
+        client: &reqwest::Client,
+        user: &User,
+        params: &MediaClientParams,
+    ) -> impl Future<Output = Result<PaginatedResponse, AppError>>;
 
     fn get_manga_list(
-        params: &MedialClientParams,
-    ) -> impl Future<Output = Result<PaginatedResponse>>;
+        client: &reqwest::Client,
+        user: &User,
+        params: &MediaClientParams,
+    ) -> impl Future<Output = Result<PaginatedResponse, AppError>>;
 }

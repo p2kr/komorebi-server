@@ -1,4 +1,4 @@
-use komorebi_server::handlers::clients::mal_models::{MalResponse, MalStatus};
+use komorebi_server::adapters::mal_models::{MalResponse, MalStatus};
 use komorebi_server::models::media::{ListStatus, PaginatedResponse};
 use serde_json::json;
 
@@ -62,7 +62,7 @@ fn test_parse_response_json() {
     assert_eq!(entry.list_entry.status, ListStatus::Completed);
     assert_eq!(entry.list_entry.score, Some(9.0));
     assert_eq!(entry.media.genres, vec!["Action", "Comedy"]);
-    assert_eq!(parsed.paging.has_next, true);
+    assert!(parsed.paging.has_next);
     assert_eq!(
         parsed.paging.next_cursor.as_deref(),
         Some("https://api.myanimelist.net/v2/users/test/animelist?offset=10")

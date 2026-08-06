@@ -1,4 +1,3 @@
-pub mod clients;
 pub mod media_handler;
 
 use axum::{
@@ -13,8 +12,8 @@ use tower_http::trace::TraceLayer;
 use tracing::debug;
 
 use crate::{
+    core::{get_server_uptime, load_app_state},
     handlers::media_handler::{get_user_anime_list, get_user_manga_list},
-    utils::get_server_uptime,
 };
 
 #[derive(Serialize)]
@@ -73,7 +72,7 @@ pub async fn health_check_bad() -> impl IntoResponse {
 }
 
 /// Add all routes here
-pub fn make_routes() -> Router {
+pub async fn make_routes() -> Router {
     let media = Router::new()
         .route("/anime", get(get_user_anime_list))
         .route("/manga", get(get_user_manga_list));
@@ -86,7 +85,8 @@ pub fn make_routes() -> Router {
     let router = Router::new()
         .route("/", get(health_check_bad))
         .nest("/api/v1", v1)
-        .layer(TraceLayer::new_for_http());
+        .layer(TraceLayer::new_for_http())
+        .with_state(load_app_state().await);
 
     debug!("registered routes: {:?}", router);
 

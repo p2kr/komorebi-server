@@ -1,7 +1,6 @@
 use axum::serve;
-use komorebi_server::utils::{
-    SERVER_START_TIME,
-    setup::{get_axum_app, get_tokio_listener, init, shutdown_signal},
+use komorebi_server::core::{
+    SERVER_START_TIME, get_axum_app, get_tokio_listener, init, shutdown_signal,
 };
 use tracing::{error, info};
 
@@ -9,10 +8,10 @@ use tracing::{error, info};
 async fn main() {
     init();
 
-    let app = get_axum_app();
+    let app = get_axum_app().await;
     let listener = get_tokio_listener();
 
-    info!("starting application at {:?}", SERVER_START_TIME);
+    info!("starting application at {:#?}", SERVER_START_TIME);
 
     let serve = serve(listener.await, app)
         .with_graceful_shutdown(shutdown_signal())

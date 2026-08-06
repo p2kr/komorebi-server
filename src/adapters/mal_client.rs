@@ -1,14 +1,13 @@
-use anyhow::{Result, bail};
 use reqwest::Client;
 use tracing::debug;
 
 use crate::{
-    db::user_repo::fetch_user_by_id,
-    handlers::clients::{
-        MediaClient, MedialClientParams,
+    adapters::{
+        MediaClient, MediaClientParams,
         mal_models::{MalResponse, MalStatus},
     },
-    models::{configs::ENV_CONFIGS, media::PaginatedResponse},
+    core::{AppError, ENV_CONFIGS},
+    models::{media::PaginatedResponse, user::User},
 };
 
 const DEFAULT_MAL_BASE_URL: &str = "https://api.myanimelist.net/v2";
@@ -20,8 +19,12 @@ const MAL_MANGA_FIELDS: &str = "synopsis,media_type,my_list_status,mean,num_chap
 pub struct MalClient {}
 
 impl MalClient {
-    async fn fetch_list(params: &MedialClientParams, is_manga: bool) -> Result<PaginatedResponse> {
-        let user = fetch_user_by_id(params.user_id).await?;
+    pub async fn fetch_list(
+        client: &Client,
+        user: &User,
+        params: &MediaClientParams,
+        is_manga: bool,
+    ) -> Result<PaginatedResponse, AppError> {
         let username = user.username.as_str();
 
         let (endpoint, fields) = if is_manga {
@@ -31,7 +34,6 @@ impl MalClient {
         };
 
         let base_url = format!("{DEFAULT_MAL_BASE_URL}/users/{username}/{endpoint}");
-        let client = Client::new();
 
         let norm_status = params
             .status
@@ -63,7 +65,10 @@ impl MalClient {
         debug!("response received from {:?}", resp.url());
 
         if !resp.status().is_success() {
-            bail!("failed due to status code {:?}", resp.status());
+            return Err(AppError::UpstreamApi {
+                provider: "MAL".to_string(),
+                message: format!("HTTP status {}", resp.status()),
+            });
         }
 
         let res = resp.json::<MalResponse>().await?;
@@ -73,11 +78,19 @@ impl MalClient {
 }
 
 impl MediaClient for MalClient {
-    async fn get_anime_list(params: &MedialClientParams) -> Result<PaginatedResponse> {
-        Self::fetch_list(params, false).await
+    async fn get_anime_list(
+        client: &Client,
+        user: &User,
+        params: &MediaClientParams,
+    ) -> Result<PaginatedResponse, AppError> {
+        Self::fetch_list(client, user, params, false).await
     }
 
-    async fn get_manga_list(params: &MedialClientParams) -> Result<PaginatedResponse> {
-        Self::fetch_list(params, true).await
+    async fn get_manga_list(
+        client: &Client,
+        user: &User,
+        params: &MediaClientParams,
+    ) -> Result<PaginatedResponse, AppError> {
+        Self::fetch_list(client, user, params, true).await
     }
 }

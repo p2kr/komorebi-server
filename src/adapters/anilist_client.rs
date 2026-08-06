@@ -1,12 +1,11 @@
-use anyhow::{Result, bail};
 use reqwest::Client;
 use serde_json::json;
 use tracing::debug;
 
 use crate::{
-    db::user_repo::fetch_user_by_id,
-    handlers::clients::{MediaClient, MedialClientParams, anilist_models::AniListResponse},
-    models::{configs::ENV_CONFIGS, media::PaginatedResponse},
+    adapters::{MediaClient, MediaClientParams, anilist_models::AniListResponse},
+    core::{AppError, ENV_CONFIGS},
+    models::{media::PaginatedResponse, user::User},
 };
 
 const ANILIST_GRAPHQL_URL: &str = "https://graphql.anilist.co";
@@ -80,11 +79,12 @@ fn normalize_anilist_status(status: Option<&str>) -> Option<&'static str> {
 pub struct AniListClient {}
 
 impl AniListClient {
-    async fn fetch_list(
-        params: &MedialClientParams,
+    pub async fn fetch_list(
+        client: &Client,
+        user: &User,
+        params: &MediaClientParams,
         media_type: &str,
-    ) -> Result<PaginatedResponse> {
-        let user = fetch_user_by_id(params.user_id).await?;
+    ) -> Result<PaginatedResponse, AppError> {
         let username = user.username.as_str();
 
         let raw_page = params.offset.unwrap_or(1);
@@ -110,7 +110,6 @@ impl AniListClient {
 
         debug!("anilist payload {:?}", payload);
 
-        let client = Client::new();
         let mut req_builder = client.post(ANILIST_GRAPHQL_URL).json(&payload);
 
         if let Some(access_token) = user.access_token.as_deref() {
@@ -125,15 +124,19 @@ impl AniListClient {
         debug!("response received from AniList: {:?}", resp.url());
 
         if !resp.status().is_success() {
-            bail!("failed due to status code {:?}", resp.status());
+            return Err(AppError::UpstreamApi {
+                provider: "ANILIST".to_string(),
+                message: format!("HTTP status {}", resp.status()),
+            });
         }
 
         let res = resp.json::<AniListResponse>().await?;
 
-        if let Some(ref errors) = res.errors {
-            if let Some(err) = errors.first() {
-                bail!("AniList GraphQL error: {}", err.message);
-            }
+        if let Some(err) = res.errors.as_ref().and_then(|errors| errors.first()) {
+            return Err(AppError::UpstreamApi {
+                provider: "ANILIST".to_string(),
+                message: err.message.clone(),
+            });
         }
 
         Ok(res.into())
@@ -141,11 +144,19 @@ impl AniListClient {
 }
 
 impl MediaClient for AniListClient {
-    async fn get_anime_list(params: &MedialClientParams) -> Result<PaginatedResponse> {
-        Self::fetch_list(params, "ANIME").await
+    async fn get_anime_list(
+        client: &Client,
+        user: &User,
+        params: &MediaClientParams,
+    ) -> Result<PaginatedResponse, AppError> {
+        Self::fetch_list(client, user, params, "ANIME").await
     }
 
-    async fn get_manga_list(params: &MedialClientParams) -> Result<PaginatedResponse> {
-        Self::fetch_list(params, "MANGA").await
+    async fn get_manga_list(
+        client: &Client,
+        user: &User,
+        params: &MediaClientParams,
+    ) -> Result<PaginatedResponse, AppError> {
+        Self::fetch_list(client, user, params, "MANGA").await
     }
 }

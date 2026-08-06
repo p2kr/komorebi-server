@@ -1,4 +1,4 @@
-use komorebi_server::handlers::clients::anilist_models::AniListResponse;
+use komorebi_server::adapters::anilist_models::AniListResponse;
 use komorebi_server::models::media::{
     ListStatus, MediaFormat, MediaProvider, MediaType, NsfwLevel, PaginatedResponse, ReleaseStatus,
 };
@@ -98,11 +98,11 @@ fn test_parse_anilist_response_json() {
     assert_eq!(entry.list_entry.status, ListStatus::Completed);
     assert_eq!(entry.list_entry.score, Some(8.5));
     assert_eq!(entry.list_entry.progress, Some(24));
-    assert_eq!(entry.list_entry.is_repeating, true);
+    assert!(entry.list_entry.is_repeating);
     assert_eq!(entry.list_entry.repeat_count, Some(1));
     assert_eq!(entry.list_entry.notes.as_deref(), Some("Must watch again!"));
 
-    assert_eq!(parsed.paging.has_next, false);
+    assert!(!parsed.paging.has_next);
 }
 
 #[test]

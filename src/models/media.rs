@@ -1,12 +1,26 @@
 use serde::{Deserialize, Serialize};
+use sqlx::prelude::Type;
+use strum::{AsRefStr, Display, EnumString};
 use uuid::Uuid;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  Enums
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "UPPERCASE")]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    Default,
+    Type,
+    Display,
+    EnumString,
+    AsRefStr,
+)]
+#[sqlx(type_name = "TEXT", rename_all = "UPPERCASE")]
 pub enum MediaProvider {
     #[default]
     MAL,
@@ -14,7 +28,6 @@ pub enum MediaProvider {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
 pub enum MediaType {
     #[default]
     Anime,
@@ -28,7 +41,6 @@ pub enum MediaType {
 /// MAL manga: unknown, manga, novel, one_shot, doujinshi, manhwa, manhua, oel
 /// AniList:   TV, TV_SHORT, MOVIE, SPECIAL, OVA, ONA, MUSIC, MANGA, NOVEL, ONE_SHOT
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
 pub enum MediaFormat {
     #[default]
     Unknown,
@@ -50,7 +62,6 @@ pub enum MediaFormat {
 
 /// Airing / publishing status of the media itself.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
 pub enum ReleaseStatus {
     #[default]
     Unknown,
@@ -63,7 +74,6 @@ pub enum ReleaseStatus {
 
 /// User's personal watching/reading status.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
 pub enum ListStatus {
     #[default]
     Current,
@@ -77,7 +87,6 @@ pub enum ListStatus {
 /// NSFW classification.
 /// MAL distinguishes white/gray/black. AniList only has isAdult bool.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
 pub enum NsfwLevel {
     #[default]
     Safe,
