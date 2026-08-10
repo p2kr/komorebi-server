@@ -1,5 +1,6 @@
 use axum::{Json, extract::State};
 use serde::Deserialize;
+use tracing::debug;
 use uuid::Uuid;
 
 use crate::{
@@ -15,11 +16,13 @@ pub struct GetUserParams {
 
 pub async fn save_user(State(state): State<AppState>, Json(params): Json<Params>) -> ApiResult {
     let user = UserService::save_user(&state, params).await?;
+    debug!(user_id = %user.id, "User successfully saved");
     Ok(success(user))
 }
 
 pub async fn get_all_users(State(state): State<AppState>) -> ApiResult {
     let users = UserService::get_all_users(&state).await?;
+    debug!("fetched users: {:?}", users.len());
     Ok(success(users))
 }
 
@@ -28,6 +31,7 @@ pub async fn get_user_by_id(
     Json(params): Json<GetUserParams>,
 ) -> ApiResult {
     let user = UserService::get_user_by_id(&state, params.user_id).await?;
+    debug!("fetched user: {:?}", user.id);
     Ok(success(user))
 }
 
@@ -41,5 +45,6 @@ pub async fn delete_user(
     Json(params): Json<DeleteUserParams>,
 ) -> ApiResult {
     UserService::delete_user(&state, params.user_id).await?;
+    debug!("deleted user: {}", params.user_id);
     Ok(success(serde_json::json!({ "deleted": true })))
 }

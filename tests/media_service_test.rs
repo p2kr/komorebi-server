@@ -66,4 +66,3 @@ fn test_json_body_deserialization_defaults() {
     assert_eq!(params.params.limit, None);
     assert_eq!(params.params.offset, None);
 }
-

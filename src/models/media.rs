@@ -10,6 +10,7 @@ use uuid::Uuid;
 #[derive(
     Debug,
     Clone,
+    Copy,
     PartialEq,
     Eq,
     Serialize,

@@ -73,7 +73,6 @@ impl UserRepo {
         .await
     }
 
-
     pub async fn fetch_user_by_username(
         &self,
         username: String,
@@ -99,7 +98,7 @@ impl UserRepo {
     }
 
     pub async fn fetch_all_users(&self) -> Result<Vec<User>, sqlx::Error> {
-        sqlx::query_as::<_, User>("SELECT * FROM users")
+        sqlx::query_as::<_, User>("SELECT * FROM users ORDER BY updated_at desc")
             .fetch_all(&self.db)
             .await
     }

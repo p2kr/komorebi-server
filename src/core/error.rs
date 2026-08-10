@@ -5,6 +5,7 @@ use axum::{
 };
 use serde::Serialize;
 use thiserror::Error;
+use tracing::error;
 use uuid::Uuid;
 
 pub type ApiResult<T = Response> = Result<T, AppError>;
@@ -69,6 +70,7 @@ impl AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let status = self.status_code();
+        error!(error = ?self, "API request failed");
         let body = Json(FailureResponse {
             success: false,
             error: ErrorDetail {

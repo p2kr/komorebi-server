@@ -34,7 +34,7 @@ impl Default for MediaClientParams {
             user_id: Default::default(),
             status: None,
             sort: None,
-            limit: Some(20),
+            limit: Some(50),
             offset: Some(0),
         }
     }

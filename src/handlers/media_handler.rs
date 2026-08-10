@@ -1,5 +1,6 @@
 use axum::{Json, extract::State};
 use serde::Deserialize;
+use tracing::debug;
 
 use crate::{
     adapters::MediaClientParams,
@@ -22,6 +23,7 @@ pub async fn get_user_anime_list(
 ) -> ApiResult {
     let provider = params.provider.unwrap_or(MediaProvider::MAL);
     let anime_list = MediaService::get_user_anime_list(&state, &provider, &params.params).await?;
+    debug!("fetched anime_list: {:?}", anime_list.data.len());
     Ok(success(anime_list))
 }
 
@@ -31,5 +33,6 @@ pub async fn get_user_manga_list(
 ) -> ApiResult {
     let provider = params.provider.unwrap_or(MediaProvider::MAL);
     let manga_list = MediaService::get_user_manga_list(&state, &provider, &params.params).await?;
+    debug!("fetched manga_list: {:?}", manga_list.data.len());
     Ok(success(manga_list))
 }

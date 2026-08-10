@@ -49,8 +49,8 @@ impl MalClient {
             req_builder = req_builder.query(&[("sort", sort)]);
         }
         req_builder = req_builder.query(&[
-            ("limit", params.limit.unwrap_or_default()),
-            ("offset", params.offset.unwrap_or_default()),
+            ("limit", params.limit.unwrap_or(50)),
+            ("offset", params.offset.unwrap_or(0)),
         ]);
 
         if let Some(access_token) = user.access_token.as_deref() {
