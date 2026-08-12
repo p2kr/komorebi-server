@@ -5,7 +5,7 @@ use axum::{
     Json, Router,
     http::{HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::post,
+    routing::{any, post},
 };
 use serde::Serialize;
 use serde_json::json;
@@ -109,13 +109,13 @@ pub async fn make_routes() -> Router {
         .route("/delete", post(delete_user));
 
     let v1 = Router::new()
-        .route("/", post(health_check))
-        .route("/health", post(health_check))
+        .route("/", any(health_check))
+        .route("/health", any(health_check))
         .nest("/media", media)
         .nest("/user", user);
 
     let router = Router::new()
-        .route("/", post(health_check_bad))
+        .route("/", any(health_check_bad))
         .nest("/api/v1", v1)
         .layer(TraceLayer::new_for_http())
         .layer(get_cors_layer())
