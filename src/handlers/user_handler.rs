@@ -1,12 +1,17 @@
 use axum::{Json, extract::State};
 use serde::Deserialize;
+use serde_json::json;
 use tracing::debug;
 use uuid::Uuid;
 
 use crate::{
     core::{ApiResult, AppState},
     handlers::success,
-    services::user_service::{Params, UserService},
+    models::user::User,
+    services::{
+        media_service::{MediaService, ValidateUserParams},
+        user_service::UserService,
+    },
 };
 
 #[derive(Debug, Deserialize)]
@@ -14,8 +19,19 @@ pub struct GetUserParams {
     pub user_id: Uuid,
 }
 
-pub async fn save_user(State(state): State<AppState>, Json(params): Json<Params>) -> ApiResult {
-    let user = UserService::save_user(&state, params).await?;
+pub async fn save_user(State(state): State<AppState>, Json(params): Json<User>) -> ApiResult {
+    // check if user exists by getting media
+    let user = MediaService::validate_user(
+        &state,
+        &ValidateUserParams {
+            username: params.username.clone(),
+            provider: Some(params.provider.clone()),
+            access_token: params.access_token.clone(),
+        },
+    )
+    .await?;
+
+    let user = UserService::save_user(&state, user).await?;
     debug!(user_id = %user.id, "User successfully saved");
     Ok(success(user))
 }
@@ -46,5 +62,5 @@ pub async fn delete_user(
 ) -> ApiResult {
     UserService::delete_user(&state, params.user_id).await?;
     debug!("deleted user: {}", params.user_id);
-    Ok(success(serde_json::json!({ "deleted": true })))
+    Ok(success(json!({ "user_id": &params.user_id })))
 }

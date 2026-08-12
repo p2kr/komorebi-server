@@ -3,13 +3,17 @@ pub mod anilist_models;
 pub mod mal_client;
 pub mod mal_models;
 
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::future::Future;
 use uuid::Uuid;
 
 use crate::{
+    adapters::{anilist_client::AniListClient, mal_client::MalClient},
     core::AppError,
-    models::{media::PaginatedResponse, user::User},
+    models::{
+        media::{MediaProvider, PaginatedResponse},
+        user::User,
+    },
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,16 +44,35 @@ impl Default for MediaClientParams {
     }
 }
 
-pub trait MediaClient {
-    fn get_anime_list(
-        client: &reqwest::Client,
-        user: &User,
-        params: &MediaClientParams,
-    ) -> impl Future<Output = Result<PaginatedResponse, AppError>>;
+#[async_trait]
+pub trait MediaClient: Send + Sync {
+    fn new(client: &reqwest::Client, user: &User) -> Self
+    where
+        Self: Sized;
 
-    fn get_manga_list(
+    async fn get_anime_list(
+        &self,
+        params: &MediaClientParams,
+    ) -> Result<PaginatedResponse, AppError>;
+
+    async fn get_manga_list(
+        &self,
+        params: &MediaClientParams,
+    ) -> Result<PaginatedResponse, AppError>;
+
+    async fn validate_new_user(&self, access_token: &str) -> Result<User, AppError>;
+}
+
+impl MediaProvider {
+    pub fn new_client(
+        &self,
         client: &reqwest::Client,
         user: &User,
-        params: &MediaClientParams,
-    ) -> impl Future<Output = Result<PaginatedResponse, AppError>>;
+    ) -> Box<dyn MediaClient + Send + Sync> {
+        let client: Box<dyn MediaClient + Send + Sync> = match self {
+            MediaProvider::MAL => Box::new(MalClient::new(client, user)),
+            MediaProvider::ANILIST => Box::new(AniListClient::new(client, user)),
+        };
+        client
+    }
 }

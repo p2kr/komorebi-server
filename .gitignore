@@ -26,3 +26,4 @@ rustc-ice-*.txt
 .env
 .agents/
 assets/dev.db
+repomix-output.xml

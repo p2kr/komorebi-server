@@ -1,7 +1,8 @@
 -- Database Schema for komorebi-server
 
 CREATE TABLE IF NOT EXISTS users (
-    id BLOB PRIMARY KEY NOT NULL,
+    id TEXT PRIMARY KEY NOT NULL,
+    provider_id TEXT,
     username TEXT NOT NULL,
     avatar_url TEXT,
     provider TEXT NOT NULL,
@@ -12,7 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
     UNIQUE(username, provider)
 );
 
-CREATE TRIGGER IF NOT EXISTS update_users_updated_at
+CREATE TRIGGER IF NOT EXISTS au_users
 AFTER UPDATE ON users
 FOR EACH ROW
 BEGIN

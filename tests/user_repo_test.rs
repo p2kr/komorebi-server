@@ -1,4 +1,7 @@
-use komorebi_server::{db::user_repo::UserRepo, models::media::MediaProvider};
+use komorebi_server::{
+    db::user_repo::UserRepo,
+    models::{media::MediaProvider, user::User},
+};
 use sqlx::sqlite::SqlitePoolOptions;
 use uuid::Uuid;
 
@@ -24,12 +27,13 @@ async fn test_user_repo_crud_and_upsert_operations() {
 
     // 1. Save User (Insert)
     let saved_user = repo
-        .save_user(
+        .save_user(User::new(
             "test_username".to_string(),
-            Some("https://example.com/avatar.png".to_string()),
-            MediaProvider::MAL,
+            None,
+            None,
+            Some(MediaProvider::MAL),
             Some("secret_token_123".to_string()),
-        )
+        ))
         .await
         .expect("failed to save user");
     assert_eq!(saved_user.username, "test_username");
@@ -60,12 +64,13 @@ async fn test_user_repo_crud_and_upsert_operations() {
 
     // 4. Upsert User on (username, provider) conflict
     let upserted_user = repo
-        .save_user(
+        .save_user(User::new(
             "test_username".to_string(),
+            None,
             Some("https://example.com/new_avatar.png".to_string()),
-            MediaProvider::MAL,
+            Some(MediaProvider::MAL),
             Some("new_secret_token_456".to_string()),
-        )
+        ))
         .await
         .expect("failed to upsert user");
 

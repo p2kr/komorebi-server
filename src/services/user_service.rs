@@ -1,33 +1,17 @@
-use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
     core::{AppError, AppState},
     db::user_repo::UserRepo,
-    models::{media::MediaProvider, user::User},
+    models::user::User,
 };
 
 pub struct UserService;
 
-#[derive(Clone, Deserialize)]
-pub struct Params {
-    pub username: String,
-    pub avatar_url: Option<String>,
-    pub provider: MediaProvider,
-    pub access_token: Option<String>,
-}
-
 impl UserService {
-    pub async fn save_user(state: &AppState, user: Params) -> Result<User, AppError> {
+    pub async fn save_user(state: &AppState, user: User) -> Result<User, AppError> {
         let user_repo = UserRepo::new(state.db.clone());
-        let user = user_repo
-            .save_user(
-                user.username,
-                user.avatar_url,
-                user.provider,
-                user.access_token,
-            )
-            .await?;
+        let user = user_repo.save_user(user).await?;
 
         Ok(user)
     }

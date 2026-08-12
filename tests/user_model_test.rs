@@ -5,6 +5,7 @@ fn test_user_is_sandbox_derived_from_access_token() {
     let user_with_token = User::new(
         "test_user".to_string(),
         None,
+        None,
         Some(MediaProvider::MAL),
         Some("token123".to_string()),
     );
@@ -12,6 +13,7 @@ fn test_user_is_sandbox_derived_from_access_token() {
 
     let user_without_token = User::new(
         "test_user".to_string(),
+        None,
         None,
         Some(MediaProvider::MAL),
         None,
