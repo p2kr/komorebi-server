@@ -1,7 +1,7 @@
 -- Database Schema for komorebi-server
 
 CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY NOT NULL,
+    id BLOB PRIMARY KEY NOT NULL,
     provider_id TEXT,
     username TEXT NOT NULL,
     avatar_url TEXT,

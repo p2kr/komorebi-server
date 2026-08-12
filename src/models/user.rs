@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::models::media::MediaProvider;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, FromRow)]
+#[serde(default)]
 pub struct User {
     pub id: Uuid,
     pub username: String,

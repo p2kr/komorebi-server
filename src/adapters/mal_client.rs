@@ -137,7 +137,7 @@ impl MediaClient for MalClient {
 
         let new_user = User {
             username,
-            provider_id: user["id"].as_str().map(|id| id.to_string()),
+            provider_id: user["id"].as_i64().map(|id| id.to_string()),
             avatar_url: user["picture"].as_str().map(|url| url.to_string()),
             provider: MediaProvider::MAL,
             access_token: Some(access_token.to_string()),

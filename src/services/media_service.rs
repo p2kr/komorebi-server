@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use tracing::debug;
+use tracing_subscriber::field::debug;
 use uuid::Uuid;
 
 use crate::{
@@ -84,12 +85,13 @@ impl MediaService {
 
         if let Some(_access_token) = &user.access_token {
             // fetch username and avatar url
+            debug!("Fetching username and avatar url for user");
             user = media_client.validate_new_user(_access_token).await?;
             return Ok(user);
         }
 
         let media_client_params = MediaClientParams {
-            user_id: Uuid::now_v7(),
+            user_id: Uuid::now_v7(), // Dummy
             status: None,
             sort: None,
             limit: Some(1),

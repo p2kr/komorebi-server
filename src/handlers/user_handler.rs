@@ -31,6 +31,8 @@ pub async fn save_user(State(state): State<AppState>, Json(params): Json<User>) 
     )
     .await?;
 
+    debug!("User validated: {:?}", user.username);
+
     let user = UserService::save_user(&state, user).await?;
     debug!(user_id = %user.id, "User successfully saved");
     Ok(success(user))

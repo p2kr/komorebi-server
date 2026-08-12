@@ -212,7 +212,7 @@ impl MediaClient for AniListClient {
                 provider: String::from("ANILIST"),
                 message: String::from("unable to get username"),
             })?;
-        let provider_id = user["data"]["Viewer"]["id"].as_str();
+        let provider_id = user["data"]["Viewer"]["id"].as_i64();
         let avatar_url = user["data"]["Viewer"]["avatar"]["medium"].as_str();
 
         let new_user = User {
