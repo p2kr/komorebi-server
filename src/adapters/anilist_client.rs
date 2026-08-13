@@ -126,16 +126,18 @@ impl AniListClient {
             "variables": variables
         });
 
-        debug!("anilist payload {:?}", payload);
+        debug!(
+            "sending anilist request for user {:?}",
+            variables.get("userName")
+        );
 
         let mut req_builder = self.client.post(ANILIST_GRAPHQL_URL).json(&payload);
 
         if let Some(access_token) = self.user.access_token.as_deref() {
             req_builder = req_builder.bearer_auth(access_token);
         }
-        if let Some(client_id) = ENV_CONFIGS.anilist_client_id.as_ref() {
-            req_builder = req_builder.query(&[("client_id", &client_id)]);
-        }
+
+        req_builder = req_builder.query(&[("client_id", ENV_CONFIGS.anilist_client_id.as_str())]);
 
         let resp = req_builder.send().await?;
 

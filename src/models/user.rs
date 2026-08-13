@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::models::media::MediaProvider;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, FromRow)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, FromRow)]
 #[serde(default)]
 pub struct User {
     pub id: Uuid,
@@ -20,6 +20,25 @@ pub struct User {
 
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+impl std::fmt::Debug for User {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("User")
+            .field("id", &self.id)
+            .field("username", &self.username)
+            .field("provider_id", &self.provider_id)
+            .field("avatar_url", &self.avatar_url)
+            .field("provider", &self.provider)
+            .field("is_sandbox", &self.is_sandbox)
+            .field(
+                "access_token",
+                &self.access_token.as_ref().map(|_| "[REDACTED]"),
+            )
+            .field("created_at", &self.created_at)
+            .field("updated_at", &self.updated_at)
+            .finish()
+    }
 }
 
 impl Default for User {

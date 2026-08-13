@@ -30,3 +30,6 @@ tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
 thiserror = "2.0.20"
 uuid = { version = "1.24.0", features = ["v7", "std", "serde"] }
 async-trait = "0.1.92"
+
+[build-dependencies]
+dotenv-build = "0.1.1"

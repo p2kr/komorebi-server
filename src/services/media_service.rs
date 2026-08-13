@@ -80,10 +80,10 @@ impl MediaService {
 
         let media_client = user.provider.new_client(&state.http_client, &user);
 
-        if let Some(_access_token) = &user.access_token {
+        if let Some(token) = &user.access_token {
             // fetch username and avatar url
             debug!("Fetching username and avatar url for user");
-            user = media_client.validate_new_user(_access_token).await?;
+            user = media_client.validate_new_user(token).await?;
             return Ok(user);
         }
 
@@ -100,12 +100,12 @@ impl MediaService {
             .await
             .is_ok()
         {
-            debug!("validated user by anime {:?}", params);
+            debug!("validated user by anime: username={:?}", params.username);
             return Ok(user);
         }
         media_client.get_manga_list(&media_client_params).await?;
 
-        debug!("validated user by manga {:?}", params);
+        debug!("validated user by manga: username={:?}", params.username);
 
         Ok(user)
     }

@@ -62,9 +62,8 @@ impl MalClient {
         if let Some(access_token) = self.user.access_token.as_deref() {
             req_builder = req_builder.bearer_auth(access_token);
         }
-        if let Some(client_id) = ENV_CONFIGS.mal_client_id.as_deref() {
-            req_builder = req_builder.header(HEADER_NAME, client_id);
-        }
+
+        req_builder = req_builder.header(HEADER_NAME, ENV_CONFIGS.mal_client_id.as_str());
 
         let resp = req_builder.send().await?;
 
@@ -110,19 +109,16 @@ impl MediaClient for MalClient {
         let resp = self
             .client
             .get(USER_INFO_URL)
-            .header(
-                HEADER_NAME,
-                ENV_CONFIGS.mal_client_id.as_deref().unwrap_or_default(),
-            )
+            .header(HEADER_NAME, ENV_CONFIGS.mal_client_id.as_str())
             .bearer_auth(access_token)
             .send()
             .await?;
 
         debug!(
-            "validation resp {:#?} using {:?}***{:?}",
-            resp,
-            substring(access_token, 0, 5),
-            substring(access_token, -5, 0)
+            "MAL validation response status: {} using {:?}***{:?}",
+            resp.status(),
+            substring(access_token, 0, 2),
+            substring(access_token, -2, 0)
         );
 
         if !resp.status().is_success() {
