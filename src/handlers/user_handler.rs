@@ -20,6 +20,7 @@ pub struct GetUserParams {
 }
 
 pub async fn save_user(State(state): State<AppState>, Json(params): Json<User>) -> ApiResult {
+    debug!("saving user {:#?}", params.username);
     // check if user exists by getting media
     let user = MediaService::validate_user(
         &state,

@@ -3,6 +3,7 @@ pub mod error;
 pub mod startup;
 pub mod state;
 pub mod telemetry;
+pub mod utils;
 
 pub use config::{Configs, ENV_CONFIGS};
 pub use error::{ApiResult, AppError};

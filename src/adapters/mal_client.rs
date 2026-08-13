@@ -7,7 +7,7 @@ use crate::{
         MediaClient, MediaClientParams,
         mal_models::{MalResponse, MalStatus},
     },
-    core::{AppError, ENV_CONFIGS},
+    core::{AppError, ENV_CONFIGS, utils::substring},
     models::{
         media::{MediaProvider, PaginatedResponse},
         user::User,
@@ -117,6 +117,13 @@ impl MediaClient for MalClient {
             .bearer_auth(access_token)
             .send()
             .await?;
+
+        debug!(
+            "validation resp {:#?} using {:?}***{:?}",
+            resp,
+            substring(access_token, 0, 5),
+            substring(access_token, -5, 0)
+        );
 
         if !resp.status().is_success() {
             return Err(AppError::UpstreamApi {
