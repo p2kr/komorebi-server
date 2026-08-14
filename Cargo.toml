@@ -9,7 +9,7 @@ axum = { version = "0.8.9", features = ["default", "macros"] }
 chrono = { version = "0.4.45", features = ["now"] }
 directories = "6.0.0"
 dotenvy = "0.15.7"
-reqwest = { version = "0.13.4", features = ["query", "json"] }
+reqwest = { version = "0.13.4", features = ["query", "json", "form"] }
 serde = "1.0.229"
 serde_json = "1.0.151"
 sqlx = { version = "0.9.0", features = [
@@ -30,6 +30,8 @@ tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
 thiserror = "2.0.20"
 uuid = { version = "1.24.0", features = ["v7", "std", "serde"] }
 async-trait = "0.1.92"
+rust-embed = "8.12.0"
+mime_guess = "2.0.5"
 
 [build-dependencies]
 dotenv-build = "0.1.1"

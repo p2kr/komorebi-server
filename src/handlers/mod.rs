@@ -1,11 +1,12 @@
 pub mod media_handler;
+pub mod spa_handler;
 pub mod user_handler;
 
 use axum::{
     Json, Router,
     http::{HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::{any, post},
+    routing::{any, get, post},
 };
 use serde::Serialize;
 use serde_json::json;
@@ -19,7 +20,10 @@ use crate::{
     core::{ENV_CONFIGS, get_server_uptime, load_app_state},
     handlers::{
         media_handler::{get_user_anime_list, get_user_manga_list},
-        user_handler::{delete_user, get_all_users, get_user_by_id, save_user},
+        spa_handler::spa_handler,
+        user_handler::{
+            delete_user, exchange_oauth_token, get_all_users, get_user_by_id, save_user,
+        },
     },
 };
 
@@ -108,17 +112,20 @@ pub async fn make_routes() -> Router {
         .route("/one", post(get_user_by_id))
         .route("/delete", post(delete_user));
 
+    let oauth = Router::new().route("/exchange", post(exchange_oauth_token));
+
     let v1 = Router::new()
         .route("/", any(health_check))
         .route("/health", any(health_check))
         .nest("/media", media)
-        .nest("/user", user);
+        .nest("/user", user)
+        .nest("/oauth", oauth);
 
     let router = Router::new()
-        .route("/", any(health_check_bad))
         .nest("/api/v1", v1)
         .layer(TraceLayer::new_for_http())
         .layer(get_cors_layer())
+        .fallback(get(spa_handler))
         .with_state(load_app_state().await);
 
     debug!("registered routes: {:?}", router);

@@ -5,39 +5,14 @@ info:
     Unified REST API server for aggregating, syncing, and managing anime and manga media lists across providers like MyAnimeList and AniList.
   version: 1.0.0
 servers:
-  - url: /
-    description: Root Server
-  - url: /api/v1
+  - url: http://localhost:8080/api/v1
     description: API v1 Base Endpoint
 
 paths:
   /:
-    post:
-      summary: Root health status check (Failure response)
-      description: Returns a 400 Bad Request pointing to the API v1 base path.
-      operationId: getRoot
-      tags:
-        - System
-      responses:
-        '400':
-          description: Default root endpoint response pointing to `/api/v1`.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FailureResponse'
-              examples:
-                default:
-                  summary: Default root failure response
-                  value:
-                    success: false
-                    error:
-                      code: base_api_url
-                      msg: /api/v1
-
-  /api/v1:
-    post:
+    get:
       summary: API v1 Health Check
-      description: Returns the health status, uptime, and version of the server.
+      description: Returns the health status, uptime, and version of the server. Accepts any HTTP method.
       operationId: getHealthCheckV1
       tags:
         - System
@@ -58,10 +33,10 @@ paths:
                       uptime: 3600
                       version: 1.0.0
 
-  /api/v1/health:
-    post:
+  /health:
+    get:
       summary: API Health Check Endpoint
-      description: Returns the health status, uptime, and version of the server.
+      description: Returns the health status, uptime, and version of the server. Accepts any HTTP method.
       operationId: getHealthCheck
       tags:
         - System
@@ -82,7 +57,7 @@ paths:
                       uptime: 3600
                       version: 1.0.0
 
-  /api/v1/media/anime:
+  /media/anime:
     post:
       summary: Get User Anime List
       description: Retrieves the paginated anime list for a given user from the specified provider.
@@ -103,16 +78,16 @@ paths:
                   format: uuid
                   description: Unique identifier (UUID) of the user.
                   example: 018f3a5e-7b12-7000-8000-123456789abc
-                provider:
-                  $ref: '#/components/schemas/MediaProvider'
                 status:
-                  $ref: '#/components/schemas/ListStatus'
+                  type: string
+                  description: Filter by list status (provider-specific string, e.g. "watching", "completed").
+                  example: watching
                 sort:
                   type: string
                   example: score_desc
                 limit:
                   type: integer
-                  default: 20
+                  default: 50
                   example: 20
                 offset:
                   type: integer
@@ -139,61 +114,6 @@ paths:
                     error:
                       code: FETCH_ANIME_FAILED
                       msg: "Failed to fetch user anime list"
-
-  /api/v1/media/manga:
-    post:
-      summary: Get User Manga List
-      description: Retrieves the paginated manga list for a given user from the specified provider.
-      operationId: getUserMangaList
-      tags:
-        - Media
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - user_id
-              properties:
-                user_id:
-                  type: string
-                  format: uuid
-                  description: Unique identifier (UUID) of the user.
-                  example: 018f3a5e-7b12-7000-8000-123456789abc
-                provider:
-                  $ref: '#/components/schemas/MediaProvider'
-                status:
-                  $ref: '#/components/schemas/ListStatus'
-                sort:
-                  type: string
-                  example: score_desc
-                limit:
-                  type: integer
-                  default: 20
-                  example: 20
-                offset:
-                  type: integer
-                  default: 0
-                  example: 0
-      responses:
-        '200':
-          description: Successfully retrieved user manga list.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedMediaResponse'
-        '400':
-          description: Failed to fetch manga list or invalid input parameters.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FailureResponse'
-              examples:
-                default:
-                  summary: Fetch manga list failed
-                  value:
-                    success: false
         '404':
           description: User not found in database.
           content:
@@ -223,10 +143,100 @@ paths:
                       code: UPSTREAM_API_ERROR
                       msg: "Upstream provider error (MAL): Network error"
 
-  /api/v1/user/add:
+  /media/manga:
+    post:
+      summary: Get User Manga List
+      description: Retrieves the paginated manga list for a given user from the specified provider.
+      operationId: getUserMangaList
+      tags:
+        - Media
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+                  description: Unique identifier (UUID) of the user.
+                  example: 018f3a5e-7b12-7000-8000-123456789abc
+                status:
+                  type: string
+                  description: Filter by list status (provider-specific string, e.g. "reading", "completed").
+                  example: reading
+                sort:
+                  type: string
+                  example: score_desc
+                limit:
+                  type: integer
+                  default: 50
+                  example: 20
+                offset:
+                  type: integer
+                  default: 0
+                  example: 0
+      responses:
+        '200':
+          description: Successfully retrieved user manga list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMediaResponse'
+        '400':
+          description: Failed to fetch manga list or invalid input parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailureResponse'
+              examples:
+                default:
+                  summary: Fetch manga list failed
+                  value:
+                    success: false
+                    error:
+                      code: FETCH_MANGA_FAILED
+                      msg: "Failed to fetch user manga list"
+        '404':
+          description: User not found in database.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailureResponse'
+              examples:
+                default:
+                  summary: User not found
+                  value:
+                    success: false
+                    error:
+                      code: USER_NOT_FOUND
+                      msg: "User with ID '018f3a5e-7b12-7000-8000-123456789abc' not found"
+        '502':
+          description: Upstream provider API failure.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailureResponse'
+              examples:
+                default:
+                  summary: Upstream error
+                  value:
+                    success: false
+                    error:
+                      code: UPSTREAM_API_ERROR
+                      msg: "Upstream provider error (MAL): Network error"
+
+  /user/add:
     post:
       summary: Add / Save User
-      description: Creates a new user or updates an existing user record with media provider details.
+      description: |
+        Creates a new user or updates an existing user record with media provider details.
+        The server validates the user against the upstream provider before saving.
+        If `access_token` is provided the provider is queried to fetch the real username and avatar;
+        otherwise the username is validated by attempting a public list lookup (sandbox mode).
       operationId: saveUser
       tags:
         - User
@@ -238,7 +248,6 @@ paths:
               type: object
               required:
                 - username
-                - provider
               properties:
                 username:
                   type: string
@@ -247,12 +256,16 @@ paths:
                 provider:
                   $ref: '#/components/schemas/MediaProvider'
                 avatar_url:
-                  type: string
+                  type:
+                    - string
+                    - "null"
                   description: Profile avatar image URL.
                   example: https://example.com/avatar.png
                 access_token:
-                  type: string
-                  description: OAuth access token for authenticating provider API requests. If omitted, user runs in sandbox mode.
+                  type:
+                    - string
+                    - "null"
+                  description: OAuth access token for authenticating provider API requests. If omitted, user is saved in sandbox mode (public list access only).
                   example: token123456
       responses:
         '200':
@@ -290,7 +303,7 @@ paths:
                       code: DATABASE_ERROR
                       msg: "Database error: Failed to insert user"
 
-  /api/v1/user/all:
+  /user/all:
     post:
       summary: Get All Users
       description: Retrieves all registered users from the database.
@@ -319,7 +332,7 @@ paths:
                       code: DATABASE_ERROR
                       msg: "Database error: Failed to fetch users"
 
-  /api/v1/user/one:
+  /user/one:
     post:
       summary: Get User By ID
       description: Retrieves a single registered user by UUID.
@@ -362,10 +375,10 @@ paths:
                       code: USER_NOT_FOUND
                       msg: "User with ID '018f3a5e-7b12-7000-8000-123456789abc' not found"
 
-  /api/v1/user/delete:
+  /user/delete:
     post:
       summary: Delete User
-      description: Deletes a user account from the database by UUID.
+      description: Deletes a user account from the database by UUID. Returns the deleted user's UUID on success.
       operationId: deleteUser
       tags:
         - User
@@ -385,11 +398,17 @@ paths:
                   example: 018f3a5e-7b12-7000-8000-123456789abc
       responses:
         '200':
-          description: User deleted successfully.
+          description: User deleted successfully. Returns the UUID of the deleted user.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeleteUserResponse'
+              examples:
+                default:
+                  summary: Deletion success
+                  value:
+                    success: true
+                    data: 018f3a5e-7b12-7000-8000-123456789abc
         '404':
           description: User not found.
           content:
@@ -419,6 +438,78 @@ paths:
                       code: DATABASE_ERROR
                       msg: "Database error: Failed to delete user"
 
+  /oauth/exchange:
+    post:
+      summary: Exchange OAuth Authorization Code
+      description: |
+        Exchanges an OAuth authorization code (with PKCE code verifier) for an access token
+        from the specified media provider. Use the returned token with `/user/add`
+        to register a user with full (non-sandbox) access.
+      operationId: exchangeOauthToken
+      tags:
+        - OAuth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - provider
+                - code
+                - code_verifier
+              properties:
+                provider:
+                  $ref: '#/components/schemas/MediaProvider'
+                code:
+                  type: string
+                  description: Authorization code received from the OAuth redirect callback.
+                  example: "abc123authcode"
+                code_verifier:
+                  type: string
+                  description: PKCE code verifier that was used to generate the code challenge.
+                  example: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+      responses:
+        '200':
+          description: Access token successfully exchanged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OauthTokenResponse'
+              examples:
+                default:
+                  summary: Token exchange success
+                  value:
+                    success: true
+                    data: "Bearer eyJhbGciOiJSUzI1NiJ9..."
+        '400':
+          description: Invalid or missing parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailureResponse'
+              examples:
+                default:
+                  summary: Invalid code
+                  value:
+                    success: false
+                    error:
+                      code: INVALID_PARAMS
+                      msg: "Invalid authorization code"
+        '502':
+          description: Upstream provider OAuth error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailureResponse'
+              examples:
+                default:
+                  summary: Upstream OAuth failure
+                  value:
+                    success: false
+                    error:
+                      code: UPSTREAM_API_ERROR
+                      msg: "Upstream provider error (MAL): Token exchange failed"
 
 
 
@@ -516,6 +607,13 @@ components:
           description: External provider username or handle.
           examples:
             - octocat
+        provider_id:
+          type:
+            - string
+            - "null"
+          description: Provider-specific user ID returned after OAuth validation.
+          examples:
+            - "12345678"
         avatar_url:
           type:
             - string
@@ -628,7 +726,7 @@ components:
             - "null"
           description: Native language title.
           examples:
-            - 進撃の巨人
+            - "\u9032\u6483\u306e\u5DE8\u4EBA"
         user_preferred:
           type:
             - string
@@ -895,7 +993,6 @@ components:
         data:
           $ref: '#/components/schemas/User'
 
-
     UserListResponse:
       type: object
       required:
@@ -922,13 +1019,25 @@ components:
           examples:
             - true
         data:
-          type: object
-          required:
-            - deleted
-          properties:
-            deleted:
-              type: boolean
-              examples:
-                - true
+          type: string
+          format: uuid
+          description: UUID of the deleted user.
+          examples:
+            - 018f3a5e-7b12-7000-8000-123456789abc
 
+    OauthTokenResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          examples:
+            - true
+        data:
+          type: string
+          description: The access token returned by the provider.
+          examples:
+            - "Bearer eyJhbGciOiJSUzI1NiJ9..."
 

@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     access_token TEXT,
     created_at INTEGER NOT NULL DEFAULT (unixepoch('subsec') * 1000),
     updated_at INTEGER NOT NULL DEFAULT (unixepoch('subsec') * 1000),
-    UNIQUE(username, provider)
+    UNIQUE(username, provider, is_sandbox)
 );
 
 CREATE TRIGGER IF NOT EXISTS au_users

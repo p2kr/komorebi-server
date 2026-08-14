@@ -1,6 +1,5 @@
 use axum::{Json, extract::State};
 use serde::Deserialize;
-use serde_json::json;
 use tracing::debug;
 use uuid::Uuid;
 
@@ -8,10 +7,7 @@ use crate::{
     core::{ApiResult, AppState},
     handlers::success,
     models::user::User,
-    services::{
-        media_service::{MediaService, ValidateUserParams},
-        user_service::UserService,
-    },
+    services::user_service::{ExchangeOauthTokenParams, UserService, ValidateUserParams},
 };
 
 #[derive(Debug, Deserialize)]
@@ -22,7 +18,7 @@ pub struct GetUserParams {
 pub async fn save_user(State(state): State<AppState>, Json(params): Json<User>) -> ApiResult {
     debug!("saving user {:#?}", params.username);
     // check if user exists by getting media
-    let user = MediaService::validate_user(
+    let user = UserService::validate_user(
         &state,
         &ValidateUserParams {
             username: params.username.clone(),
@@ -65,5 +61,14 @@ pub async fn delete_user(
 ) -> ApiResult {
     UserService::delete_user(&state, params.user_id).await?;
     debug!("deleted user: {}", params.user_id);
-    Ok(success(json!({ "user_id": &params.user_id })))
+    Ok(success(params.user_id))
+}
+
+pub async fn exchange_oauth_token(
+    State(state): State<AppState>,
+    Json(params): Json<ExchangeOauthTokenParams>,
+) -> ApiResult {
+    let token = UserService::exchange_oauth_token(&state, &params).await?;
+    debug!("exchanged oauth token for: {:?}", params.provider);
+    Ok(success(token))
 }

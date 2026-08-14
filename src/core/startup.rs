@@ -13,6 +13,7 @@ use crate::{core::telemetry::init_logger, handlers::make_routes};
 pub static SERVER_START_TIME: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 pub fn init() {
+    info!("Server initializing {:?}", SERVER_START_TIME);
     init_logger();
     load_env();
 }

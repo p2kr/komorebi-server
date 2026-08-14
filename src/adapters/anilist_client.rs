@@ -229,4 +229,23 @@ impl MediaClient for AniListClient {
 
         Ok(new_user)
     }
+
+    async fn exchange_oauth_token(
+        &self,
+        code: &str,
+        code_verifier: &str,
+    ) -> Result<String, AppError> {
+        // return either code or code_verifier, whichever has data; because anilist doesn't need exchange.
+        if code.is_empty() && code_verifier.is_empty() {
+            return Err(AppError::InvalidParams(
+                "code and code_verifier cannot be empty".to_string(),
+            ));
+        } else {
+            if !code.is_empty() {
+                return Ok(code.to_string());
+            } else {
+                return Ok(code_verifier.to_string());
+            }
+        }
+    }
 }

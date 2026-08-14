@@ -24,7 +24,7 @@ impl UserRepo {
             User,
             r#"INSERT INTO users (id, username, avatar_url, provider, is_sandbox, access_token, provider_id)
                VALUES ($1, $2, $3, $4, $5, $6, $7)
-               ON CONFLICT(username, provider) DO UPDATE SET
+               ON CONFLICT(username, provider, is_sandbox) DO UPDATE SET
                    avatar_url = excluded.avatar_url,
                    is_sandbox = excluded.is_sandbox,
                    access_token = excluded.access_token

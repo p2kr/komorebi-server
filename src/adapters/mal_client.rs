@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use serde_json::Value;
+use serde_json::{Value, json};
 use tracing::debug;
 
 use crate::{
@@ -19,6 +19,7 @@ const HEADER_NAME: &str = "X-MAL-CLIENT-ID";
 const MAL_ANIME_FIELDS: &str = "synopsis,media_type,my_list_status,rating,mean,num_episodes,popularity,alternative_titles,genres";
 const MAL_MANGA_FIELDS: &str = "synopsis,media_type,my_list_status,mean,num_chapters,num_volumes,popularity,alternative_titles,genres";
 const USER_INFO_URL: &str = "https://api.myanimelist.net/v2/users/@me?fields=id,name,picture";
+const MAL_TOKEN_URL: &str = "https://myanimelist.net/v1/oauth2/token";
 
 pub struct MalClient {
     client: reqwest::Client,
@@ -149,5 +150,40 @@ impl MediaClient for MalClient {
         };
 
         Ok(new_user)
+    }
+
+    async fn exchange_oauth_token(
+        &self,
+        code: &str,
+        code_verifier: &str,
+    ) -> Result<String, AppError> {
+        let resp = self
+            .client
+            .post(MAL_TOKEN_URL)
+            .header("Access-Control-Allow-Origin", MAL_TOKEN_URL)
+            .form(&json!({
+                "client_id": ENV_CONFIGS.mal_client_id,
+                "code": code,
+                "code_verifier": code_verifier,
+                "grant_type": "authorization_code",
+                "redirect_uri": ENV_CONFIGS.hosted_auth_page
+            }))
+            .send()
+            .await?;
+
+        debug!("exchange_oauth_token: resp={:#?}", resp);
+
+        if resp.status().is_success() {
+            let data: Value = resp.json().await?;
+            return Ok(data["access_token"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string());
+        }
+
+        Err(AppError::UpstreamApi {
+            provider: "MAL".to_string(),
+            message: "error exchanging oauth token".to_string(),
+        })
     }
 }

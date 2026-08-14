@@ -4,6 +4,7 @@ pub mod mal_client;
 pub mod mal_models;
 
 use async_trait::async_trait;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -61,14 +62,16 @@ pub trait MediaClient: Send + Sync {
     ) -> Result<PaginatedResponse, AppError>;
 
     async fn validate_new_user(&self, access_token: &str) -> Result<User, AppError>;
+
+    async fn exchange_oauth_token(
+        &self,
+        code: &str,
+        code_verifier: &str,
+    ) -> Result<String, AppError>;
 }
 
 impl MediaProvider {
-    pub fn new_client(
-        &self,
-        client: &reqwest::Client,
-        user: &User,
-    ) -> Box<dyn MediaClient + Send + Sync> {
+    pub fn new_client(&self, client: &Client, user: &User) -> Box<dyn MediaClient + Send + Sync> {
         let client: Box<dyn MediaClient + Send + Sync> = match self {
             MediaProvider::MAL => Box::new(MalClient::new(client, user)),
             MediaProvider::ANILIST => Box::new(AniListClient::new(client, user)),
