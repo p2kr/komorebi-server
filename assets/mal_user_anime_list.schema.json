@@ -1,0 +1,258 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UserAnimeListResponse",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/UserAnimeListEdge"
+      }
+    },
+    "paging": {
+      "type": "object",
+      "properties": {
+        "previous": { "type": "string" },
+        "next": { "type": "string" }
+      },
+      "required": ["previous", "next"]
+    }
+  },
+  "required": ["data", "paging"],
+  "definitions": {
+    "UserAnimeListEdge": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "$ref": "#/definitions/AnimeNode"
+        },
+        "list_status": {
+          "$ref": "#/definitions/AnimeListStatus"
+        }
+      },
+      "required": ["node", "list_status"]
+    },
+    "AnimeNode": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "title": { "type": "string" },
+        "main_picture": {
+          "type": ["object", "null"],
+          "properties": {
+            "large": { "type": ["string", "null"], "format": "uri" },
+            "medium": { "type": "string", "format": "uri" }
+          },
+          "required": ["medium"]
+        },
+        "alternative_titles": {
+          "type": ["object", "null"],
+          "description": "'synonyms' or ISO 639-1",
+          "properties": {
+            "synonyms": {
+              "type": ["array", "null"],
+              "items": { "type": ["string", "null"] }
+            },
+            "en": { "type": ["string", "null"] },
+            "ja": { "type": ["string", "null"] }
+          }
+        },
+        "start_date": { "type": ["string", "null"] },
+        "end_date": { "type": ["string", "null"] },
+        "synopsis": {
+          "type": ["string", "null"],
+          "description": "Synopsis. The API strips BBCode tags from the result."
+        },
+        "mean": {
+          "type": ["number", "null"],
+          "description": "Mean score. Omitted if user scores count is small."
+        },
+        "rank": {
+          "type": ["integer", "null"],
+          "description": "Omitted if rank cannot be calculated."
+        },
+        "popularity": { "type": ["integer", "null"] },
+        "num_list_users": {
+          "type": "integer",
+          "description": "Number of users who have this work in their list."
+        },
+        "num_scoring_users": { "type": "integer" },
+        "nsfw": {
+          "type": ["string", "null"],
+          "enum": ["white", "gray", "black", null]
+        },
+        "genres": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Genre"
+          }
+        },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "media_type": {
+          "type": "string",
+          "enum": ["unknown", "tv", "ova", "movie", "special", "ona", "music"]
+        },
+        "status": {
+          "type": "string",
+          "description": "Airing status.",
+          "enum": ["finished_airing", "currently_airing", "not_yet_aired"]
+        },
+        "my_list_status": {
+          "oneOf": [
+            { "$ref": "#/definitions/AnimeListStatus" },
+            { "type": "null" }
+          ],
+          "description": "Status of user's anime list. Excluded if there is no access token."
+        },
+        "num_episodes": {
+          "type": "integer",
+          "description": "Total number of episodes. 0 if unknown."
+        },
+        "start_season": {
+          "type": ["object", "null"],
+          "properties": {
+            "year": { "type": "integer" },
+            "season": {
+              "type": "string",
+              "enum": ["winter", "spring", "summer", "fall"]
+            }
+          },
+          "required": ["year", "season"]
+        },
+        "broadcast": {
+          "type": ["object", "null"],
+          "description": "Broadcast date.",
+          "properties": {
+            "day_of_the_week": {
+              "type": "string",
+              "description": "Day of the week broadcast in Japan time, or 'other'."
+            },
+            "start_time": {
+              "type": ["string", "null"],
+              "description": "e.g., '01:25'"
+            }
+          },
+          "required": ["day_of_the_week"]
+        },
+        "source": {
+          "type": ["string", "null"],
+          "description": "Original work.",
+          "enum": [
+            "other",
+            "original",
+            "manga",
+            "4_koma_manga",
+            "web_manga",
+            "digital_manga",
+            "novel",
+            "light_novel",
+            "visual_novel",
+            "game",
+            "card_game",
+            "book",
+            "picture_book",
+            "radio",
+            "music",
+            null
+          ]
+        },
+        "average_episode_duration": {
+          "type": ["integer", "null"],
+          "description": "Average length of episode in seconds."
+        },
+        "rating": {
+          "type": ["string", "null"],
+          "enum": ["g", "pg", "pg_13", "r", "r+", "rx", null]
+        },
+        "studios": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AnimeStudio"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "num_list_users",
+        "num_scoring_users",
+        "genres",
+        "created_at",
+        "updated_at",
+        "media_type",
+        "status",
+        "num_episodes",
+        "studios"
+      ]
+    },
+    "Genre": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "name": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "AnimeStudio": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "name": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "AnimeListStatus": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": ["string", "null"],
+          "enum": [
+            "watching",
+            "completed",
+            "on_hold",
+            "dropped",
+            "plan_to_watch",
+            null
+          ]
+        },
+        "score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "num_episodes_watched": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0 or the number of watched episodes."
+        },
+        "is_rewatching": { "type": "boolean" },
+        "start_date": { "type": ["string", "null"], "format": "date" },
+        "finish_date": { "type": ["string", "null"], "format": "date" },
+        "priority": { "type": "integer" },
+        "num_times_rewatched": { "type": "integer" },
+        "rewatch_value": { "type": "integer" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "comments": {
+          "type": "string",
+          "description": "You cannot contain this field in a list."
+        },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "score",
+        "num_episodes_watched",
+        "is_rewatching",
+        "priority",
+        "num_times_rewatched",
+        "rewatch_value",
+        "tags",
+        "comments",
+        "updated_at"
+      ]
+    }
+  }
+}
