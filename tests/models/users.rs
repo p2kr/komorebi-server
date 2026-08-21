@@ -1,369 +1,102 @@
-use chrono::{offset::Local, Duration};
-use insta::assert_debug_snapshot;
 use komorebi_server::{
     app::App,
-    models::users::{self, Model, RegisterParams},
+    models::{
+        _entities::users::{self, ActiveModel},
+        media::MediaProvider,
+    },
 };
-use loco_rs::testing::prelude::*;
-use sea_orm::{ActiveModelTrait, ActiveValue, IntoActiveModel};
+use loco_rs::{hash, testing::prelude::*};
+use sea_orm::{ActiveModelTrait, ActiveValue};
 use serial_test::serial;
-
-macro_rules! configure_insta {
-    ($($expr:expr),*) => {
-        let mut settings = insta::Settings::clone_current();
-        settings.set_prepend_module_to_snapshot(false);
-        settings.set_snapshot_suffix("users");
-        let _guard = settings.bind_to_scope();
-    };
-}
+use uuid::Uuid;
 
 #[tokio::test]
 #[serial]
-async fn test_can_validate_model() {
-    configure_insta!();
-
+async fn test_user_model_crud_and_passcode() {
     let boot = boot_test::<App>()
         .await
         .expect("Failed to boot test application");
 
-    let invalid_user = users::ActiveModel {
-        name: ActiveValue::set("1".to_string()),
-        email: ActiveValue::set("invalid-email".to_string()),
+    let username = "tester";
+    let plain_passcode = "pass123";
+    let hashed = hash::hash_password(plain_passcode).unwrap();
+
+    let user_active = ActiveModel {
+        username: ActiveValue::Set(username.to_string()),
+        provider: ActiveValue::Set(MediaProvider::MAL),
+        passcode: ActiveValue::Set(Some(hashed)),
+        is_sandbox: ActiveValue::Set(true),
         ..Default::default()
     };
 
-    let res = invalid_user.insert(&boot.app_context.db).await;
+    let user = user_active
+        .insert(&boot.app_context.db)
+        .await
+        .expect("Failed to insert user");
 
-    assert_debug_snapshot!(res);
+    assert_eq!(user.username, username);
+    assert_ne!(user.id, Uuid::nil());
+    assert!(user.verify_passcode(Some(plain_passcode)));
+    assert!(!user.verify_passcode(Some("wrong_pass")));
+    assert!(!user.verify_passcode(None));
+    assert!(!user.verify_passcode(Some("")));
+
+    // Test find_by_id
+    let found_by_id = users::Model::find_by_id(&boot.app_context.db, user.id)
+        .await
+        .expect("User should be found by id");
+    assert_eq!(found_by_id.id, user.id);
+
+    // Test find_by_username_and_provider_and_sandbox
+    let found_by_prov =
+        users::Model::find_by_username_and_provider_and_sandbox(
+            &boot.app_context.db,
+            username,
+            MediaProvider::MAL,
+            true,
+        )
+        .await
+        .expect("User should be found by username and provider");
+    assert_eq!(found_by_prov.id, user.id);
+
+    // Test get_all_users
+    let all_users = users::Model::get_all_users(&boot.app_context.db)
+        .await
+        .expect("Failed to get all users");
+    assert!(!all_users.is_empty());
+
+    // Test delete_user
+    users::Model::delete_user(&boot.app_context.db, user.id)
+        .await
+        .expect("Failed to delete user");
+
+    let deleted = users::Model::find_by_id(&boot.app_context.db, user.id).await;
+    assert!(deleted.is_err());
 }
 
 #[tokio::test]
 #[serial]
-async fn can_create_with_password() {
-    configure_insta!();
-
+async fn test_empty_passcode_validation() {
     let boot = boot_test::<App>()
         .await
         .expect("Failed to boot test application");
 
-    let params = RegisterParams {
-        email: "test@framework.com".to_string(),
-        password: "1234".to_string(),
-        name: "framework".to_string(),
+    let username = "empty_passcode_user";
+
+    let user_active = ActiveModel {
+        username: ActiveValue::Set(username.to_string()),
+        provider: ActiveValue::Set(MediaProvider::ANILIST),
+        passcode: ActiveValue::Set(None),
+        is_sandbox: ActiveValue::Set(true),
+        ..Default::default()
     };
 
-    let user = Model::create_with_password(&boot.app_context.db, &params)
+    let user = user_active
+        .insert(&boot.app_context.db)
         .await
-        .expect("a user should be created");
+        .expect("Failed to insert user");
 
-    // Snapshot only the fields this test is about, never the whole `Model`.
-    // A whole-model snapshot encodes every column, so adding one field to
-    // `users` — the first thing most apps do — fails every such test at once
-    // and buries the one real change in a pile of mechanical re-blessing.
-    // Anything the snapshot does not cover, assert directly:
-    assert_ne!(
-        user.password, params.password,
-        "the password must be stored hashed, never in the clear"
-    );
-    assert_debug_snapshot!((user.email, user.name));
-}
-#[tokio::test]
-#[serial]
-async fn handle_create_with_password_with_duplicate() {
-    configure_insta!();
-
-    let boot = boot_test::<App>()
-        .await
-        .expect("Failed to boot test application");
-    seed::<App>(&boot.app_context)
-        .await
-        .expect("Failed to seed database");
-
-    let new_user = Model::create_with_password(
-        &boot.app_context.db,
-        &RegisterParams {
-            email: "user1@example.com".to_string(),
-            password: "1234".to_string(),
-            name: "framework".to_string(),
-        },
-    )
-    .await;
-
-    assert_debug_snapshot!(new_user);
-}
-
-#[tokio::test]
-#[serial]
-async fn can_find_by_email() {
-    configure_insta!();
-
-    let boot = boot_test::<App>()
-        .await
-        .expect("Failed to boot test application");
-    seed::<App>(&boot.app_context)
-        .await
-        .expect("Failed to seed database");
-
-    let existing_user = Model::find_by_email(&boot.app_context.db, "user1@example.com").await;
-    let non_existing_user_results =
-        Model::find_by_email(&boot.app_context.db, "un@existing-email.com").await;
-
-    // Narrowed on purpose — see `can_create_with_password` above.
-    assert_debug_snapshot!(existing_user.map(|user| (user.email, user.name)));
-    assert_debug_snapshot!(non_existing_user_results.map(|user| (user.email, user.name)));
-}
-
-#[tokio::test]
-#[serial]
-async fn can_find_by_pid() {
-    configure_insta!();
-
-    let boot = boot_test::<App>()
-        .await
-        .expect("Failed to boot test application");
-    seed::<App>(&boot.app_context)
-        .await
-        .expect("Failed to seed database");
-
-    let existing_user =
-        Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111").await;
-    let non_existing_user_results =
-        Model::find_by_pid(&boot.app_context.db, "23232323-2323-2323-2323-232323232323").await;
-
-    // Narrowed on purpose — see `can_create_with_password` above.
-    assert_debug_snapshot!(existing_user.map(|user| (user.pid, user.email)));
-    assert_debug_snapshot!(non_existing_user_results.map(|user| (user.pid, user.email)));
-}
-
-#[tokio::test]
-#[serial]
-async fn can_verification_token() {
-    configure_insta!();
-
-    let boot = boot_test::<App>()
-        .await
-        .expect("Failed to boot test application");
-    seed::<App>(&boot.app_context)
-        .await
-        .expect("Failed to seed database");
-
-    let user = Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
-        .await
-        .expect("Failed to find user by PID");
-
-    assert!(
-        user.email_verification_sent_at.is_none(),
-        "Expected no email verification sent timestamp"
-    );
-    assert!(
-        user.email_verification_token.is_none(),
-        "Expected no email verification token"
-    );
-
-    let result = user
-        .into_active_model()
-        .set_email_verification_sent(&boot.app_context.db)
-        .await;
-
-    assert!(result.is_ok(), "Failed to set email verification sent");
-
-    let user = Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
-        .await
-        .expect("Failed to find user by PID after setting verification sent");
-
-    assert!(
-        user.email_verification_sent_at.is_some(),
-        "Expected email verification sent timestamp to be present"
-    );
-    assert!(
-        user.email_verification_token.is_some(),
-        "Expected email verification token to be present"
-    );
-}
-
-#[tokio::test]
-#[serial]
-async fn can_set_forgot_password_sent() {
-    configure_insta!();
-
-    let boot = boot_test::<App>()
-        .await
-        .expect("Failed to boot test application");
-    seed::<App>(&boot.app_context)
-        .await
-        .expect("Failed to seed database");
-
-    let user = Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
-        .await
-        .expect("Failed to find user by PID");
-
-    assert!(
-        user.reset_sent_at.is_none(),
-        "Expected no reset sent timestamp"
-    );
-    assert!(user.reset_token.is_none(), "Expected no reset token");
-
-    let result = user
-        .into_active_model()
-        .set_forgot_password_sent(&boot.app_context.db)
-        .await;
-
-    assert!(result.is_ok(), "Failed to set forgot password sent");
-
-    let user = Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
-        .await
-        .expect("Failed to find user by PID after setting forgot password sent");
-
-    assert!(
-        user.reset_sent_at.is_some(),
-        "Expected reset sent timestamp to be present"
-    );
-    assert!(
-        user.reset_token.is_some(),
-        "Expected reset token to be present"
-    );
-}
-
-#[tokio::test]
-#[serial]
-async fn can_verified() {
-    configure_insta!();
-
-    let boot = boot_test::<App>()
-        .await
-        .expect("Failed to boot test application");
-    seed::<App>(&boot.app_context)
-        .await
-        .expect("Failed to seed database");
-
-    let user = Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
-        .await
-        .expect("Failed to find user by PID");
-
-    assert!(
-        user.email_verified_at.is_none(),
-        "Expected email to be unverified"
-    );
-
-    let result = user
-        .into_active_model()
-        .verified(&boot.app_context.db)
-        .await;
-
-    assert!(result.is_ok(), "Failed to mark email as verified");
-
-    let user = Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
-        .await
-        .expect("Failed to find user by PID after verification");
-
-    assert!(
-        user.email_verified_at.is_some(),
-        "Expected email to be verified"
-    );
-}
-
-#[tokio::test]
-#[serial]
-async fn can_reset_password() {
-    configure_insta!();
-
-    let boot = boot_test::<App>()
-        .await
-        .expect("Failed to boot test application");
-    seed::<App>(&boot.app_context)
-        .await
-        .expect("Failed to seed database");
-
-    let user = Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
-        .await
-        .expect("Failed to find user by PID");
-
-    assert!(
-        user.verify_password("12341234"),
-        "Password verification failed for original password"
-    );
-
-    let result = user
-        .clone()
-        .into_active_model()
-        .reset_password(&boot.app_context.db, "new-password")
-        .await;
-
-    assert!(result.is_ok(), "Failed to reset password");
-
-    let user = Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
-        .await
-        .expect("Failed to find user by PID after password reset");
-
-    assert!(
-        user.verify_password("new-password"),
-        "Password verification failed for new password"
-    );
-}
-
-#[tokio::test]
-#[serial]
-async fn magic_link() {
-    let boot = boot_test::<App>().await.unwrap();
-    seed::<App>(&boot.app_context).await.unwrap();
-
-    let user = Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
-        .await
-        .unwrap();
-
-    assert!(
-        user.magic_link_token.is_none(),
-        "Magic link token should be initially unset"
-    );
-    assert!(
-        user.magic_link_expiration.is_none(),
-        "Magic link expiration should be initially unset"
-    );
-
-    let create_result = user
-        .into_active_model()
-        .create_magic_link(&boot.app_context.db)
-        .await;
-
-    assert!(
-        create_result.is_ok(),
-        "Failed to create magic link: {:?}",
-        create_result.unwrap_err()
-    );
-
-    let updated_user =
-        Model::find_by_pid(&boot.app_context.db, "11111111-1111-1111-1111-111111111111")
-            .await
-            .expect("Failed to refetch user after magic link creation");
-
-    assert!(
-        updated_user.magic_link_token.is_some(),
-        "Magic link token should be set after creation"
-    );
-
-    let magic_link_token = updated_user.magic_link_token.unwrap();
-    assert_eq!(
-        magic_link_token.len(),
-        users::MAGIC_LINK_LENGTH as usize,
-        "Magic link token length does not match expected length"
-    );
-
-    assert!(
-        updated_user.magic_link_expiration.is_some(),
-        "Magic link expiration should be set after creation"
-    );
-
-    let now = Local::now();
-    let should_expired_at = now + Duration::minutes(users::MAGIC_LINK_EXPIRATION_MIN.into());
-    let actual_expiration = updated_user.magic_link_expiration.unwrap();
-
-    assert!(
-        actual_expiration >= now,
-        "Magic link expiration should be in the future or now"
-    );
-
-    assert!(
-        actual_expiration <= should_expired_at,
-        "Magic link expiration exceeds expected maximum expiration time"
-    );
+    assert!(user.verify_passcode(None));
+    assert!(user.verify_passcode(Some("")));
+    assert!(!user.verify_passcode(Some("any_pass")));
 }

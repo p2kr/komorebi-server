@@ -5,7 +5,7 @@ use loco_rs::{
     boot::{create_app, BootResult, StartMode},
     config::Config,
     controller::AppRoutes,
-    db::{self, truncate_table},
+    db::truncate_table,
     environment::Environment,
     task::Tasks,
     Result,
@@ -13,8 +13,9 @@ use loco_rs::{
 use migration::Migrator;
 use std::path::Path;
 
+use crate::initializers::client;
 #[allow(unused_imports)]
-use crate::{controllers, models::_entities::users, tasks, workers::downloader::DownloadWorker};
+use crate::{controllers, models::_entities::users, workers::downloader::DownloadWorker};
 
 pub struct App;
 #[async_trait]
@@ -47,7 +48,7 @@ impl Hooks for App {
 
     fn routes(_ctx: &AppContext) -> AppRoutes {
         AppRoutes::with_default_routes() // controller routes below
-            .add_route(controllers::auth::routes())
+            .add_route(controllers::user_controller::routes())
     }
     async fn connect_workers(ctx: &AppContext, queue: &Queue) -> Result<()> {
         queue.register(DownloadWorker::build(ctx)).await?;
@@ -57,15 +58,18 @@ impl Hooks for App {
     #[allow(unused_variables)]
     fn register_tasks(tasks: &mut Tasks) {
         // tasks-inject (do not remove)
-        tasks.register(tasks::user_create::UserCreate);
     }
     async fn truncate(ctx: &AppContext) -> Result<()> {
         truncate_table(&ctx.db, users::Entity).await?;
         Ok(())
     }
-    async fn seed(ctx: &AppContext, base: &Path) -> Result<()> {
-        db::seed::<users::ActiveModel>(&ctx.db, &base.join("users.yaml").display().to_string())
-            .await?;
+    async fn seed(_ctx: &AppContext, _base: &Path) -> Result<()> {
         Ok(())
+    }
+
+    async fn after_context(ctx: AppContext) -> Result<AppContext> {
+        let client = client::get_reqwest_client();
+        ctx.shared_store.insert(client);
+        Ok(ctx)
     }
 }

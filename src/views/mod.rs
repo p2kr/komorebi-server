@@ -1,1 +1,1 @@
-pub mod auth;
+// Views module

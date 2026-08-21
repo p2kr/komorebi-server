@@ -1,41 +1,62 @@
-use loco_rs::schema::*;
-use sea_orm_migration::prelude::*;
+use sea_orm_migration::{async_trait::async_trait, prelude::*, schema::*};
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
-#[async_trait::async_trait]
+#[derive(DeriveIden)]
+pub enum Users {
+    Table,
+    Id,
+    Username,
+    ProviderId,
+    AvatarUrl,
+    Provider,
+    IsSandbox,
+    AccessToken,
+    Passcode,
+    CreatedAt,
+    UpdatedAt,
+}
+
+#[async_trait]
 impl MigrationTrait for Migration {
-    async fn up(&self, m: &SchemaManager) -> Result<(), DbErr> {
-        create_table(
-            m,
-            "users",
-            &[
-                ("id", ColType::PkAuto),
-                ("pid", ColType::Uuid),
-                ("email", ColType::StringUniq),
-                ("password", ColType::String),
-                ("api_key", ColType::StringUniq),
-                ("name", ColType::String),
-                ("reset_token", ColType::StringNull),
-                ("reset_sent_at", ColType::TimestampWithTimeZoneNull),
-                ("email_verification_token", ColType::StringNull),
-                (
-                    "email_verification_sent_at",
-                    ColType::TimestampWithTimeZoneNull,
-                ),
-                ("email_verified_at", ColType::TimestampWithTimeZoneNull),
-                ("magic_link_token", ColType::StringNull),
-                ("magic_link_expiration", ColType::TimestampWithTimeZoneNull),
-            ],
-            &[],
-        )
-        .await?;
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        // 1. Create `users` table
+        let table = Table::create()
+            .table(Users::Table)
+            .if_not_exists()
+            .col(pk_uuid(Users::Id))
+            .col(string(Users::Username))
+            .col(string_null(Users::ProviderId))
+            .col(string_null(Users::AvatarUrl))
+            .col(string(Users::Provider))
+            .col(boolean(Users::IsSandbox).default(true))
+            .col(string_null(Users::AccessToken))
+            .col(string_null(Users::Passcode))
+            .col(timestamp_with_time_zone_default_now(Users::CreatedAt))
+            .col(timestamp_with_time_zone_default_now(Users::UpdatedAt))
+            .to_owned();
+
+        manager.create_table(table).await?;
+
+        // 2. Create composite UNIQUE index on (username, provider, is_sandbox)
+        let index = Index::create()
+            .table(Users::Table)
+            .name("idx-uniq-users-username-provider-is_sandbox")
+            .col(Users::Username)
+            .col(Users::Provider)
+            .col(Users::IsSandbox)
+            .unique()
+            .to_owned();
+
+        manager.create_index(index).await?;
+
         Ok(())
     }
 
-    async fn down(&self, m: &SchemaManager) -> Result<(), DbErr> {
-        drop_table(m, "users").await?;
-        Ok(())
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_table(Table::drop().table(Users::Table).to_owned())
+            .await
     }
 }

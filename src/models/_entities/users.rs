@@ -3,27 +3,25 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
+use crate::models::media::MediaProvider;
+
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize, Default)]
 #[sea_orm(table_name = "users")]
+#[serde(default)]
 pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: Uuid,
+    pub username: String,
+    pub provider_id: Option<String>,
+    pub avatar_url: Option<String>,
+    pub provider: MediaProvider,
+    pub is_sandbox: bool,
+    #[serde(skip_serializing)]
+    pub access_token: Option<String>,
+    #[serde(skip_serializing)]
+    pub passcode: Option<String>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
-    #[sea_orm(primary_key)]
-    pub id: i64,
-    pub pid: Uuid,
-    #[sea_orm(unique)]
-    pub email: String,
-    pub password: String,
-    #[sea_orm(unique)]
-    pub api_key: String,
-    pub name: String,
-    pub reset_token: Option<String>,
-    pub reset_sent_at: Option<DateTimeWithTimeZone>,
-    pub email_verification_token: Option<String>,
-    pub email_verification_sent_at: Option<DateTimeWithTimeZone>,
-    pub email_verified_at: Option<DateTimeWithTimeZone>,
-    pub magic_link_token: Option<String>,
-    pub magic_link_expiration: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

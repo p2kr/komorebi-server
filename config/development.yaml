@@ -35,16 +35,16 @@ workers:
   #   - BackgroundAsync - Workers operate asynchronously in the background, processing tasks with async capabilities.
   mode: BackgroundQueue
 
-  
+
 # Queue Configuration
 queue:
   kind: Sqlite
-  
+
   # SQLite connection URI
   uri: <%= get_env(name="QUEUE_URL", default="sqlite://loco_development.sqlite?mode=rwc") %>
   # Dangerously flush all data in the queue table on startup. dangerous operation, make sure that you using this flag only on dev environments or test mode
   dangerously_flush: false
-  
+
 
 # Mailer Configuration.
 mailer:
@@ -80,7 +80,7 @@ mailer:
 # Database Configuration
 database:
   # Database connection URI
-  uri: <%= get_env(name="DATABASE_URL", default="sqlite://komorebi-server_development.sqlite?mode=rwc") %>
+  uri: <%= get_env(name="DATABASE_URL", default="sqlite://assets/dev.db?mode=rwc") %>
   # When enabled, the sql query will be logged.
   enable_logging: <%= get_env(name="DB_LOGGING", default="false") %>
   # Set the timeout duration when acquiring a connection.
