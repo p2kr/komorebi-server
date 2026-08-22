@@ -5,6 +5,7 @@ use komorebi_server::{
 use loco_rs::{hash, testing::prelude::*};
 use sea_orm::{ActiveModelTrait, ActiveValue};
 use serial_test::serial;
+use uuid::Uuid;
 
 #[tokio::test]
 #[serial]
@@ -34,14 +35,17 @@ async fn can_login_with_passcode() {
             "provider": "MAL",
             "is_sandbox": true
         });
-        let login_response = request.post("/api/v1/user/login").json(&login_payload).await;
+        let login_response = request
+            .post("/api/v1/user/login")
+            .json(&login_payload)
+            .await;
         assert_eq!(login_response.status_code(), 200);
 
         let logged_in_user: serde_json::Value =
             serde_json::from_str(&login_response.text()).unwrap();
-        assert_eq!(logged_in_user["id"], user.id.to_string());
-        assert_eq!(logged_in_user["username"], username);
-        assert_eq!(logged_in_user["provider"], "MAL");
+        assert_eq!(logged_in_user["data"]["id"], user.id.to_string());
+        assert_eq!(logged_in_user["data"]["username"], username);
+        assert_eq!(logged_in_user["data"]["provider"], "MAL");
 
         // 2. Login with wrong passcode fails
         let wrong_login = serde_json::json!({
@@ -95,12 +99,15 @@ async fn can_login_with_empty_passcode() {
             "provider": "ANILIST",
             "is_sandbox": true
         });
-        let login_response = request.post("/api/v1/user/login").json(&login_payload).await;
+        let login_response = request
+            .post("/api/v1/user/login")
+            .json(&login_payload)
+            .await;
         assert_eq!(login_response.status_code(), 200);
 
         let logged_in_user: serde_json::Value =
             serde_json::from_str(&login_response.text()).unwrap();
-        assert_eq!(logged_in_user["id"], user.id.to_string());
+        assert_eq!(logged_in_user["data"]["id"], user.id.to_string());
 
         // 2. Login with null passcode
         let login_null = serde_json::json!({
@@ -176,6 +183,80 @@ async fn can_get_and_delete_user() {
             .json(&serde_json::json!({ "user_id": user_id }))
             .await;
         assert_ne!(after_del.status_code(), 200);
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn get_user_by_id_returns_error_for_nonexistent_user() {
+    request::<App, _, _>(|request, _ctx| async move {
+        let nonexistent_id = Uuid::new_v4();
+
+        let res = request
+            .post("/api/v1/user/one")
+            .json(&serde_json::json!({ "user_id": nonexistent_id }))
+            .await;
+
+        // Should not be 200 — the user does not exist
+        assert_ne!(res.status_code(), 200, "nonexistent user should not return 200");
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn delete_user_by_id_returns_error_for_nonexistent_user() {
+    request::<App, _, _>(|request, _ctx| async move {
+        let nonexistent_id = Uuid::new_v4();
+
+        let res = request
+            .post("/api/v1/user/delete")
+            .json(&serde_json::json!({ "user_id": nonexistent_id }))
+            .await;
+
+        // Should not be 200 — there is nothing to delete
+        assert_ne!(res.status_code(), 200, "deleting nonexistent user should not return 200");
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn login_missing_provider_defaults_to_mal() {
+    // LoginParams has #[serde(default)] so a missing provider field falls back to MAL
+    request::<App, _, _>(|request, ctx| async move {
+        let username = "default_provider_user";
+        let user_active = ActiveModel {
+            username: ActiveValue::Set(username.to_string()),
+            provider: ActiveValue::Set(MediaProvider::MAL),
+            is_sandbox: ActiveValue::Set(true),
+            ..Default::default()
+        };
+        user_active.insert(&ctx.db).await.expect("seed user");
+
+        // Omit "provider" — should default to MAL
+        let payload = serde_json::json!({
+            "username": username,
+            "is_sandbox": true
+        });
+        let res = request.post("/api/v1/user/login").json(&payload).await;
+        // MAL user exists with no passcode requirement, so this should succeed
+        assert_eq!(res.status_code(), 200);
+    })
+    .await;
+}
+
+#[tokio::test]
+#[serial]
+async fn get_all_users_returns_success_shape() {
+    request::<App, _, _>(|request, _ctx| async move {
+        let res = request.post("/api/v1/user/all").await;
+        assert_eq!(res.status_code(), 200);
+        let body: serde_json::Value = serde_json::from_str(&res.text()).unwrap();
+        // Response envelope has { success: true, data: [...] }
+        assert_eq!(body["success"], true);
+        assert!(body["data"].is_array());
     })
     .await;
 }

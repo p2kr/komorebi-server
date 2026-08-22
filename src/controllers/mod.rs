@@ -37,3 +37,5 @@ pub fn fail(status_code: StatusCode, msg: &str) -> Result<Response> {
     )
         .into_response())
 }
+
+pub mod media_controller;

@@ -14,7 +14,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct LoginParams {
     pub username: String,
@@ -93,6 +93,29 @@ async fn delete_user_by_id(
     success(params.user_id)
 }
 
+#[derive(Deserialize)]
+pub struct ExchangeOauthTokenParams {
+    pub provider: MediaProvider,
+    pub code: String,
+    pub code_verifier: String,
+}
+
+#[debug_handler]
+async fn exchange_oauth_token(
+    State(ctx): State<AppContext>,
+    Json(params): Json<ExchangeOauthTokenParams>,
+) -> Result<Response> {
+    let media_client = params
+        .provider
+        .new_client(&ctx.shared_store.get::<Client>().unwrap(), &User::default());
+
+    let token = media_client
+        .exchange_oauth_token(&params.code, &params.code_verifier)
+        .await?;
+
+    success(token)
+}
+
 async fn validate_user(client: &Client, params: &User) -> Result<User> {
     let mut user = User {
         username: params.username.clone(),
@@ -132,10 +155,11 @@ async fn validate_user(client: &Client, params: &User) -> Result<User> {
 
 pub fn routes() -> Routes {
     Routes::new()
-        .prefix("/api/v1/user")
+        .prefix("/user")
         .add("/login", post(login))
         .add("/add", post(save_user))
         .add("/all", post(get_all_users))
         .add("/one", post(get_user_by_id))
         .add("/delete", post(delete_user_by_id))
+        .add("/oauth/exchange", post(exchange_oauth_token))
 }

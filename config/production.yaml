@@ -39,6 +39,15 @@ server:
   host: <%= get_env(name="HOST") %>
   # Out of the box middleware configuration. to disable middleware you can changed the `enable` field to `false` of comment the middleware block
   middlewares:
+    static:
+      enable: true
+      must_exist: true
+      folder:
+        uri: "/"
+        path: "../komorebi-web/build/"
+      fallback: "../komorebi-web/build/index.html"
+    fallback:
+      enable: false
 
 # Worker Configuration
 workers:
@@ -48,16 +57,14 @@ workers:
   #   - BackgroundAsync - Workers operate asynchronously in the background, processing tasks with async capabilities.
   mode: BackgroundQueue
 
-  
 # Queue Configuration
 queue:
   kind: Sqlite
-  
+
   # SQLite connection URI
   uri: <%= get_env(name="QUEUE_URL") %>
   # Dangerously flush all data in the queue table on startup. dangerous operation, make sure that you using this flag only on dev environments or test mode
   dangerously_flush: false
-  
 
 # Mailer Configuration.
 mailer:
