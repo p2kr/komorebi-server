@@ -2,6 +2,7 @@ pub mod adapters;
 pub mod app;
 pub mod controllers;
 pub mod core;
+pub mod crawlers;
 pub mod data;
 pub mod dtos;
 pub mod initializers;

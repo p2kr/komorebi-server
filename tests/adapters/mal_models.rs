@@ -11,7 +11,7 @@ use komorebi_server::models::media::{
 
 fn make_list_status(status: &str, rewatching: bool, rereading: bool) -> MalListStatus {
     MalListStatus {
-        status: Some(status.to_string()),
+        status: Some(status.into()),
         score: Some(8.0),
         num_episodes_watched: Some(12.0),
         num_chapters_read: Some(50),
@@ -20,43 +20,54 @@ fn make_list_status(status: &str, rewatching: bool, rereading: bool) -> MalListS
         is_rereading: Some(rereading),
         num_times_rewatched: Some(2),
         num_times_reread: Some(1),
-        tags: Some(vec!["fav".to_string()]),
-        comments: Some("Good show".to_string()),
-        updated_at: Some("2024-01-01T00:00:00Z".to_string()),
+        tags: Some(vec!["fav".into()]),
+        comments: Some("Good show".into()),
+        updated_at: Some("2024-01-01T00:00:00Z".into()),
     }
 }
 
 fn make_node(id: i64, title: &str, media_type: &str, status: &str) -> MalNode {
     MalNode {
         id: Some(id),
-        title: Some(title.to_string()),
+        title: Some(title.into()),
         alternative_titles: Some(MalAltTitles {
-            en: Some("English Title".to_string()),
-            ja: Some("日本語タイトル".to_string()),
+            en: Some("English Title".into()),
+            ja: Some("日本語タイトル".into()),
         }),
         main_picture: Some(MalPicture {
-            medium: Some("medium.jpg".to_string()),
-            large: Some("large.jpg".to_string()),
+            medium: Some("medium.jpg".into()),
+            large: Some("large.jpg".into()),
         }),
         genres: Some(vec![
-            MalGenre { id: Some(1), name: Some("Action".to_string()) },
-            MalGenre { id: Some(2), name: None }, // name-less genre should be filtered
+            MalGenre {
+                id: Some(1),
+                name: Some("Action".into()),
+            },
+            MalGenre {
+                id: Some(2),
+                name: None,
+            }, // name-less genre should be filtered
         ]),
-        synopsis: Some("A great story.".to_string()),
+        synopsis: Some("A great story.".into()),
         mean: Some(8.5),
         popularity: Some(1000),
         num_episodes: Some(24),
         average_episode_duration: Some(1440),
         num_chapters: None,
         num_volumes: None,
-        nsfw: Some("white".to_string()),
+        nsfw: Some("white".into()),
         my_list_status: None,
-        media_type: Some(media_type.to_string()),
-        status: Some(status.to_string()),
+        media_type: Some(media_type.into()),
+        status: Some(status.into()),
     }
 }
 
-fn make_item(id: i64, title: &str, media_type: &str, list_status: Option<MalListStatus>) -> MalItem {
+fn make_item(
+    id: i64,
+    title: &str,
+    media_type: &str,
+    list_status: Option<MalListStatus>,
+) -> MalItem {
     MalItem {
         node: make_node(id, title, media_type, "currently_airing"),
         list_status,
@@ -67,51 +78,123 @@ fn make_item(id: i64, title: &str, media_type: &str, list_status: Option<MalList
 
 #[test]
 fn mal_status_watching_non_manga() {
-    assert_eq!(MalStatus::try_from(("watching", false)), Ok(MalStatus::Watching));
-    assert_eq!(MalStatus::try_from(("current", false)), Ok(MalStatus::Watching));
-    assert_eq!(MalStatus::try_from(("reading", false)), Ok(MalStatus::Watching));
-    assert_eq!(MalStatus::try_from(("repeating", false)), Ok(MalStatus::Watching));
-    assert_eq!(MalStatus::try_from(("rewatching", false)), Ok(MalStatus::Watching));
-    assert_eq!(MalStatus::try_from(("rereading", false)), Ok(MalStatus::Watching));
+    assert_eq!(
+        MalStatus::try_from(("watching", false)),
+        Ok(MalStatus::Watching)
+    );
+    assert_eq!(
+        MalStatus::try_from(("current", false)),
+        Ok(MalStatus::Watching)
+    );
+    assert_eq!(
+        MalStatus::try_from(("reading", false)),
+        Ok(MalStatus::Watching)
+    );
+    assert_eq!(
+        MalStatus::try_from(("repeating", false)),
+        Ok(MalStatus::Watching)
+    );
+    assert_eq!(
+        MalStatus::try_from(("rewatching", false)),
+        Ok(MalStatus::Watching)
+    );
+    assert_eq!(
+        MalStatus::try_from(("rereading", false)),
+        Ok(MalStatus::Watching)
+    );
 }
 
 #[test]
 fn mal_status_reading_manga() {
-    assert_eq!(MalStatus::try_from(("watching", true)), Ok(MalStatus::Reading));
-    assert_eq!(MalStatus::try_from(("current", true)), Ok(MalStatus::Reading));
-    assert_eq!(MalStatus::try_from(("reading", true)), Ok(MalStatus::Reading));
-    assert_eq!(MalStatus::try_from(("repeating", true)), Ok(MalStatus::Reading));
-    assert_eq!(MalStatus::try_from(("rewatching", true)), Ok(MalStatus::Reading));
-    assert_eq!(MalStatus::try_from(("rereading", true)), Ok(MalStatus::Reading));
+    assert_eq!(
+        MalStatus::try_from(("watching", true)),
+        Ok(MalStatus::Reading)
+    );
+    assert_eq!(
+        MalStatus::try_from(("current", true)),
+        Ok(MalStatus::Reading)
+    );
+    assert_eq!(
+        MalStatus::try_from(("reading", true)),
+        Ok(MalStatus::Reading)
+    );
+    assert_eq!(
+        MalStatus::try_from(("repeating", true)),
+        Ok(MalStatus::Reading)
+    );
+    assert_eq!(
+        MalStatus::try_from(("rewatching", true)),
+        Ok(MalStatus::Reading)
+    );
+    assert_eq!(
+        MalStatus::try_from(("rereading", true)),
+        Ok(MalStatus::Reading)
+    );
 }
 
 #[test]
 fn mal_status_plan_to_watch() {
-    assert_eq!(MalStatus::try_from(("planning", false)), Ok(MalStatus::PlanToWatch));
-    assert_eq!(MalStatus::try_from(("plan_to_watch", false)), Ok(MalStatus::PlanToWatch));
-    assert_eq!(MalStatus::try_from(("plan_to_read", false)), Ok(MalStatus::PlanToWatch));
+    assert_eq!(
+        MalStatus::try_from(("planning", false)),
+        Ok(MalStatus::PlanToWatch)
+    );
+    assert_eq!(
+        MalStatus::try_from(("plan_to_watch", false)),
+        Ok(MalStatus::PlanToWatch)
+    );
+    assert_eq!(
+        MalStatus::try_from(("plan_to_read", false)),
+        Ok(MalStatus::PlanToWatch)
+    );
 }
 
 #[test]
 fn mal_status_plan_to_read() {
-    assert_eq!(MalStatus::try_from(("planning", true)), Ok(MalStatus::PlanToRead));
-    assert_eq!(MalStatus::try_from(("plan_to_watch", true)), Ok(MalStatus::PlanToRead));
-    assert_eq!(MalStatus::try_from(("plan_to_read", true)), Ok(MalStatus::PlanToRead));
+    assert_eq!(
+        MalStatus::try_from(("planning", true)),
+        Ok(MalStatus::PlanToRead)
+    );
+    assert_eq!(
+        MalStatus::try_from(("plan_to_watch", true)),
+        Ok(MalStatus::PlanToRead)
+    );
+    assert_eq!(
+        MalStatus::try_from(("plan_to_read", true)),
+        Ok(MalStatus::PlanToRead)
+    );
 }
 
 #[test]
 fn mal_status_on_hold() {
-    assert_eq!(MalStatus::try_from(("paused", false)), Ok(MalStatus::OnHold));
-    assert_eq!(MalStatus::try_from(("on_hold", false)), Ok(MalStatus::OnHold));
+    assert_eq!(
+        MalStatus::try_from(("paused", false)),
+        Ok(MalStatus::OnHold)
+    );
+    assert_eq!(
+        MalStatus::try_from(("on_hold", false)),
+        Ok(MalStatus::OnHold)
+    );
     assert_eq!(MalStatus::try_from(("paused", true)), Ok(MalStatus::OnHold));
 }
 
 #[test]
 fn mal_status_completed_and_dropped() {
-    assert_eq!(MalStatus::try_from(("completed", false)), Ok(MalStatus::Completed));
-    assert_eq!(MalStatus::try_from(("completed", true)), Ok(MalStatus::Completed));
-    assert_eq!(MalStatus::try_from(("dropped", false)), Ok(MalStatus::Dropped));
-    assert_eq!(MalStatus::try_from(("dropped", true)), Ok(MalStatus::Dropped));
+    assert_eq!(
+        MalStatus::try_from(("completed", false)),
+        Ok(MalStatus::Completed)
+    );
+    assert_eq!(
+        MalStatus::try_from(("completed", true)),
+        Ok(MalStatus::Completed)
+    );
+    assert_eq!(
+        MalStatus::try_from(("dropped", false)),
+        Ok(MalStatus::Dropped)
+    );
+    assert_eq!(
+        MalStatus::try_from(("dropped", true)),
+        Ok(MalStatus::Dropped)
+    );
 }
 
 #[test]
@@ -122,8 +205,14 @@ fn mal_status_unknown_is_err() {
 
 #[test]
 fn mal_status_case_insensitive() {
-    assert_eq!(MalStatus::try_from(("WATCHING", false)), Ok(MalStatus::Watching));
-    assert_eq!(MalStatus::try_from(("Completed", false)), Ok(MalStatus::Completed));
+    assert_eq!(
+        MalStatus::try_from(("WATCHING", false)),
+        Ok(MalStatus::Watching)
+    );
+    assert_eq!(
+        MalStatus::try_from(("Completed", false)),
+        Ok(MalStatus::Completed)
+    );
 }
 
 // ─── ListStatus from MalListStatus ───────────────────────────────────────────
@@ -212,8 +301,8 @@ fn list_entry_from_mal_all_fields() {
     // num_times_rewatched takes priority
     assert_eq!(le.repeat_count, Some(2));
     assert_eq!(le.tags, vec!["fav".to_string()]);
-    assert_eq!(le.notes, Some("Good show".to_string()));
-    assert_eq!(le.updated_at, Some("2024-01-01T00:00:00Z".to_string()));
+    assert_eq!(le.notes, Some("Good show".into()));
+    assert_eq!(le.updated_at, Some("2024-01-01T00:00:00Z".into()));
 }
 
 #[test]
@@ -259,14 +348,14 @@ fn media_entry_anime_full_conversion() {
     assert_eq!(me.media.provider, MediaProvider::MAL);
     assert_eq!(me.media.media_type, MediaType::Anime);
     assert_eq!(me.media.format, MediaFormat::Tv);
-    assert_eq!(me.media.title.romanized, Some("My Anime".to_string()));
-    assert_eq!(me.media.title.user_preferred, Some("My Anime".to_string()));
-    assert_eq!(me.media.title.english, Some("English Title".to_string()));
-    assert_eq!(me.media.title.native, Some("日本語タイトル".to_string()));
-    assert_eq!(me.media.cover.medium, Some("medium.jpg".to_string()));
-    assert_eq!(me.media.cover.large, Some("large.jpg".to_string()));
+    assert_eq!(me.media.title.romanized, Some("My Anime".into()));
+    assert_eq!(me.media.title.user_preferred, Some("My Anime".into()));
+    assert_eq!(me.media.title.english, Some("English Title".into()));
+    assert_eq!(me.media.title.native, Some("日本語タイトル".into()));
+    assert_eq!(me.media.cover.medium, Some("medium.jpg".into()));
+    assert_eq!(me.media.cover.large, Some("large.jpg".into()));
     // extra_large falls back to large when large exists
-    assert_eq!(me.media.cover.extra_large, Some("large.jpg".to_string()));
+    assert_eq!(me.media.cover.extra_large, Some("large.jpg".into()));
     assert_eq!(me.media.nsfw, NsfwLevel::Safe);
     // Only the genre with a name is included
     assert_eq!(me.media.genres, vec!["Action".to_string()]);
@@ -329,7 +418,7 @@ fn parse_mal_format_all_arms() {
 
 fn nsfw_level_for(nsfw_str: Option<&str>) -> NsfwLevel {
     let mut item = make_item(1, "Title", "tv", None);
-    item.node.nsfw = nsfw_str.map(|s| s.to_string());
+    item.node.nsfw = nsfw_str.map(|s| s.into());
     let me: MediaEntry = item.try_into().unwrap();
     me.media.nsfw
 }
@@ -347,7 +436,7 @@ fn parse_mal_nsfw_all_arms() {
 
 fn release_status_for(status_str: &str) -> komorebi_server::models::media::ReleaseStatus {
     let mut item = make_item(1, "Title", "tv", None);
-    item.node.status = Some(status_str.to_string());
+    item.node.status = Some(status_str.into());
     let me: MediaEntry = item.try_into().unwrap();
     me.media.release_status
 }
@@ -355,12 +444,27 @@ fn release_status_for(status_str: &str) -> komorebi_server::models::media::Relea
 #[test]
 fn parse_mal_release_status_all_arms() {
     use komorebi_server::models::media::ReleaseStatus;
-    assert_eq!(release_status_for("currently_airing"), ReleaseStatus::Releasing);
-    assert_eq!(release_status_for("currently_publishing"), ReleaseStatus::Releasing);
-    assert_eq!(release_status_for("finished_airing"), ReleaseStatus::Finished);
+    assert_eq!(
+        release_status_for("currently_airing"),
+        ReleaseStatus::Releasing
+    );
+    assert_eq!(
+        release_status_for("currently_publishing"),
+        ReleaseStatus::Releasing
+    );
+    assert_eq!(
+        release_status_for("finished_airing"),
+        ReleaseStatus::Finished
+    );
     assert_eq!(release_status_for("finished"), ReleaseStatus::Finished);
-    assert_eq!(release_status_for("not_yet_aired"), ReleaseStatus::NotYetReleased);
-    assert_eq!(release_status_for("not_yet_published"), ReleaseStatus::NotYetReleased);
+    assert_eq!(
+        release_status_for("not_yet_aired"),
+        ReleaseStatus::NotYetReleased
+    );
+    assert_eq!(
+        release_status_for("not_yet_published"),
+        ReleaseStatus::NotYetReleased
+    );
     assert_eq!(release_status_for("unknown"), ReleaseStatus::Unknown);
 }
 
@@ -368,10 +472,22 @@ fn parse_mal_release_status_all_arms() {
 
 #[test]
 fn media_type_manga_formats_give_manga_type() {
-    for fmt in &["manga", "novel", "one_shot", "doujinshi", "manhwa", "manhua", "oel"] {
+    for fmt in &[
+        "manga",
+        "novel",
+        "one_shot",
+        "doujinshi",
+        "manhwa",
+        "manhua",
+        "oel",
+    ] {
         let item = make_item(1, "Title", fmt, None);
         let me: MediaEntry = item.try_into().unwrap();
-        assert_eq!(me.media.media_type, MediaType::Manga, "expected Manga for format {fmt}");
+        assert_eq!(
+            me.media.media_type,
+            MediaType::Manga,
+            "expected Manga for format {fmt}"
+        );
     }
 }
 
@@ -406,15 +522,21 @@ fn mal_paginated_response_with_paging() {
     let res = MalResponse {
         data: vec![item],
         paging: Some(MalPaging {
-            next: Some("https://api.mal.net/next".to_string()),
-            previous: Some("https://api.mal.net/prev".to_string()),
+            next: Some("https://api.mal.net/next".into()),
+            previous: Some("https://api.mal.net/prev".into()),
         }),
     };
     let paginated: PaginatedResponse = res.into();
     assert_eq!(paginated.data.len(), 1);
     assert!(paginated.paging.has_next);
-    assert_eq!(paginated.paging.next_cursor, Some("https://api.mal.net/next".to_string()));
-    assert_eq!(paginated.paging.prev_cursor, Some("https://api.mal.net/prev".to_string()));
+    assert_eq!(
+        paginated.paging.next_cursor,
+        Some("https://api.mal.net/next".into())
+    );
+    assert_eq!(
+        paginated.paging.prev_cursor,
+        Some("https://api.mal.net/prev".into())
+    );
 }
 
 #[test]
@@ -435,7 +557,10 @@ fn mal_paginated_response_no_next_means_no_has_next() {
     let item = make_item(1, "Title", "tv", None);
     let res = MalResponse {
         data: vec![item],
-        paging: Some(MalPaging { next: None, previous: Some("prev".to_string()) }),
+        paging: Some(MalPaging {
+            next: None,
+            previous: Some("prev".into()),
+        }),
     };
     let paginated: PaginatedResponse = res.into();
     assert!(!paginated.paging.has_next);
@@ -457,7 +582,10 @@ fn mal_paginated_response_invalid_items_filtered() {
 
 #[test]
 fn mal_paginated_response_empty_data() {
-    let res = MalResponse { data: vec![], paging: None };
+    let res = MalResponse {
+        data: vec![],
+        paging: None,
+    };
     let paginated: PaginatedResponse = res.into();
     assert!(paginated.data.is_empty());
     assert!(!paginated.paging.has_next);

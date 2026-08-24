@@ -35,7 +35,7 @@ fn result_ext_ok_passes_through() {
 
 #[test]
 fn result_ext_err_becomes_loco_error() {
-    let err: Result<i32, String> = Err("something broke".to_string());
+    let err: Result<i32, String> = Err("something broke".into());
     let loco_result = err.to_loco_err();
     assert!(loco_result.is_err());
     let err_msg = format!("{}", loco_result.unwrap_err());
@@ -84,6 +84,9 @@ async fn exchange_oauth_token_both_empty_is_err() {
 async fn exchange_oauth_token_code_takes_priority_over_verifier() {
     let ac = make_anilist_client();
     // When both are present, code wins
-    let token = ac.exchange_oauth_token("the_code", "the_verifier").await.unwrap();
+    let token = ac
+        .exchange_oauth_token("the_code", "the_verifier")
+        .await
+        .unwrap();
     assert_eq!(token, "the_code");
 }

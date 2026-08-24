@@ -205,11 +205,11 @@ impl MediaClient for AniListClient {
         let avatar_url = user["data"]["Viewer"]["avatar"]["medium"].as_str();
 
         let new_user = User {
-            username: username.to_string(),
+            username: username.into(),
             provider_id: provider_id.map(|id| id.to_string()),
-            avatar_url: avatar_url.map(|url| url.to_string()),
+            avatar_url: avatar_url.map(|url| url.into()),
             provider: MediaProvider::ANILIST,
-            access_token: Some(access_token.to_string()),
+            access_token: Some(access_token.into()),
             is_sandbox: false,
             ..Default::default()
         };
@@ -221,13 +221,13 @@ impl MediaClient for AniListClient {
         // return either code or code_verifier, whichever has data; because anilist doesn't need exchange.
         if code.is_empty() && code_verifier.is_empty() {
             return Err(Error::Message(
-                "code and code_verifier both cannot be empty".to_string(),
+                "code and code_verifier both cannot be empty".into(),
             ));
         } else {
             if !code.is_empty() {
-                return Ok(code.to_string());
+                return Ok(code.into());
             } else {
-                return Ok(code_verifier.to_string());
+                return Ok(code_verifier.into());
             }
         }
     }

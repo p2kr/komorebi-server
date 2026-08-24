@@ -45,6 +45,12 @@ uuid = { version = "1.6", features = ["v7", "std", "serde"] }
 ts-rs = { version = "12", features = ["chrono-impl", "serde-compat"] }
 include_dir = { version = "0.7" }
 reqwest = { version = "0.13.4", features = ["query", "json", "form"] }
+yaml_serde = "0.10.7"
+indexmap = {version= "2.14.0", features = ["serde"]}
+scraper = "0.27.0"
+strum = "0.28.0"
+strum_macros = "0.28.0"
+anitomy = {git="https://github.com/Rapptz/anitomy-rs", features=["serde"]}
 
 
 [[bin]]

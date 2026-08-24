@@ -114,15 +114,15 @@ impl MediaClient for MalClient {
 
         let username = user["name"]
             .as_str()
-            .ok_or(Error::Message("Error getting username".to_string()))?
-            .to_string();
+            .ok_or(Error::Message("Error getting username".into()))?
+            .into();
 
         let new_user = User {
             username,
             provider_id: user["id"].as_i64().map(|id| id.to_string()),
-            avatar_url: user["picture"].as_str().map(|url| url.to_string()),
+            avatar_url: user["picture"].as_str().map(|url| url.into()),
             provider: MediaProvider::MAL,
-            access_token: Some(access_token.to_string()),
+            access_token: Some(access_token.into()),
             is_sandbox: false,
             ..Default::default()
         };
@@ -151,14 +151,11 @@ impl MediaClient for MalClient {
 
         if resp.status().is_success() {
             let data: Value = resp.json().await.to_loco_err()?;
-            return Ok(data["access_token"]
-                .as_str()
-                .unwrap_or_default()
-                .to_string());
+            return Ok(data["access_token"].as_str().unwrap_or_default().into());
         }
 
         Err(Error::Message(
-            "Error exchanging oauth token for MAL".to_string(),
+            "Error exchanging oauth token for MAL".into(),
         ))
     }
 }

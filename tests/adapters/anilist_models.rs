@@ -13,29 +13,29 @@ fn make_full_media(id: i64, media_type: &str, format: &str, status: &str) -> Ani
     AniListMedia {
         id: Some(id),
         id_mal: Some(id + 1000),
-        media_type: Some(media_type.to_string()),
-        format: Some(format.to_string()),
-        status: Some(status.to_string()),
+        media_type: Some(media_type.into()),
+        format: Some(format.into()),
+        status: Some(status.into()),
         title: Some(AniListTitle {
-            romaji: Some("Romaji Title".to_string()),
-            english: Some("English Title".to_string()),
-            native: Some("Native Title".to_string()),
-            user_preferred: Some("Preferred Title".to_string()),
+            romaji: Some("Romaji Title".into()),
+            english: Some("English Title".into()),
+            native: Some("Native Title".into()),
+            user_preferred: Some("Preferred Title".into()),
         }),
         cover_image: Some(AniListCoverImage {
-            extra_large: Some("xl.jpg".to_string()),
-            large: Some("l.jpg".to_string()),
-            medium: Some("m.jpg".to_string()),
-            color: Some("#ff0000".to_string()),
+            extra_large: Some("xl.jpg".into()),
+            large: Some("l.jpg".into()),
+            medium: Some("m.jpg".into()),
+            color: Some("#ff0000".into()),
         }),
-        description: Some("A synopsis".to_string()),
+        description: Some("A synopsis".into()),
         mean_score: Some(80.0),
         popularity: Some(5000),
         episodes: Some(12),
         duration: Some(24),
         chapters: Some(100),
         volumes: Some(10),
-        genres: Some(vec!["Action".to_string(), "Drama".to_string()]),
+        genres: Some(vec!["Action".into(), "Drama".into()]),
         is_adult: Some(false),
     }
 }
@@ -43,12 +43,12 @@ fn make_full_media(id: i64, media_type: &str, format: &str, status: &str) -> Ani
 fn make_entry(status: &str, media: Option<AniListMedia>) -> AniListMediaListEntry {
     AniListMediaListEntry {
         id: Some(1),
-        status: Some(status.to_string()),
+        status: Some(status.into()),
         score: Some(7.5),
         progress: Some(6),
         progress_volumes: Some(2),
         repeat: Some(0),
-        notes: Some("Nice".to_string()),
+        notes: Some("Nice".into()),
         updated_at: Some(1_700_000_000),
         media,
     }
@@ -123,8 +123,8 @@ fn list_entry_score_and_progress_mapped() {
     assert_eq!(le.score, Some(7.5_f32));
     assert_eq!(le.progress, Some(6));
     assert_eq!(le.progress_volumes, Some(2));
-    assert_eq!(le.notes, Some("Nice".to_string()));
-    assert_eq!(le.updated_at, Some("1700000000".to_string()));
+    assert_eq!(le.notes, Some("Nice".into()));
+    assert_eq!(le.updated_at, Some("1700000000".into()));
 }
 
 // ─── MediaEntry conversion ────────────────────────────────────────────────────
@@ -155,12 +155,12 @@ fn media_entry_anime_full_conversion() {
     assert_eq!(me.media.media_type, MediaType::Anime);
     assert_eq!(me.media.format, MediaFormat::Tv);
     assert_eq!(me.media.release_status, ReleaseStatus::Releasing);
-    assert_eq!(me.media.title.romanized, Some("Romaji Title".to_string()));
-    assert_eq!(me.media.title.english, Some("English Title".to_string()));
-    assert_eq!(me.media.title.native, Some("Native Title".to_string()));
-    assert_eq!(me.media.cover.extra_large, Some("xl.jpg".to_string()));
-    assert_eq!(me.media.cover.color, Some("#ff0000".to_string()));
-    assert_eq!(me.media.synopsis, Some("A synopsis".to_string()));
+    assert_eq!(me.media.title.romanized, Some("Romaji Title".into()));
+    assert_eq!(me.media.title.english, Some("English Title".into()));
+    assert_eq!(me.media.title.native, Some("Native Title".into()));
+    assert_eq!(me.media.cover.extra_large, Some("xl.jpg".into()));
+    assert_eq!(me.media.cover.color, Some("#ff0000".into()));
+    assert_eq!(me.media.synopsis, Some("A synopsis".into()));
     assert_eq!(me.media.episodes, Some(12));
     assert_eq!(me.media.duration, Some(24 * 60)); // converted to seconds
     assert_eq!(me.media.chapters, Some(100));
@@ -234,7 +234,10 @@ fn release_status_for(status_str: &str) -> ReleaseStatus {
 fn parse_release_status_all_arms() {
     assert_eq!(release_status_for("RELEASING"), ReleaseStatus::Releasing);
     assert_eq!(release_status_for("FINISHED"), ReleaseStatus::Finished);
-    assert_eq!(release_status_for("NOT_YET_RELEASED"), ReleaseStatus::NotYetReleased);
+    assert_eq!(
+        release_status_for("NOT_YET_RELEASED"),
+        ReleaseStatus::NotYetReleased
+    );
     assert_eq!(release_status_for("CANCELLED"), ReleaseStatus::Cancelled);
     assert_eq!(release_status_for("HIATUS"), ReleaseStatus::Hiatus);
     assert_eq!(release_status_for("UNKNOWN_STATUS"), ReleaseStatus::Unknown);
@@ -281,7 +284,10 @@ fn make_page_info(current: i32, has_next: bool) -> AniListPageInfo {
     }
 }
 
-fn make_anilist_response(entries: Vec<AniListMediaListEntry>, page_info: Option<AniListPageInfo>) -> AniListResponse {
+fn make_anilist_response(
+    entries: Vec<AniListMediaListEntry>,
+    page_info: Option<AniListPageInfo>,
+) -> AniListResponse {
     AniListResponse {
         data: Some(AniListData {
             page: Some(AniListPage {
@@ -300,7 +306,7 @@ fn paginated_response_has_next_page() {
     let res = make_anilist_response(vec![entry], Some(make_page_info(1, true)));
     let paginated: PaginatedResponse = res.into();
     assert!(paginated.paging.has_next);
-    assert_eq!(paginated.paging.next_cursor, Some("2".to_string()));
+    assert_eq!(paginated.paging.next_cursor, Some("2".into()));
     assert!(paginated.paging.prev_cursor.is_none()); // page 1, no prev
     assert_eq!(paginated.data.len(), 1);
 }
@@ -313,7 +319,7 @@ fn paginated_response_has_prev_page() {
     let paginated: PaginatedResponse = res.into();
     assert!(!paginated.paging.has_next);
     assert!(paginated.paging.next_cursor.is_none());
-    assert_eq!(paginated.paging.prev_cursor, Some("2".to_string()));
+    assert_eq!(paginated.paging.prev_cursor, Some("2".into()));
 }
 
 #[test]
@@ -326,7 +332,10 @@ fn paginated_response_first_page_no_prev() {
 
 #[test]
 fn paginated_response_no_data_node() {
-    let res = AniListResponse { data: None, errors: None };
+    let res = AniListResponse {
+        data: None,
+        errors: None,
+    };
     let paginated: PaginatedResponse = res.into();
     assert!(paginated.data.is_empty());
     assert!(!paginated.paging.has_next);
@@ -348,7 +357,10 @@ fn paginated_response_invalid_entries_filtered() {
     let valid_media = make_full_media(10, "ANIME", "TV", "FINISHED");
     let valid_entry = make_entry("CURRENT", Some(valid_media));
     let invalid_entry = make_entry("CURRENT", None); // no media → TryFrom fails
-    let res = make_anilist_response(vec![valid_entry, invalid_entry], Some(make_page_info(1, false)));
+    let res = make_anilist_response(
+        vec![valid_entry, invalid_entry],
+        Some(make_page_info(1, false)),
+    );
     let paginated: PaginatedResponse = res.into();
     assert_eq!(paginated.data.len(), 1);
 }
@@ -360,7 +372,7 @@ fn paginated_response_with_graphql_errors() {
     let res = AniListResponse {
         data: Some(AniListData { page: None }),
         errors: Some(vec![AniListGraphqlError {
-            message: "Not found".to_string(),
+            message: "Not found".into(),
             status: Some(404),
         }]),
     };

@@ -16,7 +16,7 @@ async fn can_login_with_passcode() {
         let hashed = hash::hash_password(passcode).unwrap();
 
         let user_active = ActiveModel {
-            username: ActiveValue::Set(username.to_string()),
+            username: ActiveValue::Set(username.into()),
             provider: ActiveValue::Set(MediaProvider::MAL),
             passcode: ActiveValue::Set(Some(hashed)),
             is_sandbox: ActiveValue::Set(true),
@@ -80,7 +80,7 @@ async fn can_login_with_empty_passcode() {
         let username = "sandbox_user";
 
         let user_active = ActiveModel {
-            username: ActiveValue::Set(username.to_string()),
+            username: ActiveValue::Set(username.into()),
             provider: ActiveValue::Set(MediaProvider::ANILIST),
             passcode: ActiveValue::Set(None),
             is_sandbox: ActiveValue::Set(true),
@@ -138,7 +138,7 @@ async fn can_get_and_delete_user() {
     request::<App, _, _>(|request, ctx| async move {
         let username = "delete_me";
         let user_active = ActiveModel {
-            username: ActiveValue::Set(username.to_string()),
+            username: ActiveValue::Set(username.into()),
             provider: ActiveValue::Set(MediaProvider::MAL),
             is_sandbox: ActiveValue::Set(true),
             ..Default::default()
@@ -199,7 +199,11 @@ async fn get_user_by_id_returns_error_for_nonexistent_user() {
             .await;
 
         // Should not be 200 — the user does not exist
-        assert_ne!(res.status_code(), 200, "nonexistent user should not return 200");
+        assert_ne!(
+            res.status_code(),
+            200,
+            "nonexistent user should not return 200"
+        );
     })
     .await;
 }
@@ -216,7 +220,11 @@ async fn delete_user_by_id_returns_error_for_nonexistent_user() {
             .await;
 
         // Should not be 200 — there is nothing to delete
-        assert_ne!(res.status_code(), 200, "deleting nonexistent user should not return 200");
+        assert_ne!(
+            res.status_code(),
+            200,
+            "deleting nonexistent user should not return 200"
+        );
     })
     .await;
 }
@@ -228,7 +236,7 @@ async fn login_missing_provider_defaults_to_mal() {
     request::<App, _, _>(|request, ctx| async move {
         let username = "default_provider_user";
         let user_active = ActiveModel {
-            username: ActiveValue::Set(username.to_string()),
+            username: ActiveValue::Set(username.into()),
             provider: ActiveValue::Set(MediaProvider::MAL),
             is_sandbox: ActiveValue::Set(true),
             ..Default::default()

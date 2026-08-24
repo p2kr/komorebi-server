@@ -51,6 +51,7 @@ impl Hooks for App {
             .prefix("/api/v1") // controller routes below
             .add_route(controllers::media_controller::routes())
             .add_route(controllers::user_controller::routes())
+            .add_route(controllers::crawler_controller::routes())
     }
     async fn connect_workers(ctx: &AppContext, queue: &Queue) -> Result<()> {
         queue.register(DownloadWorker::build(ctx)).await?;

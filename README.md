@@ -7,9 +7,11 @@ A high-performance, unified REST API backend written in Rust — built on the [L
 - **Multi-provider support** — MyAnimeList (REST) and AniList (GraphQL) behind a unified interface
 - **Normalized data models** — scores, formats, statuses, and pagination unified regardless of provider
 - **User management** — register, look up, and delete users linked to a provider account
-- **OAuth support** — exchange OAuth authorization codes for access tokens per provider
+- **Passcode auth** — optional Argon2-hashed passcode protection per user
+- **OAuth support** — exchange OAuth authorization codes + PKCE verifiers for access tokens
 - **Paginated list fetching** — anime and manga lists with filtering, sorting, and cursor/offset pagination
-- **Background workers** — Loco worker queue for async jobs
+- **Background workers** — Loco worker queue for async download jobs
+- **Crawler subsystem** — scrapes torrent sites (e.g. Nyaa.si) using configurable CSS-selector rules and title parsing
 - **TypeScript bindings** — `ts-rs` emits TS types from Rust DTOs for frontend consumption
 
 ## Tech Stack
@@ -24,6 +26,9 @@ A high-performance, unified REST API backend written in Rust — built on the [L
 | HTTP client | reqwest 0.13 |
 | IDs | UUID v7 |
 | Timestamps | chrono |
+| HTML parsing | scraper 0.27 |
+| Enum strings | strum / strum_macros 0.28 |
+| TS bindings | ts-rs 12 |
 
 ## Project Layout
 
@@ -43,13 +48,21 @@ komorebi-server/
 │   │   ├── anilist_client.rs  # AniList GraphQL client
 │   │   └── anilist_models.rs  # AniList DTO models & conversions
 │   ├── controllers/
-│   │   ├── mod.rs           # Shared response envelopes (success / fail)
+│   │   ├── mod.rs               # Shared response envelopes (success / fail)
 │   │   ├── media_controller.rs  # /api/v1/media routes
-│   │   └── user_controller.rs   # /api/v1/user routes
+│   │   ├── user_controller.rs   # /api/v1/user routes
+│   │   └── crawler_controller.rs # /api/v1/crawler routes (WIP)
 │   ├── models/
 │   │   ├── _entities/       # Generated Sea-ORM entities (do not edit)
 │   │   ├── media.rs         # Core domain types (Media, ListEntry, enums)
-│   │   └── users.rs         # User model & DB operations
+│   │   ├── users.rs         # User model & DB operations
+│   │   └── crawler.rs       # CrawlerConfig, CrawlerResult, ParsedTitle
+│   ├── crawlers/            # Web scraping & title parsing subsystem
+│   │   ├── html_crawler.rs  # CSS-selector HTML scraper
+│   │   ├── json_crawler.rs  # JSON API scraper
+│   │   ├── config_parser.rs # YAML crawler config loader
+│   │   └── title_parser.rs  # Torrent title parser (Anitomy-style)
+│   ├── dtos/                # TypeScript-exported DTO types (ts-rs)
 │   ├── workers/
 │   │   └── downloader.rs    # Background download worker
 │   └── initializers/        # App-level initializers (reqwest client)
@@ -64,12 +77,12 @@ All routes are prefixed with `/api/v1`.
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/user/login` | Authenticate a user by username + provider (+ optional passcode) |
+| `POST` | `/user/login` | Authenticate a user by username + provider + optional passcode |
 | `POST` | `/user/add` | Register / upsert a user (validates against provider) |
 | `POST` | `/user/all` | List all registered users |
 | `POST` | `/user/one` | Get a user by UUID |
 | `POST` | `/user/delete` | Delete a user by UUID |
-| `POST` | `/user/oauth/exchange` | Exchange an OAuth code for an access token |
+| `POST` | `/user/oauth/exchange` | Exchange an OAuth code + PKCE verifier for an access token |
 
 ### Media
 
@@ -77,6 +90,12 @@ All routes are prefixed with `/api/v1`.
 |---|---|---|
 | `POST` | `/media/anime` | Fetch a user's anime list from their linked provider |
 | `POST` | `/media/manga` | Fetch a user's manga list from their linked provider |
+
+### Crawler *(WIP)*
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/crawler/search` | Search external torrent sites for a media title |
 
 ### Response Envelopes
 
@@ -87,7 +106,7 @@ All responses use a consistent JSON envelope:
 { "success": true, "data": { ... } }
 
 // Failure
-{ "success": false, "msg": "Detailed error message" }
+{ "success": false, "error": "ERROR_CODE", "description": "Optional detail" }
 ```
 
 ## Quick Start

@@ -19,5 +19,5 @@ target/
 *.sqlite-*
 .env
 .agents/
-assets/dev.db
 repomix-output.xml
+examples/playground.rs

@@ -22,7 +22,7 @@ async fn test_user_model_crud_and_passcode() {
     let hashed = hash::hash_password(plain_passcode).unwrap();
 
     let user_active = ActiveModel {
-        username: ActiveValue::Set(username.to_string()),
+        username: ActiveValue::Set(username.into()),
         provider: ActiveValue::Set(MediaProvider::MAL),
         passcode: ActiveValue::Set(Some(hashed)),
         is_sandbox: ActiveValue::Set(true),
@@ -83,7 +83,7 @@ async fn test_empty_passcode_validation() {
     let username = "empty_passcode_user";
 
     let user_active = ActiveModel {
-        username: ActiveValue::Set(username.to_string()),
+        username: ActiveValue::Set(username.into()),
         provider: ActiveValue::Set(MediaProvider::ANILIST),
         passcode: ActiveValue::Set(None),
         is_sandbox: ActiveValue::Set(true),
@@ -111,9 +111,9 @@ async fn test_plain_passcode_branch() {
 
     let plain = "plain_secret";
     let user_active = ActiveModel {
-        username: ActiveValue::Set("plain_passcode_user".to_string()),
+        username: ActiveValue::Set("plain_passcode_user".into()),
         provider: ActiveValue::Set(MediaProvider::MAL),
-        passcode: ActiveValue::Set(Some(plain.to_string())), // stored unencrypted
+        passcode: ActiveValue::Set(Some(plain.into())), // stored unencrypted
         is_sandbox: ActiveValue::Set(true),
         ..Default::default()
     };
@@ -142,10 +142,10 @@ async fn test_save_user_upsert_updates_token() {
 
     // First insert
     let u1 = users::Model {
-        username: username.to_string(),
+        username: username.into(),
         provider: MediaProvider::MAL,
         is_sandbox: false,
-        access_token: Some("token_v1".to_string()),
+        access_token: Some("token_v1".into()),
         ..Default::default()
     };
     let saved1 = users::Model::save_user(&boot.app_context.db, u1)
@@ -155,10 +155,10 @@ async fn test_save_user_upsert_updates_token() {
     // Second upsert with an updated token — same (username, provider, is_sandbox) key
     let u2 = users::Model {
         id: saved1.id,
-        username: username.to_string(),
+        username: username.into(),
         provider: MediaProvider::MAL,
         is_sandbox: false,
-        access_token: Some("token_v2".to_string()),
+        access_token: Some("token_v2".into()),
         ..Default::default()
     };
     let saved2 = users::Model::save_user(&boot.app_context.db, u2)
@@ -166,6 +166,6 @@ async fn test_save_user_upsert_updates_token() {
         .expect("second save");
 
     // The access_token should have been updated via ON CONFLICT … DO UPDATE
-    assert_eq!(saved2.access_token, Some("token_v2".to_string()));
+    assert_eq!(saved2.access_token, Some("token_v2".into()));
     assert_eq!(saved2.username, username);
 }

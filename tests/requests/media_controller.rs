@@ -10,7 +10,7 @@ use uuid::Uuid;
 /// Creates a sandbox MAL user and returns its ID.
 async fn seed_user(ctx: &loco_rs::app::AppContext) -> Uuid {
     let user = ActiveModel {
-        username: ActiveValue::Set("media_test_user".to_string()),
+        username: ActiveValue::Set("media_test_user".into()),
         provider: ActiveValue::Set(MediaProvider::MAL),
         is_sandbox: ActiveValue::Set(true),
         ..Default::default()
@@ -27,10 +27,18 @@ async fn can_get_media_controllers() {
 
         // Route must exist — 404 would mean the path is wrong.
         let res = request.post("/api/v1/media/anime").json(&payload).await;
-        assert_ne!(res.status_code(), 404, "route /api/v1/media/anime should exist");
+        assert_ne!(
+            res.status_code(),
+            404,
+            "route /api/v1/media/anime should exist"
+        );
 
         let res = request.post("/api/v1/media/manga").json(&payload).await;
-        assert_ne!(res.status_code(), 404, "route /api/v1/media/manga should exist");
+        assert_ne!(
+            res.status_code(),
+            404,
+            "route /api/v1/media/manga should exist"
+        );
     })
     .await;
 }
@@ -43,8 +51,16 @@ async fn can_get_anime() {
         let payload = serde_json::json!({ "user_id": user_id });
 
         let res = request.post("/api/v1/media/anime").json(&payload).await;
-        assert_ne!(res.status_code(), 404, "route /api/v1/media/anime should exist");
-        assert_ne!(res.status_code(), 405, "POST should be accepted on /api/v1/media/anime");
+        assert_ne!(
+            res.status_code(),
+            404,
+            "route /api/v1/media/anime should exist"
+        );
+        assert_ne!(
+            res.status_code(),
+            405,
+            "POST should be accepted on /api/v1/media/anime"
+        );
     })
     .await;
 }
@@ -57,8 +73,16 @@ async fn can_get_manga() {
         let payload = serde_json::json!({ "user_id": user_id });
 
         let res = request.post("/api/v1/media/manga").json(&payload).await;
-        assert_ne!(res.status_code(), 404, "route /api/v1/media/manga should exist");
-        assert_ne!(res.status_code(), 405, "POST should be accepted on /api/v1/media/manga");
+        assert_ne!(
+            res.status_code(),
+            404,
+            "route /api/v1/media/manga should exist"
+        );
+        assert_ne!(
+            res.status_code(),
+            405,
+            "POST should be accepted on /api/v1/media/manga"
+        );
     })
     .await;
 }

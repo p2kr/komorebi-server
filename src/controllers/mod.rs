@@ -6,8 +6,6 @@ use loco_rs::{prelude::format, Result};
 use reqwest::StatusCode;
 use serde::Serialize;
 
-pub mod user_controller;
-
 #[derive(Serialize)]
 struct SuccessResponse<T> {
     success: bool,
@@ -17,7 +15,8 @@ struct SuccessResponse<T> {
 #[derive(Serialize)]
 struct FailureResponse {
     success: bool,
-    msg: String,
+    error: String,
+    description: Option<String>,
 }
 
 pub fn success<T: Serialize>(data: T) -> Result<Response> {
@@ -27,15 +26,20 @@ pub fn success<T: Serialize>(data: T) -> Result<Response> {
     })
 }
 
-pub fn fail(status_code: StatusCode, msg: &str) -> Result<Response> {
+pub fn fail(status_code: StatusCode, error: &str, description: Option<&str>) -> Result<Response> {
     Ok((
         status_code,
         Json(FailureResponse {
             success: false,
-            msg: msg.to_string(),
+            error: error.into(),
+            description: description.map(|m| m.into()),
         }),
     )
         .into_response())
 }
 
+pub mod user_controller;
+
 pub mod media_controller;
+
+pub mod crawler_controller;

@@ -1,5 +1,7 @@
 use sea_orm::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
+use strum_macros::EnumString;
 use uuid::Uuid;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -20,11 +22,22 @@ pub enum MediaProvider {
     ANILIST,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default, EnumString)]
+#[strum(ascii_case_insensitive)]
+#[serde(from = "String")]
 pub enum MediaType {
     #[default]
     Anime,
     Manga,
+    Novel,
+    #[strum(default)]
+    Other(String),
+}
+
+impl From<String> for MediaType {
+    fn from(s: String) -> Self {
+        Self::from_str(&s).unwrap()
+    }
 }
 
 /// What format the media was released as.
