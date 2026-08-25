@@ -23,8 +23,25 @@ pub enum MediaProvider {
     ANILIST,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Default, EnumString, TS)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Default,
+    EnumString,
+    DeriveActiveEnum,
+    EnumIter,
+    TS,
+)]
 #[strum(ascii_case_insensitive)]
+#[sea_orm(
+    rs_type = "String",
+    db_type = "String(StringLen::None)",
+    rename_all = "UPPERCASE"
+)]
 pub enum MediaType {
     #[default]
     Anime,

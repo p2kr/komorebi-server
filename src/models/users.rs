@@ -13,7 +13,7 @@ pub type User = Model;
 
 #[async_trait]
 impl ActiveModelBehavior for ActiveModel {
-    async fn before_save<C>(mut self, _db: &C, insert: bool) -> Result<Self, DbErr>
+    async fn before_save<C>(mut self, _: &C, insert: bool) -> Result<Self, DbErr>
     where
         C: ConnectionTrait,
     {

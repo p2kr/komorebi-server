@@ -23,7 +23,17 @@ pub struct LoginParams {
     pub is_sandbox: Option<bool>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct SaveUserParams {
+    pub username: String,
+    pub provider: MediaProvider,
+    pub access_token: Option<String>,
+    pub avatar_url: Option<String>,
+    pub passcode: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GetUserParams {
     pub user_id: Uuid,
 }
@@ -31,6 +41,13 @@ pub struct GetUserParams {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DeleteUserParams {
     pub user_id: Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExchangeOauthTokenParams {
+    pub provider: MediaProvider,
+    pub code: String,
+    pub code_verifier: String,
 }
 
 #[debug_handler]
@@ -93,13 +110,6 @@ async fn delete_user_by_id(
     success(params.user_id)
 }
 
-#[derive(Deserialize)]
-pub struct ExchangeOauthTokenParams {
-    pub provider: MediaProvider,
-    pub code: String,
-    pub code_verifier: String,
-}
-
 #[debug_handler]
 async fn exchange_oauth_token(
     State(ctx): State<AppContext>,
@@ -127,7 +137,6 @@ async fn validate_user(client: &Client, params: &User) -> Result<User> {
     let media_client = user.provider.new_client(&client, &user);
 
     if let Some(token) = &user.access_token {
-        // fetch username and avatar url
         debug!("Fetching username and avatar url for user");
         user = media_client.validate_new_user(token).await?;
         return Ok(user);

@@ -17,6 +17,8 @@ target/
 
 *.sqlite
 *.sqlite-*
+*.db
+*.db-*
 .env
 .agents/
 repomix-output.xml

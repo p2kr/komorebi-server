@@ -87,7 +87,7 @@ mailer:
 # Database Configuration
 database:
   # Database connection URI
-  uri: <%= get_env(name="DATABASE_URL", default="sqlite://assets/main.sqlite?mode=rwc") %>
+  uri: <%= get_env(name="DATABASE_URL", default="sqlite://assets/main.sqlite?mode=rwc&options=-c%20foreign_keys=on") %>
   # When enabled, the sql query will be logged.
   enable_logging: <%= get_env(name="DB_LOGGING", default="false") %>
   # Set the timeout duration when acquiring a connection.
