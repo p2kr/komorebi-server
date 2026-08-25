@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::models::media::MediaType;
 
@@ -57,7 +58,9 @@ impl CrawlerConfig {
     }
 }
 
-#[derive(Serialize, Default)]
+#[derive(Serialize, Default, TS)]
+#[serde(default)]
+#[ts(export)]
 pub struct CrawlerResult {
     pub title: String,
     pub link: String,
@@ -65,9 +68,11 @@ pub struct CrawlerResult {
     pub popularity: Option<String>,
     pub size: Option<String>,
     pub parsed_title: ParsedTitle,
+    pub category: MediaType,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, TS)]
+#[ts(export)]
 pub struct ParsedTitle {
     pub audio_term: Vec<String>,
     pub device: Vec<String>,

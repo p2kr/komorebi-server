@@ -5,7 +5,13 @@ loco-tool = "run --bin tool --"
 
 playground = "run --example playground"
 
+ts-rs = "test export_bindings"
+
 # https://github.com/rust-lang/rust/issues/141626
 # (can be removed once link.exe is fixed)
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld"
+
+[env]
+TS_RS_EXPORT_DIR = { value = "../komorebi-web/src/lib/models/bindings/", relative = true }
+TS_RS_LARGE_INT = "number"

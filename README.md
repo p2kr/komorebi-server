@@ -133,6 +133,9 @@ Configure provider credentials in your `.env` or via `config/development.yaml`:
 ## Development
 
 ```sh
+# Export TypeScript bindings for the web client
+cargo ts-rs
+
 # Run all tests
 cargo test
 

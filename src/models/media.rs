@@ -2,6 +2,7 @@ use sea_orm::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use strum_macros::EnumString;
+use ts_rs::TS;
 use uuid::Uuid;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -9,7 +10,7 @@ use uuid::Uuid;
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 #[derive(
-    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, DeriveActiveEnum, EnumIter,
+    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, DeriveActiveEnum, EnumIter, TS,
 )]
 #[sea_orm(
     rs_type = "String",
@@ -22,21 +23,22 @@ pub enum MediaProvider {
     ANILIST,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default, EnumString)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Default, EnumString, TS)]
 #[strum(ascii_case_insensitive)]
-#[serde(from = "String")]
 pub enum MediaType {
     #[default]
     Anime,
     Manga,
     Novel,
-    #[strum(default)]
-    Other(String),
 }
 
-impl From<String> for MediaType {
-    fn from(s: String) -> Self {
-        Self::from_str(&s).unwrap()
+impl<'de> Deserialize<'de> for MediaType {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(Self::from_str(&s).unwrap_or_default())
     }
 }
 
@@ -46,7 +48,7 @@ impl From<String> for MediaType {
 /// MAL anime: unknown, tv, ova, movie, special, ona, music
 /// MAL manga: unknown, manga, novel, one_shot, doujinshi, manhwa, manhua, oel
 /// AniList:   TV, TV_SHORT, MOVIE, SPECIAL, OVA, ONA, MUSIC, MANGA, NOVEL, ONE_SHOT
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 pub enum MediaFormat {
     #[default]
     Unknown,
@@ -67,7 +69,7 @@ pub enum MediaFormat {
 }
 
 /// Airing / publishing status of the media itself.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 pub enum ReleaseStatus {
     #[default]
     Unknown,
@@ -79,7 +81,7 @@ pub enum ReleaseStatus {
 }
 
 /// User's personal watching/reading status.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 pub enum ListStatus {
     #[default]
     Current,
@@ -92,7 +94,7 @@ pub enum ListStatus {
 
 /// NSFW classification.
 /// MAL distinguishes white/gray/black. AniList only has isAdult bool.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 pub enum NsfwLevel {
     #[default]
     Safe,
@@ -104,7 +106,7 @@ pub enum NsfwLevel {
 //  Value objects
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 pub struct MediaTitle {
     /// AniList: romaji. MAL: title (the main title IS romanized).
     pub romanized: Option<String>,
@@ -116,7 +118,7 @@ pub struct MediaTitle {
     pub user_preferred: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 pub struct CoverImage {
     /// AniList only. Falls back to large if unavailable.
     pub extra_large: Option<String>,
@@ -134,7 +136,7 @@ pub struct CoverImage {
 
 /// The media itself — anime or manga metadata.
 /// No user state. No list status. Just what the thing IS.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 pub struct Media {
     pub id: Uuid,
 
@@ -169,7 +171,7 @@ pub struct Media {
 }
 
 /// What the user thinks of a specific media — their list entry.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 pub struct ListEntry {
     pub status: ListStatus,
 
@@ -193,7 +195,8 @@ pub struct ListEntry {
 
 /// The "edge" that joins a media with a user's list entry.
 /// This is what the API returns: one of these per item in the list.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[ts(export)]
 pub struct MediaEntry {
     pub media: Media,
     pub list_entry: ListEntry,
@@ -203,7 +206,7 @@ pub struct MediaEntry {
 //  Pagination
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 pub struct Paging {
     /// MAL provides cursor URLs. AniList uses page numbers.
     /// Store the raw cursor/URL if the provider gives one.
@@ -212,7 +215,8 @@ pub struct Paging {
     pub has_next: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[ts(export)]
 pub struct PaginatedResponse {
     pub data: Vec<MediaEntry>,
     pub paging: Paging,
