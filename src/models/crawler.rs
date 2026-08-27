@@ -58,7 +58,7 @@ impl CrawlerConfig {
     }
 }
 
-#[derive(Serialize, Default, TS)]
+#[derive(Serialize, Deserialize, Default, TS)]
 #[serde(default)]
 #[ts(export)]
 pub struct CrawlerResult {

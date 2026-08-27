@@ -1,4 +1,5 @@
 pub mod constants;
+pub mod vault_path_resolver;
 
 use std::{fmt::Display, result::Result};
 

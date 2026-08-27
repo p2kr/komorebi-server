@@ -11,11 +11,16 @@ use loco_rs::{
     Result,
 };
 use migration::Migrator;
-use std::path::Path;
+use std::{path::Path, sync::Arc};
+use tokio::sync::broadcast;
 
-use crate::initializers::client;
 #[allow(unused_imports)]
 use crate::{controllers, models::_entities::users, workers::downloader::DownloadWorker};
+use crate::{
+    downloaders::{daemon::start_daemon, DownloadManager},
+    initializers::client,
+    models::vault::VaultItem,
+};
 
 pub struct App;
 #[async_trait]
@@ -52,6 +57,7 @@ impl Hooks for App {
             .add_route(controllers::media_controller::routes())
             .add_route(controllers::user_controller::routes())
             .add_route(controllers::crawler_controller::routes())
+            .add_route(controllers::vault_controller::routes())
     }
     async fn connect_workers(ctx: &AppContext, queue: &Queue) -> Result<()> {
         queue.register(DownloadWorker::build(ctx)).await?;
@@ -73,6 +79,17 @@ impl Hooks for App {
     async fn after_context(ctx: AppContext) -> Result<AppContext> {
         let client = client::get_reqwest_client();
         ctx.shared_store.insert(client);
+
+        // 100 will round off to 128.
+        let (ws, _wr) = broadcast::channel::<Vec<VaultItem>>(100);
+        ctx.shared_store.insert(ws.clone());
+
+        let download_manager = Arc::new(DownloadManager::new().await?);
+        ctx.shared_store.insert(download_manager.clone());
+
+        // start the download daemon
+        start_daemon(ctx.clone(), download_manager, ws);
+
         Ok(ctx)
     }
 }

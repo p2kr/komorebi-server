@@ -2,14 +2,16 @@
 
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::models::{
     media::MediaType,
     vault::{VaultDownloadType, VaultItemStatus},
 };
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize, TS)]
 #[sea_orm(table_name = "vault")]
+#[ts(export, rename = "VaultItem")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
@@ -18,18 +20,21 @@ pub struct Model {
     pub destination_path: String,
     pub media_type: MediaType,
     #[sea_orm(column_type = "Text", nullable)]
-    pub media_id: Option<String>,
+    pub media_id: String,
     pub title: String,
+    pub raw_title: String,
+    pub season: Option<String>,
+    pub episode: Option<String>,
     pub source_url: Option<String>,
     pub download_type: VaultDownloadType,
     pub status: VaultItemStatus,
     pub total_bytes: i64,
     pub downloaded_bytes: i64,
     #[sea_orm(column_type = "Float")]
-    pub progress: f32,
-    pub speed_bps: i64,
+    pub progress: f64,
+    pub speed_bps: u64,
     pub eta_seconds: Option<i64>,
-    pub temp_path: Option<String>,
+    pub temp_path: String,
     pub error_msg: Option<String>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,

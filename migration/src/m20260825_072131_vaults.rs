@@ -11,9 +11,13 @@ enum Vault {
     Table,
     Id,
     UserId,
+    DestinationPath,
     MediaType,
     MediaId,
     Title,
+    RawTitle,
+    Season,
+    Episode,
     SourceUrl,
     DownloadType,
     Status,
@@ -22,7 +26,6 @@ enum Vault {
     Progress,
     SpeedBps,
     EtaSeconds,
-    DestinationPath,
     TempPath,
     ErrorMsg,
     CreatedAt,
@@ -48,15 +51,18 @@ impl MigrationTrait for Migration {
             .col(string(Vault::MediaType).default("ANIME"))
             .col(text_null(Vault::MediaId))
             .col(string(Vault::Title))
+            .col(string(Vault::RawTitle))
+            .col(string_null(Vault::Season))
+            .col(string_null(Vault::Episode))
             .col(string_null(Vault::SourceUrl))
-            .col(string(Vault::DownloadType)) // enum
+            .col(string(Vault::DownloadType).default("MAGNET")) // enum
             .col(string(Vault::Status).default("PENDING")) // enum
-            .col(integer(Vault::TotalBytes).default("0"))
-            .col(integer(Vault::DownloadedBytes).default("0"))
-            .col(float(Vault::Progress).default("0.0"))
-            .col(integer(Vault::SpeedBps).default("1"))
-            .col(integer_null(Vault::EtaSeconds))
-            .col(string_null(Vault::TempPath))
+            .col(big_integer(Vault::TotalBytes).default(0))
+            .col(big_integer(Vault::DownloadedBytes).default(0))
+            .col(float(Vault::Progress).default(0.0))
+            .col(big_integer(Vault::SpeedBps).default(0))
+            .col(big_integer_null(Vault::EtaSeconds))
+            .col(string(Vault::TempPath))
             .col(string_null(Vault::ErrorMsg))
             .col(timestamp_with_time_zone_default_now(Vault::CreatedAt))
             .col(timestamp_with_time_zone_default_now(Vault::UpdatedAt))

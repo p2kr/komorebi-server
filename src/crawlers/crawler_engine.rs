@@ -40,7 +40,7 @@ impl CrawlerEngine {
     async fn get_crawl_result(content: &str, config: &CrawlerConfig) -> Vec<CrawlerResult> {
         if JsonCrawler::can_crawl(content) {
             JsonCrawler::crawl(content, config).await
-        } else if HtmlCrawler::can_crawl(&content) {
+        } else if HtmlCrawler::can_crawl(content) {
             HtmlCrawler::crawl(content, config).await
         } else {
             vec![]

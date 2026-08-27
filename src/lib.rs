@@ -4,6 +4,7 @@ pub mod controllers;
 pub mod core;
 pub mod crawlers;
 pub mod data;
+pub mod downloaders;
 pub mod dtos;
 pub mod initializers;
 pub mod models;

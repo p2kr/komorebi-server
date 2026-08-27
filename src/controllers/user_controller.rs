@@ -134,7 +134,7 @@ async fn validate_user(client: &Client, params: &User) -> Result<User> {
         ..Default::default()
     };
 
-    let media_client = user.provider.new_client(&client, &user);
+    let media_client = user.provider.new_client(client, &user);
 
     if let Some(token) = &user.access_token {
         debug!("Fetching username and avatar url for user");

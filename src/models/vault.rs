@@ -7,8 +7,46 @@ use ts_rs::TS;
 
 pub type VaultItem = Model;
 
+impl Default for VaultItem {
+    fn default() -> Self {
+        Self {
+            id: Default::default(),
+            user_id: Default::default(),
+            destination_path: Default::default(),
+            media_type: Default::default(),
+            media_id: Default::default(),
+            title: Default::default(),
+            raw_title: Default::default(),
+            season: Some("?".into()),
+            episode: Some("?".into()),
+            source_url: Default::default(),
+            download_type: VaultDownloadType::MAGNET,
+            status: VaultItemStatus::PENDING,
+            total_bytes: 0,
+            downloaded_bytes: 0,
+            progress: 0.0,
+            speed_bps: 0,
+            eta_seconds: None,
+            temp_path: Default::default(),
+            error_msg: None,
+            created_at: Utc::now().into(),
+            updated_at: Utc::now().into(),
+        }
+    }
+}
+
 #[derive(
-    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, DeriveActiveEnum, EnumIter, TS,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    Default,
+    DeriveActiveEnum,
+    EnumIter,
+    TS,
 )]
 #[sea_orm(
     rs_type = "String",

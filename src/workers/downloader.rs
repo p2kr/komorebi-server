@@ -1,13 +1,16 @@
 use loco_rs::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::models::vault::VaultItem;
+
 pub struct DownloadWorker {
     pub ctx: AppContext,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
 pub struct DownloadWorkerArgs {
-    pub user_guid: String,
+    pub vault_id: Uuid,
+    pub download_result: VaultItem,
 }
 
 #[async_trait]
