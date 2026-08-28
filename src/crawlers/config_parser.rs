@@ -20,9 +20,9 @@ fn get_config_str() -> String {
         }
         Err(e) => {
             tracing::warn!(
-               "failed to read crawler configs from assets/crawler_configs.yaml, falling back to default: {}",
-               e
-           );
+                "failed to read crawler configs from assets/crawler_configs.yaml, falling back to default: {}",
+                e
+            );
             String::from(fallback)
         }
     }

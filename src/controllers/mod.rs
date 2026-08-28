@@ -1,8 +1,8 @@
 use axum::{
-    response::{IntoResponse, Response},
     Json,
+    response::{IntoResponse, Response},
 };
-use loco_rs::{prelude::format, Result};
+use loco_rs::{Result, prelude::format};
 use reqwest::StatusCode;
 use serde::Serialize;
 

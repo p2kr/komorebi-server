@@ -4,8 +4,8 @@ use reqwest::{Client, Url};
 
 use crate::{
     crawlers::{
-        anitomy_title_parser::AnitomyTitleParser, config_parser::CRAWLER_CONFIGS,
-        html_crawler::HtmlCrawler, json_crawler::JsonCrawler, Crawler, TitleParser,
+        Crawler, TitleParser, anitomy_title_parser::AnitomyTitleParser,
+        config_parser::CRAWLER_CONFIGS, html_crawler::HtmlCrawler, json_crawler::JsonCrawler,
     },
     models::crawler::{CrawlerConfig, CrawlerResult, ParsedTitle},
 };

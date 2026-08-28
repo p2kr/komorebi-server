@@ -1,20 +1,34 @@
-use std::sync::Arc;
+use std::{fmt::Display, sync::Arc};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
-use librqbit::{
-    AddTorrent, AddTorrentOptions, AddTorrentResponse, ManagedTorrent, Session,
-};
-// You might need to import the handle type depending on your librqbit version:
+use librqbit::{AddTorrent, AddTorrentOptions, AddTorrentResponse, ManagedTorrent, Session};
 use loco_rs::{Error, Result};
+use reqwest::Url;
 use uuid::Uuid;
 
-use crate::{core::ResultExt, downloaders::DownloadEngine, models::vault::VaultItem};
+use crate::{
+    core::ResultExt,
+    downloaders::DownloadEngine,
+    models::vault::{VaultDownloadType, VaultItem, VaultItemStatus},
+};
 
 pub struct TorrentDownloader {
     session: Arc<Session>,
     active_items: Arc<DashMap<Uuid, VaultItem>>,
     handles: DashMap<Uuid, Arc<ManagedTorrent>>,
+}
+
+impl Display for TorrentDownloader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "TorrentDownloader[session={}, active_items={}, handles={}]",
+            self.session.client_name_and_version(),
+            self.active_items.len(),
+            self.handles.len()
+        )
+    }
 }
 
 impl TorrentDownloader {
@@ -30,10 +44,7 @@ impl TorrentDownloader {
 #[async_trait]
 impl DownloadEngine for TorrentDownloader {
     async fn add(&self, vault_item: &VaultItem) -> Result<()> {
-        let url = vault_item
-            .source_url
-            .as_ref()
-            .ok_or_else(|| Error::BadRequest("Missing source URL".into()))?;
+        let url = Url::parse(&vault_item.source_url).to_loco_err()?;
 
         // 1. Configure the torrent
         let opts = AddTorrentOptions {
@@ -43,7 +54,7 @@ impl DownloadEngine for TorrentDownloader {
         };
 
         // 2. Add it to the librqbit session
-        let add_request = AddTorrent::from_url(url);
+        let add_request = AddTorrent::from_url(url.to_string());
         let response = self
             .session
             .add_torrent(add_request, Some(opts))
@@ -66,6 +77,9 @@ impl DownloadEngine for TorrentDownloader {
     async fn pause(&self, vault_id: &Uuid) -> Result<()> {
         if let Some(handle) = self.handles.get(vault_id) {
             self.session.pause(handle.value()).await.to_loco_err()?;
+            if let Some(mut v) = self.active_items.get_mut(vault_id) {
+                v.status = VaultItemStatus::PAUSED;
+            }
         }
         Ok(())
     }
@@ -73,6 +87,9 @@ impl DownloadEngine for TorrentDownloader {
     async fn resume(&self, vault_id: &Uuid) -> Result<()> {
         if let Some(handle) = self.handles.get(vault_id) {
             self.session.unpause(handle.value()).await.to_loco_err()?;
+            if let Some(mut v) = self.active_items.get_mut(vault_id) {
+                v.status = VaultItemStatus::PENDING;
+            }
         }
         Ok(())
     }
@@ -99,21 +116,48 @@ impl DownloadEngine for TorrentDownloader {
             let t_stats = handle.stats();
 
             // Fetch the VaultItem and update it with the live librqbit stats!
-            if let Some(mut item) = self.active_items.get_mut(vault_id) {
+            if let Some(mut item) = self.active_items.get_mut(vault_id)
+                && !handle.is_paused()
+                && matches!(
+                    item.status,
+                    VaultItemStatus::DOWNLOADING | VaultItemStatus::PENDING
+                )
+                && matches!(
+                    item.download_type,
+                    VaultDownloadType::MAGNET | VaultDownloadType::TFILE
+                )
+            {
                 item.total_bytes = t_stats.total_bytes as i64;
 
-                let downloaded = t_stats.total_bytes.saturating_sub(t_stats.progress_bytes);
-                item.downloaded_bytes = downloaded as i64;
+                item.downloaded_bytes = t_stats.progress_bytes as i64;
 
                 if item.total_bytes > 0 {
-                    item.progress = (downloaded as f64 / item.total_bytes as f64) * 100.0;
+                    item.progress =
+                        (item.downloaded_bytes as f64 / item.total_bytes as f64) * 100.0;
                 }
 
-                item.speed_bps = t_stats.live.unwrap_or_default().download_speed.as_bytes();
+                item.speed_bps = t_stats.live.unwrap_or_default().download_speed.as_bytes() as i64;
 
-                stats.push(item.clone());
+                // tracing::debug!(
+                //     "downloaded={}, total={}, speed={}",
+                //     item.downloaded_bytes,
+                //     item.total_bytes,
+                //     item.speed_bps
+                // );
+
+                if t_stats.finished || item.progress == 100f64 {
+                    item.status = VaultItemStatus::COMPLETED;
+                } else {
+                    item.status = VaultItemStatus::DOWNLOADING;
+                }
+
+                stats.push(item.to_owned());
             }
         }
         stats
+    }
+
+    async fn stop(&self) {
+        self.session.stop().await;
     }
 }

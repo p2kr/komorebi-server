@@ -1,5 +1,5 @@
 use komorebi_server::{
-    crawlers::{json_crawler::JsonCrawler, Crawler},
+    crawlers::{Crawler, json_crawler::JsonCrawler},
     models::crawler::CrawlerConfig,
 };
 

@@ -54,7 +54,7 @@ impl MigrationTrait for Migration {
             .col(string(Vault::RawTitle))
             .col(string_null(Vault::Season))
             .col(string_null(Vault::Episode))
-            .col(string_null(Vault::SourceUrl))
+            .col(string(Vault::SourceUrl))
             .col(string(Vault::DownloadType).default("MAGNET")) // enum
             .col(string(Vault::Status).default("PENDING")) // enum
             .col(big_integer(Vault::TotalBytes).default(0))

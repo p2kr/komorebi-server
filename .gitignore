@@ -24,3 +24,5 @@ target/
 repomix-output.xml
 examples/playground.rs
 vault/
+assets/*
+!assets/crawler_configs.yaml

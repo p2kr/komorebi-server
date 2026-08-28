@@ -1,12 +1,9 @@
 use komorebi_server::{
     app::App,
-    models::{
-        _entities::users::{self, ActiveModel},
-        media::MediaProvider,
-    },
+    models::{media::MediaProvider, users::users},
 };
 use loco_rs::{hash, testing::prelude::*};
-use sea_orm::{ActiveModelTrait, ActiveValue};
+use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
 use serial_test::serial;
 use uuid::Uuid;
 
@@ -21,7 +18,7 @@ async fn test_user_model_crud_and_passcode() {
     let plain_passcode = "pass123";
     let hashed = hash::hash_password(plain_passcode).unwrap();
 
-    let user_active = ActiveModel {
+    let user_active = users::ActiveModel {
         username: ActiveValue::Set(username.into()),
         provider: ActiveValue::Set(MediaProvider::MAL),
         passcode: ActiveValue::Set(Some(hashed)),
@@ -42,7 +39,8 @@ async fn test_user_model_crud_and_passcode() {
     assert!(!user.verify_passcode(Some("")));
 
     // Test find_by_id
-    let found_by_id = users::Model::find_by_id(&boot.app_context.db, user.id)
+    let found_by_id = users::Entity::find_by_id(user.id)
+        .require_one(&boot.app_context.db)
         .await
         .expect("User should be found by id");
     assert_eq!(found_by_id.id, user.id);
@@ -59,17 +57,21 @@ async fn test_user_model_crud_and_passcode() {
     assert_eq!(found_by_prov.id, user.id);
 
     // Test get_all_users
-    let all_users = users::Model::get_all_users(&boot.app_context.db)
+    let all_users = users::Entity::find()
+        .all(&boot.app_context.db)
         .await
         .expect("Failed to get all users");
     assert!(!all_users.is_empty());
 
     // Test delete_user
-    users::Model::delete_user(&boot.app_context.db, user.id)
+    users::ActiveModel::from(user.clone())
+        .delete(&boot.app_context.db)
         .await
         .expect("Failed to delete user");
 
-    let deleted = users::Model::find_by_id(&boot.app_context.db, user.id).await;
+    let deleted = users::Entity::find_by_id(user.id)
+        .require_one(&boot.app_context.db)
+        .await;
     assert!(deleted.is_err());
 }
 
@@ -82,7 +84,7 @@ async fn test_empty_passcode_validation() {
 
     let username = "empty_passcode_user";
 
-    let user_active = ActiveModel {
+    let user_active = users::ActiveModel {
         username: ActiveValue::Set(username.into()),
         provider: ActiveValue::Set(MediaProvider::ANILIST),
         passcode: ActiveValue::Set(None),
@@ -110,7 +112,7 @@ async fn test_plain_passcode_branch() {
         .expect("Failed to boot test application");
 
     let plain = "plain_secret";
-    let user_active = ActiveModel {
+    let user_active = users::ActiveModel {
         username: ActiveValue::Set("plain_passcode_user".into()),
         provider: ActiveValue::Set(MediaProvider::MAL),
         passcode: ActiveValue::Set(Some(plain.into())), // stored unencrypted

@@ -1,7 +1,11 @@
 use loco_rs::prelude::*;
 use reqwest::Client;
 
-use crate::{adapters::MediaClientParams, controllers::success, models::users::User};
+use crate::{
+    adapters::MediaClientParams,
+    controllers::success,
+    models::users::{self},
+};
 
 #[debug_handler]
 pub async fn get_user_anime(
@@ -9,7 +13,9 @@ pub async fn get_user_anime(
     Json(params): Json<MediaClientParams>,
 ) -> Result<Response> {
     // get the user
-    let user = User::find_by_id(&ctx.db, params.user_id).await?;
+    let user = users::Entity::find_by_id(params.user_id)
+        .require_one(&ctx.db)
+        .await?;
 
     // get the user's anime
     let media_client = user
@@ -27,7 +33,9 @@ pub async fn get_user_manga(
     Json(params): Json<MediaClientParams>,
 ) -> Result<Response> {
     // get the user
-    let user = User::find_by_id(&ctx.db, params.user_id).await?;
+    let user = users::Entity::find_by_id(params.user_id)
+        .require_one(&ctx.db)
+        .await?;
 
     // get the user's anime
     let media_client = user

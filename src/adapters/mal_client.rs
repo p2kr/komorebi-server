@@ -1,14 +1,14 @@
 use async_trait::async_trait;
 use loco_rs::{Error, Result};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tracing::debug;
 
 use crate::{
     adapters::{
-        mal_models::{MalResponse, MalStatus},
         MediaClient, MediaClientParams,
+        mal_models::{MalResponse, MalStatus},
     },
-    core::{constants::DEFAULT_HOSTED_AUTH_PAGE, ResultExt},
+    core::{ResultExt, constants::DEFAULT_HOSTED_AUTH_PAGE},
     models::{
         media::{MediaProvider, PaginatedResponse},
         users::User,

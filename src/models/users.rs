@@ -63,17 +63,6 @@ impl Model {
         Ok(new_user)
     }
 
-    pub async fn get_all_users(db: &DatabaseConnection) -> ModelResult<Vec<Self>> {
-        let users = Entity::find().all(db).await?;
-        Ok(users)
-    }
-
-    /// Finds a user by ID
-    pub async fn find_by_id(db: &DatabaseConnection, id: Uuid) -> ModelResult<Self> {
-        let user = Entity::find_by_id(id).one(db).await?;
-        user.ok_or_else(|| ModelError::EntityNotFound)
-    }
-
     /// Finds a user by username and provider
     pub async fn find_by_username_and_provider_and_sandbox(
         db: &DatabaseConnection,
@@ -88,11 +77,6 @@ impl Model {
             .one(db)
             .await?;
         user.ok_or_else(|| ModelError::EntityNotFound)
-    }
-
-    pub async fn delete_user(db: &DatabaseConnection, id: Uuid) -> ModelResult<()> {
-        users::Entity::delete_by_id(id).exec(db).await?;
-        Ok(())
     }
 
     /// Verifies if the provided passcode matches the user's passcode.

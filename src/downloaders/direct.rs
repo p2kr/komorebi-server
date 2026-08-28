@@ -1,9 +1,9 @@
-use std::sync::Arc;
+use std::{fmt::Display, sync::Arc};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
-use loco_rs::{Error, Result};
-use reqwest::{header, Client};
+use loco_rs::Result;
+use reqwest::{Client, Url, header};
 use tokio::{
     fs::{self, OpenOptions},
     io::AsyncWriteExt,
@@ -12,15 +12,26 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    core::{vault_path_resolver::get_file_path, ResultExt},
+    core::{ResultExt, vault_path_resolver::get_file_path},
     downloaders::DownloadEngine,
-    models::vault::VaultItem,
+    models::vault::{VaultDownloadType, VaultItem},
 };
 
 pub struct DirectDownloader {
     client: Client,
     cancel_tokens: DashMap<Uuid, CancellationToken>,
     active_items: Arc<DashMap<Uuid, VaultItem>>,
+}
+
+impl Display for DirectDownloader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "DirectDownloader[client=reqwest::Client, cancel_tokens={}, active_items={}]",
+            self.cancel_tokens.len(),
+            self.active_items.len()
+        )
+    }
 }
 
 impl DirectDownloader {
@@ -36,10 +47,7 @@ impl DirectDownloader {
 #[async_trait]
 impl DownloadEngine for DirectDownloader {
     async fn add(&self, vault_item: &VaultItem) -> Result<()> {
-        let url = vault_item
-            .source_url
-            .clone()
-            .ok_or_else(|| Error::BadRequest("Missing source URL".into()))?;
+        let url = Url::parse(&vault_item.source_url).to_loco_err()?;
 
         // 1. Ensure the destination directory exists
         fs::create_dir_all(&vault_item.destination_path)
@@ -61,7 +69,7 @@ impl DownloadEngine for DirectDownloader {
         tokio::spawn(async move {
             // Determine if we need to resume
             let mut downloaded_bytes = 0;
-            let mut req = client.get(&url);
+            let mut req = client.get(url);
 
             if let Ok(metadata) = fs::metadata(&file_path).await {
                 downloaded_bytes = metadata.len();
@@ -167,6 +175,7 @@ impl DownloadEngine for DirectDownloader {
         // so we can just blindly return what's in the map!
         self.active_items
             .iter()
+            .filter(|item| matches!(item.download_type, VaultDownloadType::DIRECT))
             .map(|item| item.value().clone())
             .collect()
     }

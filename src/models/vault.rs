@@ -1,7 +1,7 @@
 pub use super::_entities::vault::{ActiveModel, Entity, Model};
 use async_trait::async_trait;
 use chrono::Utc;
-use sea_orm::{entity::prelude::*, ActiveValue};
+use sea_orm::{ActiveValue, entity::prelude::*};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -102,7 +102,27 @@ impl ActiveModelBehavior for ActiveModel {
 impl Model {}
 
 // implement your write-oriented logic here
-impl ActiveModel {}
+impl ActiveModel {
+    pub fn update_status(mut self, new_status: VaultItemStatus, error_msg: Option<String>) -> Self {
+        self.status = ActiveValue::Set(new_status);
+        if let Some(msg) = error_msg {
+            self.error_msg = ActiveValue::Set(Some(msg));
+        }
+
+        self
+    }
+
+    pub fn update_progress_mut(mut self) -> Self {
+        self.total_bytes.reset();
+        self.downloaded_bytes.reset();
+        self.progress.reset();
+        self.speed_bps.reset();
+        self.eta_seconds.reset();
+        self.status.reset();
+
+        self
+    }
+}
 
 // implement your custom finders, selectors oriented logic here
 impl Entity {}

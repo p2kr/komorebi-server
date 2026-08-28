@@ -8,9 +8,8 @@ use crate::{
     adapters::MediaClientParams,
     controllers::success,
     models::{
-        _entities::users::{self},
         media::MediaProvider,
-        users::User,
+        users::{self, User},
     },
 };
 
@@ -87,7 +86,7 @@ async fn save_user(State(ctx): State<AppContext>, Json(user): Json<User>) -> Res
 
 #[debug_handler]
 async fn get_all_users(State(ctx): State<AppContext>) -> Result<Response> {
-    let all_users = User::get_all_users(&ctx.db).await?;
+    let all_users = users::Entity::find().all(&ctx.db).await?;
     success(all_users)
 }
 
@@ -96,7 +95,9 @@ async fn get_user_by_id(
     State(ctx): State<AppContext>,
     Json(params): Json<GetUserParams>,
 ) -> Result<Response> {
-    let user = users::Model::find_by_id(&ctx.db, params.user_id).await?;
+    let user = users::Entity::find_by_id(params.user_id)
+        .require_one(&ctx.db)
+        .await?;
     success(user)
 }
 
@@ -105,7 +106,9 @@ async fn delete_user_by_id(
     State(ctx): State<AppContext>,
     Json(params): Json<DeleteUserParams>,
 ) -> Result<Response> {
-    let user = users::Model::find_by_id(&ctx.db, params.user_id).await?;
+    let user = users::Entity::find_by_id(params.user_id)
+        .require_one(&ctx.db)
+        .await?;
     user.delete(&ctx.db).await?;
     success(params.user_id)
 }

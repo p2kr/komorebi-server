@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -74,29 +75,29 @@ pub struct CrawlerResult {
 #[derive(Serialize, Deserialize, Default, TS)]
 #[ts(export)]
 pub struct ParsedTitle {
-    pub audio_term: Vec<String>,
-    pub device: Vec<String>,
-    pub episode: Vec<String>,
-    pub episode_title: Vec<String>,
-    pub file_checksum: Vec<String>,
-    pub file_extension: Vec<String>,
-    pub language: Vec<String>,
-    pub other: Vec<String>,
-    pub part: Vec<String>,
-    pub release_group: Vec<String>,
-    pub release_information: Vec<String>,
-    pub release_version: Vec<String>,
-    pub season: Vec<String>,
-    pub source: Vec<String>,
-    pub subtitles: Vec<String>,
-    pub title: Vec<String>,
-    pub video_resolution: Vec<String>,
-    pub video_term: Vec<String>,
-    pub volume: Vec<String>,
-    pub year: Vec<String>,
-    pub episode_alt: Vec<String>,
-    pub date: Vec<String>,
+    pub audio_term: IndexSet<String>,
+    pub device: IndexSet<String>,
+    pub episode: IndexSet<String>,
+    pub episode_title: IndexSet<String>,
+    pub file_checksum: IndexSet<String>,
+    pub file_extension: IndexSet<String>,
+    pub language: IndexSet<String>,
+    pub other: IndexSet<String>,
+    pub part: IndexSet<String>,
+    pub release_group: IndexSet<String>,
+    pub release_information: IndexSet<String>,
+    pub release_version: IndexSet<String>,
+    pub season: IndexSet<String>,
+    pub source: IndexSet<String>,
+    pub subtitles: IndexSet<String>,
+    pub title: IndexSet<String>,
+    pub video_resolution: IndexSet<String>,
+    pub video_term: IndexSet<String>,
+    pub volume: IndexSet<String>,
+    pub year: IndexSet<String>,
+    pub episode_alt: IndexSet<String>,
+    pub date: IndexSet<String>,
 
     #[serde(rename = "type")]
-    pub kind: Vec<String>,
+    pub kind: IndexSet<String>,
 }

@@ -1,7 +1,7 @@
 [package]
 name = "komorebi-server"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 publish = false
 default-run = "komorebi_server-cli"
 
@@ -42,7 +42,7 @@ uuid = { version = "1.6", features = ["v7", "std", "serde"] }
 # ts-rs derives the TypeScript bindings for the `dtos` (the typed JSON API
 # contract). Present for every db app; the SPA frontend consumes the exports,
 # and a headless app can still emit them for external consumers.
-ts-rs = { version = "12", features = ["chrono-impl", "serde-compat", "uuid-impl", "serde-json-impl"] }
+ts-rs = { version = "12", features = ["chrono-impl", "serde-compat", "uuid-impl", "serde-json-impl", "indexmap-impl"] }
 include_dir = { version = "0.7" }
 reqwest = { version = "0.13.4", features = ["query", "json", "form"] }
 yaml_serde = "0.10.7"
@@ -54,7 +54,6 @@ anitomy = {git="https://github.com/Rapptz/anitomy-rs", features=["serde"]}
 tokio-util = "0.7.19"
 librqbit = "9.0.1"
 dashmap = "6.2.1"
-
 
 [[bin]]
 name = "komorebi_server-cli"

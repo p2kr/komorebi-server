@@ -50,10 +50,10 @@ fn parse_selectors(strs: &[&str]) -> Vec<scraper::Selector> {
 
 /// Use the configured selector when non-empty and valid; otherwise fall back to defaults.
 fn build_selectors(configured: &str, defaults: &[&str]) -> Vec<scraper::Selector> {
-    if !configured.is_empty() {
-        if let Ok(sel) = scraper::Selector::parse(configured) {
-            return vec![sel];
-        }
+    if !configured.is_empty()
+        && let Ok(sel) = scraper::Selector::parse(configured)
+    {
+        return vec![sel];
     }
     parse_selectors(defaults)
 }
