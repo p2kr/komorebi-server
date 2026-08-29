@@ -90,7 +90,7 @@ impl Hooks for App {
         let (ws, _) = broadcast::channel::<Vec<VaultItem>>(100);
         ctx.shared_store.insert(ws.clone());
 
-        let download_manager = Arc::new(DownloadManager::new(&ctx.db).await?);
+        let download_manager = DownloadManager::new(&ctx.db).await?;
         ctx.shared_store.insert(download_manager.clone());
 
         // start the download daemon

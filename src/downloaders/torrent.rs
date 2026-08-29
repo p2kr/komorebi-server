@@ -1,7 +1,6 @@
 use std::{fmt::Display, sync::Arc};
 
 use dashmap::DashMap;
-use futures::future::join_all;
 use librqbit::{AddTorrent, AddTorrentOptions, AddTorrentResponse, ManagedTorrent, Session};
 use loco_rs::prelude::async_trait;
 use loco_rs::{Error, Result};
@@ -37,31 +36,11 @@ impl TorrentDownloader {
         session: Arc<Session>,
         active_items: Arc<DashMap<Uuid, VaultItem>>,
     ) -> Arc<Self> {
-        let n = Arc::new(Self {
+        Arc::new(Self {
             session,
             active_items,
             handles: DashMap::new(),
-        });
-
-        // Resume Pending/Downloading items
-        let bg_n = n.clone();
-        tokio::spawn(async move {
-            bg_n.resume_download().await;
-        });
-
-        n
-    }
-
-    async fn resume_download(&self) {
-        let items: Vec<VaultItem> = self
-            .active_items
-            .iter()
-            .map(|v| v.value().clone())
-            .collect();
-
-        let ft = items.iter().map(|item| self.add(item));
-
-        join_all(ft).await;
+        })
     }
 }
 
@@ -74,6 +53,7 @@ impl DownloadEngine for TorrentDownloader {
         let opts = AddTorrentOptions {
             paused: false,
             output_folder: Some(vault_item.destination_path.clone()),
+            overwrite: true,
             ..Default::default()
         };
 

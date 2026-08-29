@@ -1,7 +1,6 @@
 use std::{fmt::Display, io::SeekFrom, sync::Arc};
 
 use dashmap::DashMap;
-use futures::future::join_all;
 use loco_rs::Result;
 use loco_rs::prelude::async_trait;
 use reqwest::{Client, StatusCode, Url, header};
@@ -38,31 +37,11 @@ impl Display for DirectDownloader {
 
 impl DirectDownloader {
     pub async fn new(client: Client, active_items: Arc<DashMap<Uuid, VaultItem>>) -> Arc<Self> {
-        let n = Arc::new(Self {
+        Arc::new(Self {
             client,
             cancel_tokens: DashMap::new(),
             active_items: active_items.clone(),
-        });
-
-        // Resume Pending/Downloading items
-        let bg_n = n.clone();
-        tokio::spawn(async move {
-            bg_n.resume_download().await;
-        });
-
-        n
-    }
-
-    async fn resume_download(&self) {
-        let items: Vec<VaultItem> = self
-            .active_items
-            .iter()
-            .map(|v| v.value().clone())
-            .collect();
-
-        let ft = items.iter().map(|item| self.add(item));
-
-        join_all(ft).await;
+        })
     }
 }
 

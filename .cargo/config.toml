@@ -15,3 +15,6 @@ linker = "rust-lld"
 [env]
 TS_RS_EXPORT_DIR = { value = "../komorebi-web/src/lib/models/bindings/", relative = true }
 TS_RS_LARGE_INT = "number"
+
+[build]
+rustc-wrapper = "sccache"

@@ -32,6 +32,7 @@ pub fn start_daemon(ctx: AppContext, manager: Arc<DownloadManager>, ws: Sender<V
 
             for stat in all_stats.iter() {
                 if stat.status == VaultItemStatus::COMPLETED {
+                    tracing::info!("Download completed for: {}", stat.raw_title);
                     manager.active_items.remove(&stat.id);
                 }
             }

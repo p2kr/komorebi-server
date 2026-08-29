@@ -5,7 +5,7 @@ use librqbit::{DhtSessionConfig, Session, SessionOptions, dht::DhtPersistenceCon
 use loco_rs::Result;
 use reqwest::Client;
 use sea_orm::{DbConn, EntityTrait};
-use tokio::sync::Notify;
+use tokio::{sync::Notify, task::JoinSet};
 use uuid::Uuid;
 
 use crate::{
@@ -14,16 +14,18 @@ use crate::{
     models::vault::{self, VaultDownloadType, VaultItem, VaultItemStatus},
 };
 
-pub type SharedEngine = Arc<dyn DownloadEngine + Send + Sync>;
+type SharedEngine = Arc<dyn DownloadEngine + Send + Sync>;
+type SharedEngineMap = HashMap<VaultDownloadType, SharedEngine>;
+type ActiveItemsMap = DashMap<Uuid, VaultItem>;
 
 pub struct DownloadManager {
-    pub active_items: Arc<DashMap<Uuid, VaultItem>>,
-    engines: HashMap<VaultDownloadType, SharedEngine>,
+    pub active_items: Arc<ActiveItemsMap>,
+    engines: Arc<SharedEngineMap>,
     pub wakeup: Arc<Notify>,
 }
 
 impl DownloadManager {
-    async fn get_active_items(db: &DbConn) -> DashMap<Uuid, VaultItem> {
+    async fn get_active_items(db: &DbConn) -> ActiveItemsMap {
         let map = DashMap::new();
 
         if let Ok(v) = vault::Entity::find().all(db).await {
@@ -40,8 +42,11 @@ impl DownloadManager {
         map
     }
 
-    pub async fn new(db: &DbConn) -> Result<Self> {
+    pub async fn new(db: &DbConn) -> Result<Arc<Self>> {
         let active_items = Arc::new(Self::get_active_items(db).await);
+
+        tracing::info!("loading {} active items", active_items.len());
+
         let client = Client::new();
 
         let session_opt_default = SessionOptions {
@@ -73,8 +78,7 @@ impl DownloadManager {
         }
 
         let session = session_res.to_loco_err()?;
-
-        let mut engines: HashMap<VaultDownloadType, SharedEngine> = HashMap::new();
+        let mut engines: SharedEngineMap = HashMap::new();
 
         let direct_engine = DirectDownloader::new(client.clone(), active_items.clone()).await;
         let torrent_engine = TorrentDownloader::new(session, active_items.clone()).await;
@@ -83,11 +87,52 @@ impl DownloadManager {
         engines.insert(VaultDownloadType::TFILE, torrent_engine.clone());
         engines.insert(VaultDownloadType::MAGNET, torrent_engine);
 
-        Ok(Self {
-            active_items,
-            engines,
+        let engines = Arc::new(engines);
+
+        let m = Arc::new(Self {
+            active_items: active_items.clone(),
+            engines: engines.clone(),
             wakeup: Arc::new(Notify::new()),
-        })
+        });
+
+        let bg_m = m.clone();
+
+        tokio::spawn(async move {
+            // 1. Extract items quickly to drop the DashMap lock
+            let items: Vec<VaultItem> = active_items.iter().map(|v| v.value().clone()).collect();
+
+            let mut set = JoinSet::new();
+
+            // 2. Iterate and spawn isolated tasks
+            for item in items {
+                // Deref the DashMap guard and clone the engine so we own it for the async block
+                if let Some(engine) = engines.get(&item.download_type).map(|e| e.clone()) {
+                    set.spawn(async move {
+                        if let Err(e) = engine.add(&item).await {
+                            tracing::error!("Failed to resume item {} for engine: {}", item.id, e);
+                        }
+                    });
+                } else {
+                    tracing::warn!(
+                        "No download engine found for type {:?} for item {}",
+                        item.download_type,
+                        item.id
+                    );
+                }
+            }
+
+            // 3. Wait for all engine additions to finish
+            while let Some(res) = set.join_next().await {
+                if let Err(e) = res {
+                    tracing::error!("Resume download task panicked during startup: {}", e);
+                }
+            }
+
+            // 4. Wake the daemon after all items are safely loaded
+            bg_m.wake_daemon();
+        });
+
+        Ok(m)
     }
 
     pub fn wake_daemon(&self) {
