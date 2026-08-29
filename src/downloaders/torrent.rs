@@ -1,8 +1,9 @@
 use std::{fmt::Display, sync::Arc};
 
-use async_trait::async_trait;
 use dashmap::DashMap;
+use futures::future::join_all;
 use librqbit::{AddTorrent, AddTorrentOptions, AddTorrentResponse, ManagedTorrent, Session};
+use loco_rs::prelude::async_trait;
 use loco_rs::{Error, Result};
 use reqwest::Url;
 use uuid::Uuid;
@@ -32,12 +33,35 @@ impl Display for TorrentDownloader {
 }
 
 impl TorrentDownloader {
-    pub async fn new(session: Arc<Session>, active_items: Arc<DashMap<Uuid, VaultItem>>) -> Self {
-        Self {
+    pub async fn new(
+        session: Arc<Session>,
+        active_items: Arc<DashMap<Uuid, VaultItem>>,
+    ) -> Arc<Self> {
+        let n = Arc::new(Self {
             session,
             active_items,
             handles: DashMap::new(),
-        }
+        });
+
+        // Resume Pending/Downloading items
+        let bg_n = n.clone();
+        tokio::spawn(async move {
+            bg_n.resume_download().await;
+        });
+
+        n
+    }
+
+    async fn resume_download(&self) {
+        let items: Vec<VaultItem> = self
+            .active_items
+            .iter()
+            .map(|v| v.value().clone())
+            .collect();
+
+        let ft = items.iter().map(|item| self.add(item));
+
+        join_all(ft).await;
     }
 }
 
@@ -63,10 +87,12 @@ impl DownloadEngine for TorrentDownloader {
 
         // 3. Save the handle so we can pause/resume/stat it later
         match response {
-            AddTorrentResponse::Added(_, handle)
-            | AddTorrentResponse::AlreadyManaged(_, handle) => {
+            AddTorrentResponse::Added(_, handle) => {
                 self.handles.insert(vault_item.id, handle);
                 self.active_items.insert(vault_item.id, vault_item.clone());
+            }
+            AddTorrentResponse::AlreadyManaged(_, _) => {
+                return Err(Error::Unauthorized("Torrent already added".into()));
             }
             _ => return Err(Error::BadRequest("Failed to add torrent to session".into())),
         }
@@ -137,6 +163,8 @@ impl DownloadEngine for TorrentDownloader {
                 }
 
                 item.speed_bps = t_stats.live.unwrap_or_default().download_speed.as_bytes() as i64;
+
+                item.eta_seconds = item.total_bytes.checked_div(item.speed_bps);
 
                 // tracing::debug!(
                 //     "downloaded={}, total={}, speed={}",

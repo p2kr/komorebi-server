@@ -4,7 +4,7 @@ pub mod crawler_engine;
 pub mod html_crawler;
 pub mod json_crawler;
 
-use async_trait::async_trait;
+use loco_rs::prelude::async_trait;
 
 use crate::models::crawler::{CrawlerConfig, CrawlerResult, ParsedTitle};
 

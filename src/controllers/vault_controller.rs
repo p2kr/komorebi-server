@@ -4,6 +4,7 @@ use reqwest::{StatusCode, Url};
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::broadcast::Sender;
+use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::{
@@ -18,12 +19,14 @@ use crate::{
 };
 
 // --- JSON Payloads ---
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
+#[ts(export)]
 pub struct VaultActionPayload {
     vault_id: Uuid,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
+#[ts(export)]
 pub struct VaultAddPayload {
     crawler_result: CrawlerResult,
     user_id: Uuid,
@@ -113,14 +116,17 @@ pub async fn add(
         None => Some("Download engine not found for this item".into()),
     };
 
-    // If there's an error, update DB to FAILED and return fail() early
+    // If there's an error, remove from db and return fail() early
     if let Some(msg) = err_msg {
         vault::ActiveModel::from(inserted_item)
-            .update_status(VaultItemStatus::FAILED, Some(msg.clone()))
-            .update(&ctx.db)
+            .delete(&ctx.db)
             .await?;
 
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, &msg, None);
+        return fail(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "ERROR_VAULT_ADD",
+            Some(&msg),
+        );
     }
 
     // Success path: Update DB, wake daemon, and return success()

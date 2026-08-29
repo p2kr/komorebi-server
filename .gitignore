@@ -21,8 +21,7 @@ target/
 *.db-*
 .env
 .agents/
-repomix-output.xml
-examples/playground.rs
+examples/*
 vault/
 assets/*
 !assets/crawler_configs.yaml

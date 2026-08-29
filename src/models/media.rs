@@ -1,7 +1,7 @@
 use sea_orm::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use strum_macros::EnumString;
+use strum::EnumString;
 use ts_rs::TS;
 use uuid::Uuid;
 

@@ -15,19 +15,18 @@ members = [
 
 [workspace.dependencies]
 loco-rs = { version = "1.1" }
+ts-rs = { version = "12" }
 
 [dependencies]
 loco-rs = { workspace = true , features = ["worker"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
-tokio = { version = "1.45", default-features = false, features = [
+tokio = { version = "1.53", default-features = false, features = [
   "rt-multi-thread",
 ] }
-async-trait = { version = "0.1" }
 axum = { version = "0.8", features= ["ws"] }
 tracing = { version = "0.1" }
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-regex = { version = "1.11" }
+regex = { version = "1.13" }
 migration = { path = "migration" }
 sea-orm = { version = "2.0", features = [
   "sqlx-sqlite",
@@ -37,23 +36,25 @@ sea-orm = { version = "2.0", features = [
   "debug-print",
 ] }
 chrono = { version = "0.4" , features = ["now"]}
-validator = { version = "0.20" }
-uuid = { version = "1.6", features = ["v7", "std", "serde"] }
+# validator = { version = "0.20" }
+uuid = { version = "1.26", features = ["v7", "std", "serde"] }
+
 # ts-rs derives the TypeScript bindings for the `dtos` (the typed JSON API
 # contract). Present for every db app; the SPA frontend consumes the exports,
 # and a headless app can still emit them for external consumers.
-ts-rs = { version = "12", features = ["chrono-impl", "serde-compat", "uuid-impl", "serde-json-impl", "indexmap-impl"] }
-include_dir = { version = "0.7" }
+ts-rs = { workspace=true, features = ["chrono-impl", "serde-compat", "uuid-impl", "serde-json-impl", "indexmap-impl"] }
+
+# include_dir = { version = "0.7" }
 reqwest = { version = "0.13.4", features = ["query", "json", "form"] }
 yaml_serde = "0.10.7"
-indexmap = {version= "2.14.0", features = ["serde"]}
+indexmap = {version= "2.14.1", features = ["serde"]}
 scraper = "0.27.0"
-strum = "0.28.0"
-strum_macros = "0.28.0"
+strum = { version = "0.28", features = ["derive"] }
 anitomy = {git="https://github.com/Rapptz/anitomy-rs", features=["serde"]}
 tokio-util = "0.7.19"
 librqbit = "9.0.1"
 dashmap = "6.2.1"
+futures = "0.3.34"
 
 [[bin]]
 name = "komorebi_server-cli"
@@ -66,10 +67,10 @@ required-features = []
 
 [dev-dependencies]
 loco-rs = { workspace = true, features = ["testing"] }
-serial_test = { version = "3.1.1" }
+serial_test = { version = "3.5.0" }
 rstest = { version = "0.25" }
-insta = { version = "1.34", features = ["redactions", "yaml", "filters"] }
-ts-rs = { version = "12", features = ["format"] }
+insta = { version = "1.48", features = ["redactions", "yaml", "filters"] }
+ts-rs = { workspace = true, features = ["format"] }
 
 [build-dependencies]
 dotenv-build = "0.1.1"

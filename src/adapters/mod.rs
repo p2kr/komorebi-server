@@ -3,8 +3,8 @@ pub mod anilist_models;
 pub mod mal_client;
 pub mod mal_models;
 
-use async_trait::async_trait;
 use loco_rs::Result;
+use loco_rs::prelude::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

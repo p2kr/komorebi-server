@@ -5,8 +5,7 @@ pub mod torrent;
 
 use std::fmt::Display;
 
-use async_trait::async_trait;
-use loco_rs::Result;
+use loco_rs::{Result, prelude::async_trait};
 use uuid::Uuid;
 
 use crate::models::vault::VaultItem;

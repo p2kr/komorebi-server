@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use chrono::Utc;
+use loco_rs::prelude::async_trait;
 use loco_rs::{hash, prelude::*};
 use migration::OnConflict;
 use uuid::Uuid;

@@ -1,12 +1,14 @@
-use std::{fmt::Display, sync::Arc};
+use std::{fmt::Display, io::SeekFrom, sync::Arc};
 
-use async_trait::async_trait;
 use dashmap::DashMap;
+use futures::future::join_all;
 use loco_rs::Result;
-use reqwest::{Client, Url, header};
+use loco_rs::prelude::async_trait;
+use reqwest::{Client, StatusCode, Url, header};
 use tokio::{
     fs::{self, OpenOptions},
-    io::AsyncWriteExt,
+    io::{AsyncSeekExt, AsyncWriteExt},
+    time::Instant,
 };
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -14,7 +16,7 @@ use uuid::Uuid;
 use crate::{
     core::{ResultExt, vault_path_resolver::get_file_path},
     downloaders::DownloadEngine,
-    models::vault::{VaultDownloadType, VaultItem},
+    models::vault::{VaultDownloadType, VaultItem, VaultItemStatus},
 };
 
 pub struct DirectDownloader {
@@ -35,12 +37,32 @@ impl Display for DirectDownloader {
 }
 
 impl DirectDownloader {
-    pub async fn new(client: Client, active_items: Arc<DashMap<Uuid, VaultItem>>) -> Self {
-        Self {
+    pub async fn new(client: Client, active_items: Arc<DashMap<Uuid, VaultItem>>) -> Arc<Self> {
+        let n = Arc::new(Self {
             client,
             cancel_tokens: DashMap::new(),
-            active_items,
-        }
+            active_items: active_items.clone(),
+        });
+
+        // Resume Pending/Downloading items
+        let bg_n = n.clone();
+        tokio::spawn(async move {
+            bg_n.resume_download().await;
+        });
+
+        n
+    }
+
+    async fn resume_download(&self) {
+        let items: Vec<VaultItem> = self
+            .active_items
+            .iter()
+            .map(|v| v.value().clone())
+            .collect();
+
+        let ft = items.iter().map(|item| self.add(item));
+
+        join_all(ft).await;
     }
 }
 
@@ -67,6 +89,15 @@ impl DownloadEngine for DirectDownloader {
 
         // 3. Spawn the background worker
         tokio::spawn(async move {
+            let fail_item = |prefix: &str, e: &dyn Display| {
+                let msg = format!("{}:{}", prefix, e);
+                tracing::error!("{}", msg);
+                if let Some(mut item) = active_items.get_mut(&vault_id) {
+                    item.status = VaultItemStatus::FAILED;
+                    item.error_msg = Some(msg);
+                }
+            };
+
             // Determine if we need to resume
             let mut downloaded_bytes = 0;
             let mut req = client.get(url);
@@ -79,63 +110,126 @@ impl DownloadEngine for DirectDownloader {
             let mut res = match req.send().await {
                 Ok(r) => r,
                 Err(e) => {
-                    tracing::error!("Failed to start direct download: {}", e);
+                    fail_item("Failed to start direct download", &e);
                     return;
                 }
             };
+
+            if res.status() != StatusCode::PARTIAL_CONTENT {
+                downloaded_bytes = 0; // The server is sending from the beginning!
+            } else {
+                // Parse the Content-Range header (e.g., "bytes 1000-9999/10000")
+                if let Some(content_range) = res.headers().get(header::CONTENT_RANGE) {
+                    if let Ok(range_str) = content_range.to_str() {
+                        if let Some(range_info) = range_str.strip_prefix("bytes ") {
+                            // Split by '-' and take the first part
+                            if let Some(start_str) = range_info.split('-').next() {
+                                if let Ok(parsed_start) = start_str.parse::<u64>() {
+                                    // The server might have decided to start slightly earlier
+                                    // than we requested. We trust the server.
+                                    downloaded_bytes = parsed_start;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             let total_bytes = res.content_length().unwrap_or(0) + downloaded_bytes;
 
             let mut file = match OpenOptions::new()
                 .create(true)
-                .append(true)
+                .write(true)
+                .truncate(res.status() != StatusCode::PARTIAL_CONTENT)
                 .open(&file_path)
                 .await
             {
                 Ok(f) => f,
                 Err(e) => {
-                    tracing::error!("Failed to open file: {}", e);
+                    let msg = format!("Failed to open file: {}", e);
+                    tracing::error!(msg);
+                    if let Some(mut item) = active_items.get_mut(&vault_id) {
+                        item.status = VaultItemStatus::FAILED;
+                        item.error_msg = Some(msg);
+                    }
                     return;
                 }
             };
+
+            if downloaded_bytes > 0 {
+                if let Err(e) = file.seek(SeekFrom::Start(downloaded_bytes)).await {
+                    fail_item("Failed to seek file: {}", &e);
+                    return;
+                }
+
+                // This safely chops off the end of the file if the server told us to start
+                // earlier than our physical file length.
+                if let Err(e) = file.set_len(downloaded_bytes).await {
+                    fail_item("Failed to truncate stale file data: {}", &e);
+                    return;
+                }
+            }
+
+            let mut last_updated = Instant::now();
 
             // Stream chunks
             loop {
                 tokio::select! {
                     _ = cancel_token.cancelled() => {
-                        tracing::info!("Download paused/cancelled for vault_id: {}", vault_id);
+                        let msg = format!("Download paused/cancelled for vault_id: {}", vault_id);
+                        tracing::error!(msg);
+                        if let Some(mut item) = active_items.get_mut(&vault_id) {
+                            item.status = VaultItemStatus::PAUSED;
+                            item.error_msg = Some(msg);
+                        }
                         break;
                     }
                     chunk = res.chunk() => {
                         match chunk {
                             Ok(Some(bytes)) => {
                                 if let Err(e) = file.write_all(&bytes).await {
-                                    tracing::error!("Failed to write to file: {}", e);
+                                    fail_item("Failed to write to file: {}",  &e);
                                     break;
                                 }
                                 downloaded_bytes += bytes.len() as u64;
 
                                 // Update live stats!
-                                if let Some(mut item) = active_items.get_mut(&vault_id) {
+                                if last_updated.elapsed().as_millis() > 500
+                                    && let Some(mut item) = active_items.get_mut(&vault_id)
+                                {
+                                    let delta = (item.downloaded_bytes as u64).abs_diff(downloaded_bytes);
                                     item.total_bytes = total_bytes as i64;
                                     item.downloaded_bytes = downloaded_bytes as i64;
                                     if total_bytes > 0 {
                                         item.progress = (downloaded_bytes as f64 / total_bytes as f64) * 100.0;
                                     }
+                                    // TODO: Calculate speed.
+                                    item.speed_bps = (delta as f64 / 0.5).round() as i64 ;
+
+                                    last_updated = Instant::now();
                                 }
                             }
                             Ok(None) => {
                                 tracing::info!("Download completed for vault_id: {}", vault_id);
+                                if let Some(mut item) = active_items.get_mut(&vault_id) {
+                                    item.downloaded_bytes = total_bytes as i64;
+                                    item.progress = 100.0;
+                                    item.status = VaultItemStatus::COMPLETED;
+                                }
                                 active_items.remove(&vault_id);
                                 break;
                             }
                             Err(e) => {
-                                tracing::error!("Error reading chunk: {}", e);
+                                fail_item("Error reading chunk: {}",  &e);
                                 break;
                             }
                         }
                     }
                 }
+            }
+
+            if let Err(e) = file.sync_all().await {
+                tracing::warn!("Error syncing download file: {}", e);
             }
         });
 

@@ -16,19 +16,19 @@ A high-performance, unified REST API backend written in Rust — built on the [L
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Language | Rust (Edition 2021) |
-| Framework | [Loco](https://loco.rs) 1.1 |
-| Web | Axum 0.8 |
-| Database | SQLite via Sea-ORM 2.0 |
-| Async runtime | Tokio |
-| HTTP client | reqwest 0.13 |
-| IDs | UUID v7 |
-| Timestamps | chrono |
-| HTML parsing | scraper 0.27 |
-| Enum strings | strum / strum_macros 0.28 |
-| TS bindings | ts-rs 12 |
+| Layer         | Technology                  |
+| ------------- | --------------------------- |
+| Language      | Rust (Edition 2021)         |
+| Framework     | [Loco](https://loco.rs) 1.1 |
+| Web           | Axum 0.8                    |
+| Database      | SQLite via Sea-ORM 2.0      |
+| Async runtime | Tokio                       |
+| HTTP client   | reqwest 0.13                |
+| IDs           | UUID v7                     |
+| Timestamps    | chrono                      |
+| HTML parsing  | scraper 0.27                |
+| Enum strings  | strum / strum_macros 0.28   |
+| TS bindings   | ts-rs 12                    |
 
 ## Project Layout
 
@@ -75,26 +75,26 @@ All routes are prefixed with `/api/v1`.
 
 ### User
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/user/login` | Authenticate a user by username + provider + optional passcode |
-| `POST` | `/user/add` | Register / upsert a user (validates against provider) |
-| `POST` | `/user/all` | List all registered users |
-| `POST` | `/user/one` | Get a user by UUID |
-| `POST` | `/user/delete` | Delete a user by UUID |
-| `POST` | `/user/oauth/exchange` | Exchange an OAuth code + PKCE verifier for an access token |
+| Method | Path                   | Description                                                    |
+| ------ | ---------------------- | -------------------------------------------------------------- |
+| `POST` | `/user/login`          | Authenticate a user by username + provider + optional passcode |
+| `POST` | `/user/add`            | Register / upsert a user (validates against provider)          |
+| `POST` | `/user/all`            | List all registered users                                      |
+| `POST` | `/user/one`            | Get a user by UUID                                             |
+| `POST` | `/user/delete`         | Delete a user by UUID                                          |
+| `POST` | `/user/oauth/exchange` | Exchange an OAuth code + PKCE verifier for an access token     |
 
 ### Media
 
-| Method | Path | Description |
-|---|---|---|
+| Method | Path           | Description                                          |
+| ------ | -------------- | ---------------------------------------------------- |
 | `POST` | `/media/anime` | Fetch a user's anime list from their linked provider |
 | `POST` | `/media/manga` | Fetch a user's manga list from their linked provider |
 
-### Crawler *(WIP)*
+### Crawler _(WIP)_
 
-| Method | Path | Description |
-|---|---|---|
+| Method | Path              | Description                                     |
+| ------ | ----------------- | ----------------------------------------------- |
 | `POST` | `/crawler/search` | Search external torrent sites for a media title |
 
 ### Response Envelopes
@@ -123,12 +123,12 @@ cargo loco start
 
 Configure provider credentials in your `.env` or via `config/development.yaml`:
 
-| Variable | Description |
-|---|---|
-| `MAL_CLIENT_ID` | MyAnimeList API client ID |
-| `MAL_CLIENT_SECRET` | MyAnimeList API client secret |
-| `ANILIST_CLIENT_ID` | AniList OAuth client ID |
-| `ANILIST_CLIENT_SECRET` | AniList OAuth client secret |
+| Variable                | Description                   |
+| ----------------------- | ----------------------------- |
+| `MAL_CLIENT_ID`         | MyAnimeList API client ID     |
+| `MAL_CLIENT_SECRET`     | MyAnimeList API client secret |
+| `ANILIST_CLIENT_ID`     | AniList OAuth client ID       |
+| `ANILIST_CLIENT_SECRET` | AniList OAuth client secret   |
 
 ## Development
 

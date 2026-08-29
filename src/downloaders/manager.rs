@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::{
     core::{ResultExt, constants::VAULT_LOC},
     downloaders::{DownloadEngine, direct::DirectDownloader, torrent::TorrentDownloader},
-    models::vault::{self, VaultDownloadType, VaultItem},
+    models::vault::{self, VaultDownloadType, VaultItem, VaultItemStatus},
 };
 
 pub type SharedEngine = Arc<dyn DownloadEngine + Send + Sync>;
@@ -28,7 +28,12 @@ impl DownloadManager {
 
         if let Ok(v) = vault::Entity::find().all(db).await {
             for item in v {
-                map.insert(item.id, item);
+                if !matches!(
+                    item.status,
+                    VaultItemStatus::COMPLETED | VaultItemStatus::CANCELLED
+                ) {
+                    map.insert(item.id, item);
+                }
             }
         }
 
@@ -71,9 +76,8 @@ impl DownloadManager {
 
         let mut engines: HashMap<VaultDownloadType, SharedEngine> = HashMap::new();
 
-        let direct_engine =
-            Arc::new(DirectDownloader::new(client.clone(), active_items.clone()).await);
-        let torrent_engine = Arc::new(TorrentDownloader::new(session, active_items.clone()).await);
+        let direct_engine = DirectDownloader::new(client.clone(), active_items.clone()).await;
+        let torrent_engine = TorrentDownloader::new(session, active_items.clone()).await;
 
         engines.insert(VaultDownloadType::DIRECT, direct_engine);
         engines.insert(VaultDownloadType::TFILE, torrent_engine.clone());

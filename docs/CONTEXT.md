@@ -10,19 +10,19 @@ The system abstracts differences in provider data models, score scales, formats,
 
 ## 2. Technology Stack
 
-| Layer | Technology |
-|---|---|
-| Language | Rust (Edition 2021) |
-| Framework | [Loco](https://loco.rs) 1.1 |
-| Web | Axum 0.8 |
-| Database | SQLite via Sea-ORM 2.0 |
-| Async runtime | Tokio |
-| HTTP client | reqwest 0.13 |
-| IDs | UUID v7 |
-| Timestamps | chrono |
-| HTML parsing | scraper 0.27 |
-| Enum strings | strum / strum_macros 0.28 |
-| TS bindings | ts-rs 12 |
+| Layer         | Technology                  |
+| ------------- | --------------------------- |
+| Language      | Rust (Edition 2021)         |
+| Framework     | [Loco](https://loco.rs) 1.1 |
+| Web           | Axum 0.8                    |
+| Database      | SQLite via Sea-ORM 2.0      |
+| Async runtime | Tokio                       |
+| HTTP client   | reqwest 0.13                |
+| IDs           | UUID v7                     |
+| Timestamps    | chrono                      |
+| HTML parsing  | scraper 0.27                |
+| Enum strings  | strum / strum_macros 0.28   |
+| TS bindings   | ts-rs 12                    |
 
 ---
 
@@ -145,18 +145,19 @@ CREATE TABLE IF NOT EXISTS users (
 
 ### 5.2 User Model Operations (`src/models/users.rs`)
 
-| Method | Description |
-|---|---|
-| `save_user` | UPSERT on `(username, provider, is_sandbox)` conflict. Returns saved `User`. |
-| `get_all_users` | Returns all users. |
-| `find_by_id` | Finds user by UUID. |
-| `find_by_username_and_provider_and_sandbox` | Used for login lookup. |
-| `delete_user` | Deletes by UUID. |
-| `verify_passcode` | Argon2 hash comparison; falls back to plain-text for unhashed passcodes. |
+| Method                                      | Description                                                                  |
+| ------------------------------------------- | ---------------------------------------------------------------------------- |
+| `save_user`                                 | UPSERT on `(username, provider, is_sandbox)` conflict. Returns saved `User`. |
+| `get_all_users`                             | Returns all users.                                                           |
+| `find_by_id`                                | Finds user by UUID.                                                          |
+| `find_by_username_and_provider_and_sandbox` | Used for login lookup.                                                       |
+| `delete_user`                               | Deletes by UUID.                                                             |
+| `verify_passcode`                           | Argon2 hash comparison; falls back to plain-text for unhashed passcodes.     |
 
 ### 5.3 `ActiveModelBehavior` (`src/models/users.rs`)
 
 The `before_save` hook:
+
 - Auto-assigns `Uuid::now_v7()` on insert if ID is nil.
 - Derives `is_sandbox = access_token.is_none_or_empty()`.
 - Sets `created_at` on insert; always updates `updated_at`.
@@ -169,17 +170,17 @@ The `before_save` hook:
 
 All routes are under `/api/v1` (set in `src/app.rs`).
 
-| Method | Path | Handler |
-|---|---|---|
-| `POST` | `/api/v1/user/login` | `user_controller::login` |
-| `POST` | `/api/v1/user/add` | `user_controller::save_user` |
-| `POST` | `/api/v1/user/all` | `user_controller::get_all_users` |
-| `POST` | `/api/v1/user/one` | `user_controller::get_user_by_id` |
-| `POST` | `/api/v1/user/delete` | `user_controller::delete_user_by_id` |
-| `POST` | `/api/v1/user/oauth/exchange` | `user_controller::exchange_oauth_token` |
-| `POST` | `/api/v1/media/anime` | `media_controller::get_user_anime` |
-| `POST` | `/api/v1/media/manga` | `media_controller::get_user_manga` |
-| `POST` | `/api/v1/crawler/search` | `crawler_controller::search_media` (WIP) |
+| Method | Path                          | Handler                                  |
+| ------ | ----------------------------- | ---------------------------------------- |
+| `POST` | `/api/v1/user/login`          | `user_controller::login`                 |
+| `POST` | `/api/v1/user/add`            | `user_controller::save_user`             |
+| `POST` | `/api/v1/user/all`            | `user_controller::get_all_users`         |
+| `POST` | `/api/v1/user/one`            | `user_controller::get_user_by_id`        |
+| `POST` | `/api/v1/user/delete`         | `user_controller::delete_user_by_id`     |
+| `POST` | `/api/v1/user/oauth/exchange` | `user_controller::exchange_oauth_token`  |
+| `POST` | `/api/v1/media/anime`         | `media_controller::get_user_anime`       |
+| `POST` | `/api/v1/media/manga`         | `media_controller::get_user_manga`       |
+| `POST` | `/api/v1/crawler/search`      | `crawler_controller::search_media` (WIP) |
 
 Plus Loco's default routes (`GET /_health`, `GET /_ping`, etc.).
 
@@ -442,10 +443,6 @@ CREATE TABLE IF NOT EXISTS users (
 - `POST /api/v1/user/all` -> `get_all_users`.
 - `POST /api/v1/user/one` -> `get_user_by_id`.
 - `POST /api/v1/user/delete` -> `delete_user`.
-
-
-
-
 
 ### 6.2 Standardized Response Envelopes
 

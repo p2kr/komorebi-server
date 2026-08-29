@@ -17,12 +17,12 @@ paths:
       tags:
         - System
       responses:
-        '200':
+        "200":
           description: Health check information.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HealthCheckResponse'
+                $ref: "#/components/schemas/HealthCheckResponse"
               examples:
                 default:
                   summary: Health check response
@@ -41,12 +41,12 @@ paths:
       tags:
         - System
       responses:
-        '200':
+        "200":
           description: Health check information.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HealthCheckResponse'
+                $ref: "#/components/schemas/HealthCheckResponse"
               examples:
                 default:
                   summary: Health check response
@@ -94,18 +94,18 @@ paths:
                   default: 0
                   example: 0
       responses:
-        '200':
+        "200":
           description: Successfully retrieved user anime list.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedMediaResponse'
-        '400':
+                $ref: "#/components/schemas/PaginatedMediaResponse"
+        "400":
           description: Failed to fetch anime list or invalid input parameters.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FailureResponse'
+                $ref: "#/components/schemas/FailureResponse"
               examples:
                 default:
                   summary: Fetch anime list failed
@@ -114,12 +114,12 @@ paths:
                     error:
                       code: FETCH_ANIME_FAILED
                       msg: "Failed to fetch user anime list"
-        '404':
+        "404":
           description: User not found in database.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FailureResponse'
+                $ref: "#/components/schemas/FailureResponse"
               examples:
                 default:
                   summary: User not found
@@ -128,12 +128,12 @@ paths:
                     error:
                       code: USER_NOT_FOUND
                       msg: "User with ID '018f3a5e-7b12-7000-8000-123456789abc' not found"
-        '502':
+        "502":
           description: Upstream provider API failure.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FailureResponse'
+                $ref: "#/components/schemas/FailureResponse"
               examples:
                 default:
                   summary: Upstream error
@@ -180,18 +180,18 @@ paths:
                   default: 0
                   example: 0
       responses:
-        '200':
+        "200":
           description: Successfully retrieved user manga list.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedMediaResponse'
-        '400':
+                $ref: "#/components/schemas/PaginatedMediaResponse"
+        "400":
           description: Failed to fetch manga list or invalid input parameters.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FailureResponse'
+                $ref: "#/components/schemas/FailureResponse"
               examples:
                 default:
                   summary: Fetch manga list failed
@@ -200,12 +200,12 @@ paths:
                     error:
                       code: FETCH_MANGA_FAILED
                       msg: "Failed to fetch user manga list"
-        '404':
+        "404":
           description: User not found in database.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FailureResponse'
+                $ref: "#/components/schemas/FailureResponse"
               examples:
                 default:
                   summary: User not found
@@ -214,12 +214,12 @@ paths:
                     error:
                       code: USER_NOT_FOUND
                       msg: "User with ID '018f3a5e-7b12-7000-8000-123456789abc' not found"
-        '502':
+        "502":
           description: Upstream provider API failure.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FailureResponse'
+                $ref: "#/components/schemas/FailureResponse"
               examples:
                 default:
                   summary: Upstream error
@@ -254,7 +254,7 @@ paths:
                   description: External provider username or handle.
                   example: octocat
                 provider:
-                  $ref: '#/components/schemas/MediaProvider'
+                  $ref: "#/components/schemas/MediaProvider"
                 avatar_url:
                   type:
                     - string
@@ -268,18 +268,18 @@ paths:
                   description: OAuth access token for authenticating provider API requests. If omitted, user is saved in sandbox mode (public list access only).
                   example: token123456
       responses:
-        '200':
+        "200":
           description: User saved successfully.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SaveUserResponse'
-        '400':
+                $ref: "#/components/schemas/SaveUserResponse"
+        "400":
           description: Invalid input parameters or missing required parameters.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FailureResponse'
+                $ref: "#/components/schemas/FailureResponse"
               examples:
                 default:
                   summary: Invalid parameters
@@ -288,12 +288,12 @@ paths:
                     error:
                       code: INVALID_PARAMS
                       msg: "Missing required parameter: username"
-        '500':
+        "500":
           description: Database or internal server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FailureResponse'
+                $ref: "#/components/schemas/FailureResponse"
               examples:
                 default:
                   summary: Database error
@@ -311,18 +311,18 @@ paths:
       tags:
         - User
       responses:
-        '200':
+        "200":
           description: Successfully retrieved all users.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserListResponse'
-        '500':
+                $ref: "#/components/schemas/UserListResponse"
+        "500":
           description: Database or internal server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FailureResponse'
+                $ref: "#/components/schemas/FailureResponse"
               examples:
                 default:
                   summary: Database error
@@ -354,18 +354,18 @@ paths:
                   description: Unique identifier (UUID) of the user.
                   example: 018f3a5e-7b12-7000-8000-123456789abc
       responses:
-        '200':
+        "200":
           description: Successfully retrieved user.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetUserResponse'
-        '404':
+                $ref: "#/components/schemas/GetUserResponse"
+        "404":
           description: User not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FailureResponse'
+                $ref: "#/components/schemas/FailureResponse"
               examples:
                 default:
                   summary: User not found
@@ -397,24 +397,24 @@ paths:
                   description: Unique identifier (UUID) of the user to delete.
                   example: 018f3a5e-7b12-7000-8000-123456789abc
       responses:
-        '200':
+        "200":
           description: User deleted successfully. Returns the UUID of the deleted user.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DeleteUserResponse'
+                $ref: "#/components/schemas/DeleteUserResponse"
               examples:
                 default:
                   summary: Deletion success
                   value:
                     success: true
                     data: 018f3a5e-7b12-7000-8000-123456789abc
-        '404':
+        "404":
           description: User not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FailureResponse'
+                $ref: "#/components/schemas/FailureResponse"
               examples:
                 default:
                   summary: User not found
@@ -423,12 +423,12 @@ paths:
                     error:
                       code: USER_NOT_FOUND
                       msg: "User with ID '018f3a5e-7b12-7000-8000-123456789abc' not found"
-        '500':
+        "500":
           description: Database or internal server error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FailureResponse'
+                $ref: "#/components/schemas/FailureResponse"
               examples:
                 default:
                   summary: Database error
@@ -460,7 +460,7 @@ paths:
                 - code_verifier
               properties:
                 provider:
-                  $ref: '#/components/schemas/MediaProvider'
+                  $ref: "#/components/schemas/MediaProvider"
                 code:
                   type: string
                   description: Authorization code received from the OAuth redirect callback.
@@ -470,24 +470,24 @@ paths:
                   description: PKCE code verifier that was used to generate the code challenge.
                   example: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
       responses:
-        '200':
+        "200":
           description: Access token successfully exchanged.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OauthTokenResponse'
+                $ref: "#/components/schemas/OauthTokenResponse"
               examples:
                 default:
                   summary: Token exchange success
                   value:
                     success: true
                     data: "Bearer eyJhbGciOiJSUzI1NiJ9..."
-        '400':
+        "400":
           description: Invalid or missing parameters.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FailureResponse'
+                $ref: "#/components/schemas/FailureResponse"
               examples:
                 default:
                   summary: Invalid code
@@ -496,12 +496,12 @@ paths:
                     error:
                       code: INVALID_PARAMS
                       msg: "Invalid authorization code"
-        '502':
+        "502":
           description: Upstream provider OAuth error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FailureResponse'
+                $ref: "#/components/schemas/FailureResponse"
               examples:
                 default:
                   summary: Upstream OAuth failure
@@ -510,9 +510,6 @@ paths:
                     error:
                       code: UPSTREAM_API_ERROR
                       msg: "Upstream provider error (MAL): Token exchange failed"
-
-
-
 
 components:
   schemas:
@@ -548,7 +545,7 @@ components:
           examples:
             - true
         data:
-          $ref: '#/components/schemas/HealthCheckData'
+          $ref: "#/components/schemas/HealthCheckData"
 
     ErrorDetail:
       type: object
@@ -576,7 +573,7 @@ components:
           examples:
             - false
         error:
-          $ref: '#/components/schemas/ErrorDetail'
+          $ref: "#/components/schemas/ErrorDetail"
 
     MediaProvider:
       type: string
@@ -622,7 +619,7 @@ components:
           examples:
             - https://example.com/avatar.png
         provider:
-          $ref: '#/components/schemas/MediaProvider'
+          $ref: "#/components/schemas/MediaProvider"
         is_sandbox:
           type: boolean
           description: Indicates whether user is running in sandbox mode (no access token provided).
@@ -787,17 +784,17 @@ components:
           examples:
             - "16498"
         provider:
-          $ref: '#/components/schemas/MediaProvider'
+          $ref: "#/components/schemas/MediaProvider"
         media_type:
-          $ref: '#/components/schemas/MediaType'
+          $ref: "#/components/schemas/MediaType"
         format:
-          $ref: '#/components/schemas/MediaFormat'
+          $ref: "#/components/schemas/MediaFormat"
         release_status:
-          $ref: '#/components/schemas/ReleaseStatus'
+          $ref: "#/components/schemas/ReleaseStatus"
         title:
-          $ref: '#/components/schemas/MediaTitle'
+          $ref: "#/components/schemas/MediaTitle"
         cover:
-          $ref: '#/components/schemas/CoverImage'
+          $ref: "#/components/schemas/CoverImage"
         synopsis:
           type:
             - string
@@ -849,7 +846,7 @@ components:
           examples:
             - ["Action", "Drama", "Fantasy"]
         nsfw:
-          $ref: '#/components/schemas/NsfwLevel'
+          $ref: "#/components/schemas/NsfwLevel"
 
     ListEntry:
       type: object
@@ -859,7 +856,7 @@ components:
         - tags
       properties:
         status:
-          $ref: '#/components/schemas/ListStatus'
+          $ref: "#/components/schemas/ListStatus"
         score:
           type:
             - number
@@ -916,9 +913,9 @@ components:
         - list_entry
       properties:
         media:
-          $ref: '#/components/schemas/Media'
+          $ref: "#/components/schemas/Media"
         list_entry:
-          $ref: '#/components/schemas/ListEntry'
+          $ref: "#/components/schemas/ListEntry"
 
     Paging:
       type: object
@@ -950,9 +947,9 @@ components:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/MediaEntry'
+            $ref: "#/components/schemas/MediaEntry"
         paging:
-          $ref: '#/components/schemas/Paging'
+          $ref: "#/components/schemas/Paging"
 
     PaginatedMediaResponse:
       type: object
@@ -965,7 +962,7 @@ components:
           examples:
             - true
         data:
-          $ref: '#/components/schemas/PaginatedResponse'
+          $ref: "#/components/schemas/PaginatedResponse"
 
     GetUserResponse:
       type: object
@@ -978,7 +975,7 @@ components:
           examples:
             - true
         data:
-          $ref: '#/components/schemas/User'
+          $ref: "#/components/schemas/User"
 
     SaveUserResponse:
       type: object
@@ -991,7 +988,7 @@ components:
           examples:
             - true
         data:
-          $ref: '#/components/schemas/User'
+          $ref: "#/components/schemas/User"
 
     UserListResponse:
       type: object
@@ -1006,7 +1003,7 @@ components:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/User'
+            $ref: "#/components/schemas/User"
 
     DeleteUserResponse:
       type: object
@@ -1040,4 +1037,3 @@ components:
           description: The access token returned by the provider.
           examples:
             - "Bearer eyJhbGciOiJSUzI1NiJ9..."
-

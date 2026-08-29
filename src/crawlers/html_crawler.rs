@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
-use async_trait::async_trait;
+use loco_rs::prelude::async_trait;
 use regex::Regex;
 use reqwest::Url;
 
