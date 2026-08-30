@@ -142,9 +142,13 @@ impl DownloadEngine for TorrentDownloader {
                         (item.downloaded_bytes as f64 / item.total_bytes as f64) * 100.0;
                 }
 
-                item.speed_bps = t_stats.live.unwrap_or_default().download_speed.as_bytes() as i64;
+                let live_speed = t_stats.live.unwrap_or_default().download_speed.as_bytes() as i64;
+                item.speed_bps = live_speed;
 
-                item.eta_seconds = item.total_bytes.checked_div(item.speed_bps);
+                item.eta_seconds = item
+                    .total_bytes
+                    .saturating_sub(item.downloaded_bytes)
+                    .checked_div(item.speed_bps);
 
                 // tracing::debug!(
                 //     "downloaded={}, total={}, speed={}",

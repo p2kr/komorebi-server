@@ -69,7 +69,7 @@ impl DownloadEngine for DirectDownloader {
         // 3. Spawn the background worker
         tokio::spawn(async move {
             let fail_item = |prefix: &str, e: &dyn Display| {
-                let msg = format!("{}:{}", prefix, e);
+                let msg = format!("{}: {}", prefix, e);
                 tracing::error!("{}", msg);
                 if let Some(mut item) = active_items.get_mut(&vault_id) {
                     item.status = VaultItemStatus::FAILED;
@@ -98,18 +98,17 @@ impl DownloadEngine for DirectDownloader {
                 downloaded_bytes = 0; // The server is sending from the beginning!
             } else {
                 // Parse the Content-Range header (e.g., "bytes 1000-9999/10000")
-                if let Some(content_range) = res.headers().get(header::CONTENT_RANGE) {
-                    if let Ok(range_str) = content_range.to_str() {
-                        if let Some(range_info) = range_str.strip_prefix("bytes ") {
-                            // Split by '-' and take the first part
-                            if let Some(start_str) = range_info.split('-').next() {
-                                if let Ok(parsed_start) = start_str.parse::<u64>() {
-                                    // The server might have decided to start slightly earlier
-                                    // than we requested. We trust the server.
-                                    downloaded_bytes = parsed_start;
-                                }
-                            }
-                        }
+                if let Some(content_range) = res.headers().get(header::CONTENT_RANGE)
+                    && let Ok(range_str) = content_range.to_str()
+                    && let Some(range_info) = range_str.strip_prefix("bytes ")
+                {
+                    // Split by '-' and take the first part
+                    if let Some(start_str) = range_info.split('-').next()
+                        && let Ok(parsed_start) = start_str.parse::<u64>()
+                    {
+                        // The server might have decided to start slightly earlier
+                        // than we requested. We trust the server.
+                        downloaded_bytes = parsed_start;
                     }
                 }
             }
@@ -137,19 +136,23 @@ impl DownloadEngine for DirectDownloader {
 
             if downloaded_bytes > 0 {
                 if let Err(e) = file.seek(SeekFrom::Start(downloaded_bytes)).await {
-                    fail_item("Failed to seek file: {}", &e);
+                    fail_item("Failed to seek file", &e);
                     return;
                 }
 
                 // This safely chops off the end of the file if the server told us to start
                 // earlier than our physical file length.
                 if let Err(e) = file.set_len(downloaded_bytes).await {
-                    fail_item("Failed to truncate stale file data: {}", &e);
+                    fail_item("Failed to truncate stale file data", &e);
                     return;
                 }
             }
 
             let mut last_updated = Instant::now();
+            if let Some(mut item) = active_items.get_mut(&vault_id) {
+                item.downloaded_bytes = downloaded_bytes as i64;
+                item.total_bytes = total_bytes as i64;
+            }
 
             // Stream chunks
             loop {
@@ -167,23 +170,39 @@ impl DownloadEngine for DirectDownloader {
                         match chunk {
                             Ok(Some(bytes)) => {
                                 if let Err(e) = file.write_all(&bytes).await {
-                                    fail_item("Failed to write to file: {}",  &e);
+                                    fail_item("Failed to write to file", &e);
                                     break;
                                 }
                                 downloaded_bytes += bytes.len() as u64;
 
+                                let elapsed =  last_updated.elapsed();
+
                                 // Update live stats!
-                                if last_updated.elapsed().as_millis() > 500
+                                if elapsed.as_millis() > 500
                                     && let Some(mut item) = active_items.get_mut(&vault_id)
                                 {
-                                    let delta = (item.downloaded_bytes as u64).abs_diff(downloaded_bytes);
+                                    let delta = (item.downloaded_bytes as u64)
+                                        .abs_diff(downloaded_bytes) as f64;
+                                    let elapsed_secs = elapsed.as_secs_f64();
+
                                     item.total_bytes = total_bytes as i64;
                                     item.downloaded_bytes = downloaded_bytes as i64;
-                                    if total_bytes > 0 {
-                                        item.progress = (downloaded_bytes as f64 / total_bytes as f64) * 100.0;
+
+                                    if elapsed_secs > 0.0 {
+                                        item.speed_bps = (delta/elapsed_secs).round()   as i64;
                                     }
-                                    // TODO: Calculate speed.
-                                    item.speed_bps = (delta as f64 / 0.5).round() as i64 ;
+
+                                    if total_bytes > 0 {
+                                        item.progress = (downloaded_bytes as f64
+                                            / total_bytes as f64)
+                                            * 100.0;
+
+
+                                        item.eta_seconds = total_bytes
+                                            .saturating_sub(downloaded_bytes)
+                                            .checked_div(item.speed_bps as u64)
+                                            .map(|v| v as i64);
+                                    }
 
                                     last_updated = Instant::now();
                                 }
@@ -199,12 +218,17 @@ impl DownloadEngine for DirectDownloader {
                                 break;
                             }
                             Err(e) => {
-                                fail_item("Error reading chunk: {}",  &e);
+                                fail_item("Error reading chunk", &e);
                                 break;
                             }
                         }
                     }
                 }
+            }
+
+            if let Some(mut item) = active_items.get_mut(&vault_id) {
+                item.speed_bps = 0;
+                item.eta_seconds = None;
             }
 
             if let Err(e) = file.sync_all().await {

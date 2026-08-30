@@ -106,7 +106,7 @@ impl DownloadManager {
             // 2. Iterate and spawn isolated tasks
             for item in items {
                 // Deref the DashMap guard and clone the engine so we own it for the async block
-                if let Some(engine) = engines.get(&item.download_type).map(|e| e.clone()) {
+                if let Some(engine) = engines.get(&item.download_type).cloned() {
                     set.spawn(async move {
                         if let Err(e) = engine.add(&item).await {
                             tracing::error!("Failed to resume item {} for engine: {}", item.id, e);
@@ -128,7 +128,7 @@ impl DownloadManager {
                 }
             }
 
-            // 4. Wake the daemon after all items are safely loaded
+            // 4. Wake the daemon after all items are loaded
             bg_m.wake_daemon();
         });
 

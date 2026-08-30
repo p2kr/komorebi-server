@@ -23,6 +23,8 @@ pub fn start_daemon(ctx: AppContext, manager: Arc<DownloadManager>, ws: Sender<V
                 all_stats.append(&mut engine_stats);
             }
 
+            let _ = ws.send(all_stats.clone());
+
             if all_stats.is_empty() {
                 tracing::info!("no active downloads, waiting for wakeup signal");
                 manager.wakeup.notified().await;
@@ -36,8 +38,6 @@ pub fn start_daemon(ctx: AppContext, manager: Arc<DownloadManager>, ws: Sender<V
                     manager.active_items.remove(&stat.id);
                 }
             }
-
-            let _ = ws.send(all_stats.clone());
 
             for item in all_stats {
                 let id = item.id;

@@ -211,7 +211,20 @@ pub async fn ws(State(ctx): State<AppContext>, ws: WebSocketUpgrade) -> Response
     let tx = ctx.shared_store.get::<Sender<Vec<VaultItem>>>().unwrap();
     let mut rx = tx.subscribe();
 
+    let manager = ctx.shared_store.get::<Arc<DownloadManager>>().unwrap();
+
     ws.on_upgrade(move |mut socket| async move {
+        // Send initial state
+        let items: Vec<VaultItem> = manager
+            .active_items
+            .iter()
+            .map(|v| v.value().clone())
+            .collect();
+
+        if let Ok(json) = serde_json::to_string(&items) {
+            let _ = socket.send(Message::Text(json.into())).await;
+        }
+
         // Stream progress updates to the frontend
         while let Ok(stats) = rx.recv().await {
             if let Ok(json) = serde_json::to_string(&stats)
