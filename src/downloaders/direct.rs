@@ -1,4 +1,4 @@
-use std::{fmt::Display, io::SeekFrom, sync::Arc};
+use std::{fmt::Display, io::SeekFrom, sync::Arc, time::Duration};
 
 use dashmap::DashMap;
 use loco_rs::Result;
@@ -79,7 +79,8 @@ impl DownloadEngine for DirectDownloader {
 
             // Determine if we need to resume
             let mut downloaded_bytes = 0;
-            let mut req = client.get(url);
+            // Very large timeout but not infinite.
+            let mut req = client.get(url).timeout(Duration::from_hours(24 * 7));
 
             if let Ok(metadata) = fs::metadata(&file_path).await {
                 downloaded_bytes = metadata.len();

@@ -10,16 +10,16 @@ infrastructure by hand.**
 
 ```
 src/app.rs            # impl Hooks for App — registers routes/workers/tasks (the wiring hub)
-src/controllers/      # HTTP handlers grouped into Routes
+src/controllers/      # HTTP handlers grouped into Routes (media, user, crawler, vault)
 src/models/_entities/ # GENERATED Sea-ORM entities — do not hand-edit
-src/models/*.rs       # your model logic (media.rs, users.rs, crawler.rs)
+src/models/*.rs       # your model logic (media.rs, users.rs, crawler.rs, vault.rs)
 src/adapters/         # MediaClient trait + MAL & AniList provider implementations
 src/crawlers/         # Crawler & TitleParser traits + HTML/JSON scraper implementations
+src/downloaders/      # DownloadManager, DownloadEngine trait (Direct, Torrent), polling daemon
 src/dtos/             # ts-rs DTO types exported to frontend/src/bindings/
-src/core/             # App-wide constants and shared utilities
+src/core/             # App-wide constants, path resolvers, client builder, and utilities
 src/workers/          # background jobs (DownloadWorker)
 src/tasks/            # CLI/admin tasks
-src/initializers/     # App-level initializers (reqwest::Client shared store)
 migration/            # Sea-ORM migrations
 config/*.yaml         # per-environment config (LOCO_ENV)
 tests/                # request/model/task tests
@@ -38,13 +38,14 @@ docs/openapi.yaml     # OpenAPI 3.1 spec
 - App code returns `loco_rs::Result<T>` and uses `?`.
 - Config is YAML in `config/`; secrets come from the environment via the
   `get_env` Tera helper inside the YAML.
-- Primary keys on `users` are **UUID v7** (`uuid::Uuid`), not sequential integers.
+- Primary keys on `users` and `vault` are **UUID v7** (`uuid::Uuid`), not sequential integers.
 
 ## Project-specific conventions
 
-- **reqwest client**: A shared `reqwest::Client` is built in `src/initializers/client.rs`
-  and stored in `ctx.shared_store`. Retrieve it in handlers with
-  `ctx.shared_store.get::<Client>().unwrap()`. Do not create additional clients.
+- **Shared store state**: `ctx.shared_store` holds:
+  - `Client`: Shared `reqwest::Client` from `src/core/client.rs`. Retrieve with `ctx.shared_store.get::<Client>().unwrap()`.
+  - `Arc<DownloadManager>`: Central download orchestrator. Retrieve with `ctx.shared_store.get::<Arc<DownloadManager>>().unwrap()`.
+  - `Sender<Vec<VaultItem>>`: Tokio broadcast channel for real-time WebSocket progress updates. Retrieve with `ctx.shared_store.get::<Sender<Vec<VaultItem>>>().unwrap()`.
 - **Provider dispatch**: Use `user.provider.new_client(&client, &user)` to get a
   `Box<dyn MediaClient>`. Never instantiate `MalClient` or `AniListClient` directly.
 - **Response envelopes**: All handlers return via the `success(data)` or
@@ -53,6 +54,8 @@ docs/openapi.yaml     # OpenAPI 3.1 spec
 - **User model**: `User` is an alias for `users::Model`. Always go through
   `User::save_user` for upserts — it runs `ActiveModelBehavior::before_save`
   which sets UUID, `is_sandbox`, and timestamps.
+- **Vault model**: `VaultItem` is an alias for `vault::Model`. Use `ActiveModelBehavior::before_save`
+  which sets UUID v7 and timestamps. Isolated storage lives at `{VAULT_LOC}/{vault_id}/`.
 - **Crawler configs**: Load via `config_parser` or fall back to `CrawlerConfig::fallback()`
   (Nyaa.si). Do not hardcode selectors in controller logic.
 - **TypeScript bindings**: Structs in `src/dtos/` that derive `ts-rs::TS` and annotate

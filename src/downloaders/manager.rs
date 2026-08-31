@@ -42,12 +42,10 @@ impl DownloadManager {
         map
     }
 
-    pub async fn new(db: &DbConn) -> Result<Arc<Self>> {
+    pub async fn new(db: &DbConn, client: Client) -> Result<Arc<Self>> {
         let active_items = Arc::new(Self::get_active_items(db).await);
 
         tracing::info!("loading {} active items", active_items.len());
-
-        let client = Client::new();
 
         let session_opt_default = SessionOptions {
             dht: Some(DhtSessionConfig {
@@ -77,11 +75,11 @@ impl DownloadManager {
             session_res = Session::new_with_opts(vault_loc, session_opt_backup).await;
         }
 
-        let session = session_res.to_loco_err()?;
+        let session = session_res.to_loco_string()?;
         let mut engines: SharedEngineMap = HashMap::new();
 
         let direct_engine = DirectDownloader::new(client.clone(), active_items.clone()).await;
-        let torrent_engine = TorrentDownloader::new(session, active_items.clone()).await;
+        let torrent_engine = TorrentDownloader::new(client, session, active_items.clone()).await;
 
         engines.insert(VaultDownloadType::DIRECT, direct_engine);
         engines.insert(VaultDownloadType::TFILE, torrent_engine.clone());

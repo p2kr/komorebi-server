@@ -28,7 +28,7 @@ fn media_client_params_type_alias_works() {
 #[test]
 fn result_ext_ok_passes_through() {
     let ok: Result<i32, String> = Ok(42);
-    let loco_result = ok.to_loco_err();
+    let loco_result = ok.to_loco_string();
     assert!(loco_result.is_ok());
     assert_eq!(loco_result.unwrap(), 42);
 }
@@ -36,7 +36,7 @@ fn result_ext_ok_passes_through() {
 #[test]
 fn result_ext_err_becomes_loco_error() {
     let err: Result<i32, String> = Err("something broke".into());
-    let loco_result = err.to_loco_err();
+    let loco_result = err.to_loco_string();
     assert!(loco_result.is_err());
     let err_msg = format!("{}", loco_result.unwrap_err());
     assert!(err_msg.contains("something broke"));

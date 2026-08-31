@@ -1,4 +1,3 @@
-use loco_rs::prelude::async_trait;
 use serde_json::Value;
 
 use crate::{
@@ -79,7 +78,6 @@ fn extract_string(value: &Value, candidate_keys: &[&str]) -> String {
 
 // ─── implementation ───────────────────────────────────────────────────────────
 
-#[async_trait]
 impl Crawler for JsonCrawler {
     /// Returns `true` when the content is valid JSON (object or array).
     fn can_crawl(content: &str) -> bool {
@@ -93,7 +91,7 @@ impl Crawler for JsonCrawler {
         )
     }
 
-    async fn crawl(content: &str, config: &CrawlerConfig) -> Vec<CrawlerResult> {
+    fn crawl(content: &str, config: &CrawlerConfig) -> Vec<CrawlerResult> {
         let mut results = Vec::new();
 
         if content.is_empty() || !config.is_active {

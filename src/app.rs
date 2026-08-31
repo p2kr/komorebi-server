@@ -11,7 +11,9 @@ use loco_rs::{
     task::Tasks,
 };
 use migration::Migrator;
+use reqwest::Client;
 use std::{path::Path, sync::Arc, time::Duration};
+use tokio::sync::broadcast::Sender;
 use tokio::{
     sync::broadcast::{self},
     time::timeout,
@@ -20,8 +22,8 @@ use tokio::{
 #[allow(unused_imports)]
 use crate::{controllers, models::_entities::users, workers::downloader::DownloadWorker};
 use crate::{
+    core::client,
     downloaders::{daemon::start_daemon, manager::DownloadManager},
-    initializers::client,
     models::vault::VaultItem,
 };
 
@@ -56,11 +58,11 @@ impl Hooks for App {
 
     fn routes(_ctx: &AppContext) -> AppRoutes {
         AppRoutes::with_default_routes()
-            .prefix("/api/v1") // controller routes below
+            .prefix("/api/v1")
             .add_route(controllers::media_controller::routes())
             .add_route(controllers::user_controller::routes())
             .add_route(controllers::crawler_controller::routes())
-            .add_route(controllers::vault_controller::routes())
+            .add_route(controllers::vault_controller::routes()) // controller routes below
     }
 
     async fn connect_workers(ctx: &AppContext, queue: &Queue) -> Result<()> {
@@ -83,15 +85,17 @@ impl Hooks for App {
     }
 
     async fn after_context(ctx: AppContext) -> Result<AppContext> {
-        let client = client::get_reqwest_client();
-        ctx.shared_store.insert(client);
+        let client = client::get_reqwest_client()?;
+        ctx.shared_store.insert::<Client>(client.clone());
 
         // 100 will round off to 128.
         let (ws, _) = broadcast::channel::<Vec<VaultItem>>(100);
-        ctx.shared_store.insert(ws.clone());
+        ctx.shared_store
+            .insert::<Sender<Vec<VaultItem>>>(ws.clone());
 
-        let download_manager = DownloadManager::new(&ctx.db).await?;
-        ctx.shared_store.insert(download_manager.clone());
+        let download_manager = DownloadManager::new(&ctx.db, client).await?;
+        ctx.shared_store
+            .insert::<Arc<DownloadManager>>(download_manager.clone());
 
         // start the download daemon
         start_daemon(ctx.clone(), download_manager, ws);

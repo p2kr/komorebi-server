@@ -44,7 +44,7 @@ const SAMPLE_HTML: &str = r#"<!DOCTYPE html>
 #[tokio::test]
 async fn test_basic_extraction() {
     let config = config("https://example.com");
-    let results = HtmlCrawler::crawl(SAMPLE_HTML, &config).await;
+    let results = HtmlCrawler::crawl(SAMPLE_HTML, &config);
 
     // Empty row is discarded (Gap 6)
     assert_eq!(results.len(), 2);
@@ -67,7 +67,7 @@ async fn test_basic_extraction() {
 async fn test_empty_base_url_absolute_links_still_work() {
     // Gap 8: no base_url — absolute magnet links should still be returned
     let config = config("");
-    let results = HtmlCrawler::crawl(SAMPLE_HTML, &config).await;
+    let results = HtmlCrawler::crawl(SAMPLE_HTML, &config);
 
     // Row 0 has a relative link → collapses to "" → discarded with empty title? No:
     // title is "Demon Slayer S01" (non-empty), so it is kept with an empty link.

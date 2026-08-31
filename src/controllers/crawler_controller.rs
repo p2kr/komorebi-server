@@ -18,7 +18,7 @@ pub struct SearchMediaParam {
 
 #[axum::debug_handler]
 pub async fn search_media(
-    State(_ctx): State<AppContext>,
+    State(ctx): State<AppContext>,
     Json(params): Json<SearchMediaParam>,
 ) -> Result<Response> {
     // Extract media_type supporting configs
@@ -28,7 +28,8 @@ pub async fn search_media(
         .cloned()
         .collect();
 
-    let engine = CrawlerEngine::new(&params.query, configs);
+    let client = ctx.shared_store.get().unwrap();
+    let engine = CrawlerEngine::new(&params.query, configs, client);
 
     success(engine.start().await)
 }

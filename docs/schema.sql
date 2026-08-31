@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS vault (
     user_id           BLOB    NOT NULL,             -- Foreign key to users.id
     destination_path  TEXT    NOT NULL UNIQUE,      -- Full file/folder path (inside {vault_root}/{id}/)
     media_type        TEXT    NOT NULL,             -- Media type (e.g. 'ANIME', 'MANGA', 'NOVEL')
-    media_id          TEXT    NOT NULL,             -- Provider media ID (e.g. MAL / AniList ID)
+    media_id          TEXT,                         -- Provider media ID (e.g. MAL / AniList ID)
     title             TEXT    NOT NULL,             -- Display title
     raw_title         TEXT    NOT NULL,             -- Raw unparsed title
     season            TEXT,                         -- Optional season (e.g. "1", "S01", "2")

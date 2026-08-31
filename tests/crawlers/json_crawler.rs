@@ -24,7 +24,7 @@ async fn test_flat_array_extracts_title_and_link() {
         ..Default::default()
     };
 
-    let results = JsonCrawler::crawl(content, &config).await;
+    let results = JsonCrawler::crawl(content, &config);
 
     assert_eq!(results.len(), 2);
 

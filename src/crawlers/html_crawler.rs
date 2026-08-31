@@ -65,7 +65,7 @@ impl Crawler for HtmlCrawler {
         html_regex().is_match(&content[..sample_size])
     }
 
-    async fn crawl(content: &str, config: &CrawlerConfig) -> Vec<CrawlerResult> {
+    fn crawl(content: &str, config: &CrawlerConfig) -> Vec<CrawlerResult> {
         let mut results = Vec::new();
 
         if content.is_empty() || !config.is_active {

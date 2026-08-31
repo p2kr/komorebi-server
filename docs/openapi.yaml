@@ -2,65 +2,19 @@ openapi: 3.1.0
 info:
   title: Komorebi Server API
   description: |
-    Unified REST API server for aggregating, syncing, and managing anime and manga media lists across providers like MyAnimeList and AniList.
-  version: 1.0.0
+    Unified media backend REST API and real-time WebSocket server for aggregating, synchronizing, and managing anime and manga media lists (MyAnimeList, AniList), scraping torrent indexes, and managing multi-backend downloads (Direct HTTP with Range resume & BitTorrent/Magnet via librqbit).
+  version: 1.1.0
 servers:
-  - url: http://localhost:8080/api/v1
-    description: API v1 Base Endpoint
+  - url: http://localhost:5150/api/v1
+    description: Development API Server (default port)
+  - url: /api/v1
+    description: Relative API Base Path
 
 paths:
-  /:
-    get:
-      summary: API v1 Health Check
-      description: Returns the health status, uptime, and version of the server. Accepts any HTTP method.
-      operationId: getHealthCheckV1
-      tags:
-        - System
-      responses:
-        "200":
-          description: Health check information.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HealthCheckResponse"
-              examples:
-                default:
-                  summary: Health check response
-                  value:
-                    success: true
-                    data:
-                      base_url: /api/v1
-                      uptime: 3600
-                      version: 1.0.0
-
-  /health:
-    get:
-      summary: API Health Check Endpoint
-      description: Returns the health status, uptime, and version of the server. Accepts any HTTP method.
-      operationId: getHealthCheck
-      tags:
-        - System
-      responses:
-        "200":
-          description: Health check information.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HealthCheckResponse"
-              examples:
-                default:
-                  summary: Health check response
-                  value:
-                    success: true
-                    data:
-                      base_url: /api/v1
-                      uptime: 3600
-                      version: 1.0.0
-
   /media/anime:
     post:
       summary: Get User Anime List
-      description: Retrieves the paginated anime list for a given user from the specified provider.
+      description: Retrieves the paginated anime list for a given user from their linked third-party provider (MAL or AniList).
       operationId: getUserAnimeList
       tags:
         - Media
@@ -69,30 +23,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - user_id
-              properties:
-                user_id:
-                  type: string
-                  format: uuid
-                  description: Unique identifier (UUID) of the user.
-                  example: 018f3a5e-7b12-7000-8000-123456789abc
-                status:
-                  type: string
-                  description: Filter by list status (provider-specific string, e.g. "watching", "completed").
-                  example: watching
-                sort:
-                  type: string
-                  example: score_desc
-                limit:
-                  type: integer
-                  default: 50
-                  example: 20
-                offset:
-                  type: integer
-                  default: 0
-                  example: 0
+              $ref: "#/components/schemas/MediaClientParams"
       responses:
         "200":
           description: Successfully retrieved user anime list.
@@ -106,47 +37,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FailureResponse"
-              examples:
-                default:
-                  summary: Fetch anime list failed
-                  value:
-                    success: false
-                    error:
-                      code: FETCH_ANIME_FAILED
-                      msg: "Failed to fetch user anime list"
         "404":
           description: User not found in database.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/FailureResponse"
-              examples:
-                default:
-                  summary: User not found
-                  value:
-                    success: false
-                    error:
-                      code: USER_NOT_FOUND
-                      msg: "User with ID '018f3a5e-7b12-7000-8000-123456789abc' not found"
-        "502":
-          description: Upstream provider API failure.
+        "500":
+          description: Internal server or upstream provider error.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/FailureResponse"
-              examples:
-                default:
-                  summary: Upstream error
-                  value:
-                    success: false
-                    error:
-                      code: UPSTREAM_API_ERROR
-                      msg: "Upstream provider error (MAL): Network error"
 
   /media/manga:
     post:
       summary: Get User Manga List
-      description: Retrieves the paginated manga list for a given user from the specified provider.
+      description: Retrieves the paginated manga list for a given user from their linked third-party provider (MAL or AniList).
       operationId: getUserMangaList
       tags:
         - Media
@@ -155,30 +62,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - user_id
-              properties:
-                user_id:
-                  type: string
-                  format: uuid
-                  description: Unique identifier (UUID) of the user.
-                  example: 018f3a5e-7b12-7000-8000-123456789abc
-                status:
-                  type: string
-                  description: Filter by list status (provider-specific string, e.g. "reading", "completed").
-                  example: reading
-                sort:
-                  type: string
-                  example: score_desc
-                limit:
-                  type: integer
-                  default: 50
-                  example: 20
-                offset:
-                  type: integer
-                  default: 0
-                  example: 0
+              $ref: "#/components/schemas/MediaClientParams"
       responses:
         "200":
           description: Successfully retrieved user manga list.
@@ -192,51 +76,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FailureResponse"
-              examples:
-                default:
-                  summary: Fetch manga list failed
-                  value:
-                    success: false
-                    error:
-                      code: FETCH_MANGA_FAILED
-                      msg: "Failed to fetch user manga list"
         "404":
           description: User not found in database.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/FailureResponse"
-              examples:
-                default:
-                  summary: User not found
-                  value:
-                    success: false
-                    error:
-                      code: USER_NOT_FOUND
-                      msg: "User with ID '018f3a5e-7b12-7000-8000-123456789abc' not found"
-        "502":
-          description: Upstream provider API failure.
+        "500":
+          description: Internal server or upstream provider error.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/FailureResponse"
-              examples:
-                default:
-                  summary: Upstream error
-                  value:
-                    success: false
-                    error:
-                      code: UPSTREAM_API_ERROR
-                      msg: "Upstream provider error (MAL): Network error"
+
+  /user/login:
+    post:
+      summary: Authenticate User
+      description: Finds a user by username, provider, and sandbox flag, then verifies their optional Argon2 passcode.
+      operationId: loginUser
+      tags:
+        - User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginParams"
+      responses:
+        "200":
+          description: User authenticated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetUserResponse"
+        "401":
+          description: User not found or invalid passcode.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureResponse"
 
   /user/add:
     post:
       summary: Add / Save User
       description: |
-        Creates a new user or updates an existing user record with media provider details.
-        The server validates the user against the upstream provider before saving.
-        If `access_token` is provided the provider is queried to fetch the real username and avatar;
-        otherwise the username is validated by attempting a public list lookup (sandbox mode).
+        Creates a new user or updates an existing user record.
+        The user is validated against the upstream provider before saving:
+        If `access_token` is provided, provider user details (username, avatar) are fetched;
+        otherwise the username is validated by attempting a public list probe (sandbox mode).
       operationId: saveUser
       tags:
         - User
@@ -245,63 +132,26 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - username
-              properties:
-                username:
-                  type: string
-                  description: External provider username or handle.
-                  example: octocat
-                provider:
-                  $ref: "#/components/schemas/MediaProvider"
-                avatar_url:
-                  type:
-                    - string
-                    - "null"
-                  description: Profile avatar image URL.
-                  example: https://example.com/avatar.png
-                access_token:
-                  type:
-                    - string
-                    - "null"
-                  description: OAuth access token for authenticating provider API requests. If omitted, user is saved in sandbox mode (public list access only).
-                  example: token123456
+              $ref: "#/components/schemas/User"
       responses:
         "200":
-          description: User saved successfully.
+          description: User saved/upserted successfully.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/SaveUserResponse"
         "400":
-          description: Invalid input parameters or missing required parameters.
+          description: Invalid input parameters or failed provider validation.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/FailureResponse"
-              examples:
-                default:
-                  summary: Invalid parameters
-                  value:
-                    success: false
-                    error:
-                      code: INVALID_PARAMS
-                      msg: "Missing required parameter: username"
         "500":
-          description: Database or internal server error.
+          description: Database error.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/FailureResponse"
-              examples:
-                default:
-                  summary: Database error
-                  value:
-                    success: false
-                    error:
-                      code: DATABASE_ERROR
-                      msg: "Database error: Failed to insert user"
 
   /user/all:
     post:
@@ -318,19 +168,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserListResponse"
         "500":
-          description: Database or internal server error.
+          description: Database error.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/FailureResponse"
-              examples:
-                default:
-                  summary: Database error
-                  value:
-                    success: false
-                    error:
-                      code: DATABASE_ERROR
-                      msg: "Database error: Failed to fetch users"
 
   /user/one:
     post:
@@ -344,15 +186,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - user_id
-              properties:
-                user_id:
-                  type: string
-                  format: uuid
-                  description: Unique identifier (UUID) of the user.
-                  example: 018f3a5e-7b12-7000-8000-123456789abc
+              $ref: "#/components/schemas/GetUserParams"
       responses:
         "200":
           description: Successfully retrieved user.
@@ -366,19 +200,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FailureResponse"
-              examples:
-                default:
-                  summary: User not found
-                  value:
-                    success: false
-                    error:
-                      code: USER_NOT_FOUND
-                      msg: "User with ID '018f3a5e-7b12-7000-8000-123456789abc' not found"
 
   /user/delete:
     post:
       summary: Delete User
-      description: Deletes a user account from the database by UUID. Returns the deleted user's UUID on success.
+      description: Deletes a user account from the database by UUID (cascades to user's vault items).
       operationId: deleteUser
       tags:
         - User
@@ -387,15 +213,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - user_id
-              properties:
-                user_id:
-                  type: string
-                  format: uuid
-                  description: Unique identifier (UUID) of the user to delete.
-                  example: 018f3a5e-7b12-7000-8000-123456789abc
+              $ref: "#/components/schemas/DeleteUserParams"
       responses:
         "200":
           description: User deleted successfully. Returns the UUID of the deleted user.
@@ -403,72 +221,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeleteUserResponse"
-              examples:
-                default:
-                  summary: Deletion success
-                  value:
-                    success: true
-                    data: 018f3a5e-7b12-7000-8000-123456789abc
         "404":
           description: User not found.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/FailureResponse"
-              examples:
-                default:
-                  summary: User not found
-                  value:
-                    success: false
-                    error:
-                      code: USER_NOT_FOUND
-                      msg: "User with ID '018f3a5e-7b12-7000-8000-123456789abc' not found"
-        "500":
-          description: Database or internal server error.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/FailureResponse"
-              examples:
-                default:
-                  summary: Database error
-                  value:
-                    success: false
-                    error:
-                      code: DATABASE_ERROR
-                      msg: "Database error: Failed to delete user"
 
-  /oauth/exchange:
+  /user/oauth/exchange:
     post:
       summary: Exchange OAuth Authorization Code
-      description: |
-        Exchanges an OAuth authorization code (with PKCE code verifier) for an access token
-        from the specified media provider. Use the returned token with `/user/add`
-        to register a user with full (non-sandbox) access.
+      description: Exchanges an OAuth authorization code and PKCE code verifier for an access token from the provider.
       operationId: exchangeOauthToken
       tags:
-        - OAuth
+        - User
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - provider
-                - code
-                - code_verifier
-              properties:
-                provider:
-                  $ref: "#/components/schemas/MediaProvider"
-                code:
-                  type: string
-                  description: Authorization code received from the OAuth redirect callback.
-                  example: "abc123authcode"
-                code_verifier:
-                  type: string
-                  description: PKCE code verifier that was used to generate the code challenge.
-                  example: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+              $ref: "#/components/schemas/ExchangeOauthTokenParams"
       responses:
         "200":
           description: Access token successfully exchanged.
@@ -476,92 +248,224 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OauthTokenResponse"
-              examples:
-                default:
-                  summary: Token exchange success
-                  value:
-                    success: true
-                    data: "Bearer eyJhbGciOiJSUzI1NiJ9..."
         "400":
-          description: Invalid or missing parameters.
+          description: Invalid authorization code or missing parameters.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/FailureResponse"
-              examples:
-                default:
-                  summary: Invalid code
-                  value:
-                    success: false
-                    error:
-                      code: INVALID_PARAMS
-                      msg: "Invalid authorization code"
         "502":
           description: Upstream provider OAuth error.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/FailureResponse"
-              examples:
-                default:
-                  summary: Upstream OAuth failure
-                  value:
-                    success: false
-                    error:
-                      code: UPSTREAM_API_ERROR
-                      msg: "Upstream provider error (MAL): Token exchange failed"
+
+  /crawler/search:
+    post:
+      summary: Search Media Crawlers
+      description: Scrapes configured active external sites (e.g. Nyaa.si) for a query string and parses release titles using Anitomy.
+      operationId: searchMediaCrawler
+      tags:
+        - Crawler
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchMediaParam"
+      responses:
+        "200":
+          description: Search completed successfully. Returns list of parsed crawler results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CrawlerSearchResponse"
+        "500":
+          description: Crawler failure.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureResponse"
+
+  /vault/add:
+    post:
+      summary: Add Download Item to Vault
+      description: Creates a new Vault item, assigns isolated storage `{VAULT_LOC}/{vault_id}/`, dispatches to the download engine (Direct or Torrent), and wakes the background polling daemon.
+      operationId: addVaultItem
+      tags:
+        - Vault
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultAddPayload"
+      responses:
+        "200":
+          description: Download added and queued successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultItemResponse"
+        "400":
+          description: Invalid input or unsupported download scheme.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureResponse"
+        "500":
+          description: Download engine failed to add item.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureResponse"
+
+  /vault/one:
+    post:
+      summary: Get Single Vault Item
+      description: Retrieves metadata and status for a specific vault item by UUID.
+      operationId: getVaultItem
+      tags:
+        - Vault
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultActionPayload"
+      responses:
+        "200":
+          description: Successfully retrieved vault item.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultItemResponse"
+        "404":
+          description: Vault item not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureResponse"
+
+  /vault/all:
+    post:
+      summary: Get All Vault Items
+      description: Retrieves all vault records stored in the database.
+      operationId: getAllVaultItems
+      tags:
+        - Vault
+      responses:
+        "200":
+          description: Successfully retrieved all vault items.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultItemListResponse"
+        "500":
+          description: Database error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureResponse"
+
+  /vault/pause:
+    post:
+      summary: Pause Download
+      description: Pauses an active direct HTTP or torrent download.
+      operationId: pauseVaultDownload
+      tags:
+        - Vault
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultActionPayload"
+      responses:
+        "200":
+          description: Download paused.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultActionResponse"
+        "404":
+          description: Vault item not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureResponse"
+
+  /vault/resume:
+    post:
+      summary: Resume Download
+      description: Resumes a paused download from its existing byte offset on disk.
+      operationId: resumeVaultDownload
+      tags:
+        - Vault
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultActionPayload"
+      responses:
+        "200":
+          description: Download resumed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultActionResponse"
+        "404":
+          description: Vault item not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureResponse"
+
+  /vault/delete:
+    post:
+      summary: Delete / Cancel Download
+      description: Stops active download, removes tracked handles, and deletes downloaded files and directory from disk.
+      operationId: deleteVaultItem
+      tags:
+        - Vault
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultActionPayload"
+      responses:
+        "200":
+          description: Download cancelled and deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultActionResponse"
+        "404":
+          description: Vault item not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureResponse"
+
+  /vault/ws:
+    get:
+      summary: Real-Time Download Stats WebSocket
+      description: |
+        Upgrades HTTP connection to a WebSocket.
+        On connect, immediately sends the current active `Vec<VaultItem>` state as a JSON text message.
+        Subsequently streams real-time updates of active downloads every 2 seconds whenever downloads are active.
+      operationId: streamVaultWebSocket
+      tags:
+        - Vault
+      responses:
+        "101":
+          description: Switching Protocols to WebSocket.
 
 components:
   schemas:
-    HealthCheckData:
-      type: object
-      required:
-        - base_url
-        - uptime
-        - version
-      properties:
-        base_url:
-          type: string
-          examples:
-            - /api/v1
-        uptime:
-          type: integer
-          description: Server uptime in seconds.
-          examples:
-            - 3600
-        version:
-          type: string
-          examples:
-            - 1.0.0
-
-    HealthCheckResponse:
-      type: object
-      required:
-        - success
-        - data
-      properties:
-        success:
-          type: boolean
-          examples:
-            - true
-        data:
-          $ref: "#/components/schemas/HealthCheckData"
-
-    ErrorDetail:
-      type: object
-      required:
-        - code
-        - msg
-      properties:
-        code:
-          type: string
-          examples:
-            - FETCH_ANIME_FAILED
-        msg:
-          type: string
-          examples:
-            - Could not fetch anime list from provider
-
     FailureResponse:
       type: object
       required:
@@ -570,10 +474,17 @@ components:
       properties:
         success:
           type: boolean
-          examples:
-            - false
+          example: false
         error:
-          $ref: "#/components/schemas/ErrorDetail"
+          type: string
+          description: Application error code.
+          example: ERROR_VAULT_ADD
+        description:
+          type:
+            - string
+            - "null"
+          description: Human-readable error description.
+          example: Download engine not found for this item
 
     MediaProvider:
       type: string
@@ -583,66 +494,12 @@ components:
       default: MAL
       description: Supported third-party media providers.
 
-    User:
-      type: object
-      required:
-        - id
-        - username
-        - provider
-        - is_sandbox
-        - created_at
-        - updated_at
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique internal user ID (UUID v7).
-          examples:
-            - 018f3a5e-7b12-7000-8000-123456789abc
-        username:
-          type: string
-          description: External provider username or handle.
-          examples:
-            - octocat
-        provider_id:
-          type:
-            - string
-            - "null"
-          description: Provider-specific user ID returned after OAuth validation.
-          examples:
-            - "12345678"
-        avatar_url:
-          type:
-            - string
-            - "null"
-          description: Profile avatar image URL.
-          examples:
-            - https://example.com/avatar.png
-        provider:
-          $ref: "#/components/schemas/MediaProvider"
-        is_sandbox:
-          type: boolean
-          description: Indicates whether user is running in sandbox mode (no access token provided).
-          examples:
-            - false
-        created_at:
-          type: integer
-          format: int64
-          description: Creation timestamp in milliseconds since epoch.
-          examples:
-            - 1722864600000
-        updated_at:
-          type: integer
-          format: int64
-          description: Last update timestamp in milliseconds since epoch.
-          examples:
-            - 1722864600000
-
     MediaType:
       type: string
       enum:
         - Anime
         - Manga
+        - Novel
       default: Anime
       description: Type of media.
 
@@ -708,29 +565,25 @@ components:
             - string
             - "null"
           description: Romanized title (e.g. Romaji).
-          examples:
-            - Shingeki no Kyojin
+          example: Shingeki no Kyojin
         english:
           type:
             - string
             - "null"
           description: English localized title.
-          examples:
-            - Attack on Titan
+          example: Attack on Titan
         native:
           type:
             - string
             - "null"
           description: Native language title.
-          examples:
-            - "\u9032\u6483\u306e\u5DE8\u4EBA"
+          example: "進撃の巨人"
         user_preferred:
           type:
             - string
             - "null"
           description: User preferred title choice.
-          examples:
-            - Attack on Titan
+          example: Attack on Titan
 
     CoverImage:
       type: object
@@ -755,8 +608,7 @@ components:
             - string
             - "null"
           description: Hex color code associated with cover image.
-          examples:
-            - "#e4a15d"
+          example: "#e4a15d"
 
     Media:
       type: object
@@ -776,13 +628,10 @@ components:
           type: string
           format: uuid
           description: Unique internal ID (UUID v7).
-          examples:
-            - 018f3a5e-7b12-7000-8000-123456789abc
         provider_id:
           type: string
           description: External provider ID.
-          examples:
-            - "16498"
+          example: "16498"
         provider:
           $ref: "#/components/schemas/MediaProvider"
         media_type:
@@ -806,29 +655,25 @@ components:
             - "null"
           format: float
           description: Normalized community mean score (0.0 to 10.0 scale).
-          examples:
-            - 8.54
+          example: 8.54
         popularity:
           type:
             - integer
             - "null"
           description: Total user popularity count.
-          examples:
-            - 2500000
+          example: 2500000
         episodes:
           type:
             - integer
             - "null"
           description: Total episode count (anime only).
-          examples:
-            - 25
+          example: 25
         duration:
           type:
             - integer
             - "null"
           description: Episode duration in seconds (anime only).
-          examples:
-            - 1440
+          example: 1440
         chapters:
           type:
             - integer
@@ -843,8 +688,7 @@ components:
           type: array
           items:
             type: string
-          examples:
-            - ["Action", "Drama", "Fantasy"]
+          example: ["Action", "Drama", "Fantasy"]
         nsfw:
           $ref: "#/components/schemas/NsfwLevel"
 
@@ -863,15 +707,13 @@ components:
             - "null"
           format: float
           description: User score normalized on a 0.0 to 10.0 scale.
-          examples:
-            - 9.0
+          example: 9.0
         progress:
           type:
             - integer
             - "null"
           description: Episodes watched (anime) or chapters read (manga).
-          examples:
-            - 25
+          example: 25
         progress_volumes:
           type:
             - integer
@@ -880,21 +722,18 @@ components:
         is_repeating:
           type: boolean
           description: Whether the user is currently re-watching or re-reading.
-          examples:
-            - false
+          example: false
         repeat_count:
           type:
             - integer
             - "null"
           description: Number of times re-watched or re-read.
-          examples:
-            - 0
+          example: 0
         tags:
           type: array
           items:
             type: string
-          examples:
-            - ["favorite", "masterpiece"]
+          example: ["favorite", "masterpiece"]
         notes:
           type:
             - string
@@ -935,8 +774,7 @@ components:
         has_next:
           type: boolean
           description: Indicates whether another page of results exists.
-          examples:
-            - true
+          example: true
 
     PaginatedResponse:
       type: object
@@ -959,10 +797,147 @@ components:
       properties:
         success:
           type: boolean
-          examples:
-            - true
+          example: true
         data:
           $ref: "#/components/schemas/PaginatedResponse"
+
+    MediaClientParams:
+      type: object
+      required:
+        - user_id
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: Unique identifier (UUID) of the user.
+        status:
+          type:
+            - string
+            - "null"
+          description: Filter by list status.
+        sort:
+          type:
+            - string
+            - "null"
+          example: score_desc
+        limit:
+          type:
+            - integer
+            - "null"
+          default: 50
+          example: 20
+        offset:
+          type:
+            - integer
+            - "null"
+          default: 0
+          example: 0
+
+    User:
+      type: object
+      required:
+        - id
+        - username
+        - provider
+        - is_sandbox
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique user ID (UUID v7).
+        username:
+          type: string
+          description: Provider username or handle.
+          example: octocat
+        provider_id:
+          type:
+            - string
+            - "null"
+          description: Provider-specific user ID.
+        avatar_url:
+          type:
+            - string
+            - "null"
+          description: Profile avatar image URL.
+        provider:
+          $ref: "#/components/schemas/MediaProvider"
+        is_sandbox:
+          type: boolean
+          description: Sandbox status (true if no access token is set).
+        access_token:
+          type:
+            - string
+            - "null"
+          description: OAuth access token for provider API requests.
+        passcode:
+          type:
+            - string
+            - "null"
+          description: Optional user passcode (Argon2 hashed or plaintext).
+        created_at:
+          type: string
+          description: Creation timestamp.
+        updated_at:
+          type: string
+          description: Last update timestamp.
+
+    LoginParams:
+      type: object
+      required:
+        - username
+        - provider
+      properties:
+        username:
+          type: string
+          example: octocat
+        passcode:
+          type:
+            - string
+            - "null"
+          example: "mysecretpassword"
+        provider:
+          $ref: "#/components/schemas/MediaProvider"
+        is_sandbox:
+          type:
+            - boolean
+            - "null"
+          default: false
+
+    GetUserParams:
+      type: object
+      required:
+        - user_id
+      properties:
+        user_id:
+          type: string
+          format: uuid
+
+    DeleteUserParams:
+      type: object
+      required:
+        - user_id
+      properties:
+        user_id:
+          type: string
+          format: uuid
+
+    ExchangeOauthTokenParams:
+      type: object
+      required:
+        - provider
+        - code
+        - code_verifier
+      properties:
+        provider:
+          $ref: "#/components/schemas/MediaProvider"
+        code:
+          type: string
+          description: Authorization code received from OAuth redirect callback.
+        code_verifier:
+          type: string
+          description: PKCE code verifier.
 
     GetUserResponse:
       type: object
@@ -972,8 +947,7 @@ components:
       properties:
         success:
           type: boolean
-          examples:
-            - true
+          example: true
         data:
           $ref: "#/components/schemas/User"
 
@@ -985,8 +959,7 @@ components:
       properties:
         success:
           type: boolean
-          examples:
-            - true
+          example: true
         data:
           $ref: "#/components/schemas/User"
 
@@ -998,8 +971,7 @@ components:
       properties:
         success:
           type: boolean
-          examples:
-            - true
+          example: true
         data:
           type: array
           items:
@@ -1013,14 +985,11 @@ components:
       properties:
         success:
           type: boolean
-          examples:
-            - true
+          example: true
         data:
           type: string
           format: uuid
-          description: UUID of the deleted user.
-          examples:
-            - 018f3a5e-7b12-7000-8000-123456789abc
+          description: UUID of deleted user.
 
     OauthTokenResponse:
       type: object
@@ -1030,10 +999,268 @@ components:
       properties:
         success:
           type: boolean
-          examples:
-            - true
+          example: true
         data:
           type: string
-          description: The access token returned by the provider.
-          examples:
-            - "Bearer eyJhbGciOiJSUzI1NiJ9..."
+          description: Provider OAuth access token.
+
+    SearchMediaParam:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          description: Search term (e.g. "Frieren").
+          example: Frieren
+        media_type:
+          $ref: "#/components/schemas/MediaType"
+
+    ParsedTitle:
+      type: object
+      properties:
+        title:
+          type: array
+          items:
+            type: string
+        season:
+          type: array
+          items:
+            type: string
+        episode:
+          type: array
+          items:
+            type: string
+        episode_title:
+          type: array
+          items:
+            type: string
+        release_group:
+          type: array
+          items:
+            type: string
+        video_resolution:
+          type: array
+          items:
+            type: string
+        subtitles:
+          type: array
+          items:
+            type: string
+        audio_term:
+          type: array
+          items:
+            type: string
+        file_extension:
+          type: array
+          items:
+            type: string
+        type:
+          type: array
+          items:
+            type: string
+        year:
+          type: array
+          items:
+            type: string
+
+    CrawlerResult:
+      type: object
+      required:
+        - title
+        - link
+        - source
+        - parsed_title
+        - category
+      properties:
+        title:
+          type: string
+        link:
+          type: string
+        source:
+          type: string
+        popularity:
+          type:
+            - string
+            - "null"
+        size:
+          type:
+            - string
+            - "null"
+        parsed_title:
+          $ref: "#/components/schemas/ParsedTitle"
+        category:
+          $ref: "#/components/schemas/MediaType"
+
+    CrawlerSearchResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/CrawlerResult"
+
+    VaultDownloadType:
+      type: string
+      enum:
+        - DIRECT
+        - MAGNET
+        - TFILE
+      default: MAGNET
+
+    VaultItemStatus:
+      type: string
+      enum:
+        - PENDING
+        - DOWNLOADING
+        - PAUSED
+        - COMPLETED
+        - FAILED
+        - CANCELLED
+      default: PENDING
+
+    VaultItem:
+      type: object
+      required:
+        - id
+        - user_id
+        - destination_path
+        - title
+        - raw_title
+        - source_url
+        - download_type
+        - status
+        - total_bytes
+        - downloaded_bytes
+        - progress
+        - speed_bps
+        - temp_path
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        destination_path:
+          type: string
+        media_type:
+          $ref: "#/components/schemas/MediaType"
+        media_id:
+          type:
+            - string
+            - "null"
+        title:
+          type: string
+        raw_title:
+          type: string
+        season:
+          type:
+            - string
+            - "null"
+        episode:
+          type:
+            - string
+            - "null"
+        source_url:
+          type: string
+        download_type:
+          $ref: "#/components/schemas/VaultDownloadType"
+        status:
+          $ref: "#/components/schemas/VaultItemStatus"
+        total_bytes:
+          type: integer
+          format: int64
+        downloaded_bytes:
+          type: integer
+          format: int64
+        progress:
+          type: number
+          format: float
+        speed_bps:
+          type: integer
+          format: int64
+        eta_seconds:
+          type:
+            - integer
+            - "null"
+          format: int64
+        temp_path:
+          type: string
+        error_msg:
+          type:
+            - string
+            - "null"
+        created_at:
+          type: string
+        updated_at:
+          type: string
+
+    VaultAddPayload:
+      type: object
+      required:
+        - crawler_result
+        - user_id
+      properties:
+        crawler_result:
+          $ref: "#/components/schemas/CrawlerResult"
+        user_id:
+          type: string
+          format: uuid
+
+    VaultActionPayload:
+      type: object
+      required:
+        - vault_id
+      properties:
+        vault_id:
+          type: string
+          format: uuid
+
+    VaultItemResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/VaultItem"
+
+    VaultItemListResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/VaultItem"
+
+    VaultActionResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: string
+          example: "Resumed download"
+
