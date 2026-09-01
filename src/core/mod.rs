@@ -34,17 +34,6 @@ impl<T, E> ResultExt<T, E> for Result<T, E> {
     }
 }
 
-/// Construct error with loco message
-/// ```
-/// Err(Error::Message(format!("{}", e)))
-/// ```
-#[macro_export]
-macro_rules! loco_err {
-    ($($arg:tt)*) => {
-            Err(loco_err_msg!($($arg)*))
-        };
-}
-
 /// Construct loco error message
 /// ```
 /// Error::Message(format!("{}", e))
@@ -53,5 +42,16 @@ macro_rules! loco_err {
 macro_rules! loco_err_msg {
     ($($arg:tt)*) => {
             Error::Message(format!($($arg)*))
+        };
+}
+
+/// Construct error with loco message
+/// ```
+/// Err(Error::Message(format!("{}", e)))
+/// ```
+#[macro_export]
+macro_rules! loco_err {
+    ($($arg:tt)*) => {
+            Err(Error::Message(format!($($arg)*)))
         };
 }

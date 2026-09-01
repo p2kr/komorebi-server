@@ -6,6 +6,7 @@ pub mod torrent;
 use std::fmt::Display;
 
 use loco_rs::{Result, prelude::async_trait};
+use tokio::fs;
 use uuid::Uuid;
 
 use crate::models::vault::VaultItem;
@@ -24,4 +25,17 @@ pub trait DownloadEngine: Display {
 
     /// stop session/client
     async fn stop(&self) {}
+}
+
+pub fn remove_vault_contents(item: VaultItem) {
+    tokio::spawn(async move {
+        if let Err(e) = fs::remove_dir_all(&item.destination_path).await {
+            tracing::error!(
+                "Failed to delete download path {} for vault item {}: {}",
+                item.destination_path,
+                item.id,
+                e
+            );
+        }
+    });
 }

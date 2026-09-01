@@ -18,21 +18,21 @@ A high-performance, unified media backend server written in Rust — built on th
 
 ## Tech Stack
 
-| Layer             | Technology                       |
-| ----------------- | -------------------------------- |
-| Language          | Rust (Edition 2024)              |
-| Framework         | [Loco](https://loco.rs) 1.1      |
-| Web & WebSockets  | Axum 0.8 (with `ws` feature)     |
-| Database          | SQLite via Sea-ORM 2.0           |
-| Async runtime     | Tokio                            |
-| HTTP client       | reqwest 0.13                     |
-| BitTorrent engine | librqbit 9.0                     |
-| IDs               | UUID v7                          |
-| Timestamps        | chrono                           |
-| HTML parsing      | scraper 0.27                     |
-| Title parsing     | anitomy-rs                       |
-| Enum strings      | strum / strum_macros 0.28        |
-| TS bindings       | ts-rs 12                         |
+| Layer             | Technology                   |
+| ----------------- | ---------------------------- |
+| Language          | Rust (Edition 2024)          |
+| Framework         | [Loco](https://loco.rs) 1.1  |
+| Web & WebSockets  | Axum 0.8 (with `ws` feature) |
+| Database          | SQLite via Sea-ORM 2.0       |
+| Async runtime     | Tokio                        |
+| HTTP client       | reqwest 0.13                 |
+| BitTorrent engine | librqbit 9.0                 |
+| IDs               | UUID v7                      |
+| Timestamps        | chrono                       |
+| HTML parsing      | scraper 0.27                 |
+| Title parsing     | anitomy-rs                   |
+| Enum strings      | strum / strum_macros 0.28    |
+| TS bindings       | ts-rs 12                     |
 
 ## Project Layout
 
@@ -91,8 +91,8 @@ All application routes are prefixed with `/api/v1`.
 
 ### User
 
-| Method | Path                         | Description                                                    |
-| ------ | ---------------------------- | -------------------------------------------------------------- |
+| Method | Path                          | Description                                                    |
+| ------ | ----------------------------- | -------------------------------------------------------------- |
 | `POST` | `/api/v1/user/login`          | Authenticate a user by username + provider + optional passcode |
 | `POST` | `/api/v1/user/add`            | Register / upsert a user (validates against provider)          |
 | `POST` | `/api/v1/user/all`            | List all registered users                                      |
@@ -109,21 +109,21 @@ All application routes are prefixed with `/api/v1`.
 
 ### Crawler
 
-| Method | Path                    | Description                                                   |
-| ------ | ----------------------- | ------------------------------------------------------------- |
-| `POST` | `/api/v1/crawler/search`| Search configured crawlers for media titles and parsed torrents |
+| Method | Path                     | Description                                                     |
+| ------ | ------------------------ | --------------------------------------------------------------- |
+| `POST` | `/api/v1/crawler/search` | Search configured crawlers for media titles and parsed torrents |
 
 ### Vault (Downloads)
 
-| Method | Path                   | Description                                                      |
-| ------ | ---------------------- | ---------------------------------------------------------------- |
-| `POST` | `/api/v1/vault/add`    | Add a download item to the vault (direct URL or magnet/torrent)  |
-| `POST` | `/api/v1/vault/one`    | Get single vault item metadata and progress by UUID              |
-| `POST` | `/api/v1/vault/all`    | List all vault items in database                                 |
-| `POST` | `/api/v1/vault/pause`  | Pause an active direct or torrent download                       |
-| `POST` | `/api/v1/vault/resume` | Resume a paused download                                         |
-| `POST` | `/api/v1/vault/delete` | Delete / cancel a download and remove files from disk            |
-| `GET`  | `/api/v1/vault/ws`     | WebSocket upgrade endpoint for live progress update stream       |
+| Method | Path                   | Description                                                     |
+| ------ | ---------------------- | --------------------------------------------------------------- |
+| `POST` | `/api/v1/vault/add`    | Add a download item to the vault (direct URL or magnet/torrent) |
+| `POST` | `/api/v1/vault/one`    | Get single vault item metadata and progress by UUID             |
+| `POST` | `/api/v1/vault/all`    | List all vault items in database                                |
+| `POST` | `/api/v1/vault/pause`  | Pause an active direct or torrent download                      |
+| `POST` | `/api/v1/vault/resume` | Resume a paused download                                        |
+| `POST` | `/api/v1/vault/delete` | Delete / cancel a download and remove files from disk           |
+| `GET`  | `/api/v1/vault/ws`     | WebSocket upgrade endpoint for live progress update stream      |
 
 ### Response Envelopes
 
@@ -158,17 +158,17 @@ cargo loco start
 
 Configure provider credentials and storage settings in `.env` or via `config/*.yaml`:
 
-| Variable                | Description                                                | Default              |
-| ----------------------- | ---------------------------------------------------------- | -------------------- |
-| `PORT`                  | Server port                                                | `5150`               |
-| `BINDING`               | Server bind address                                        | `localhost`          |
-| `DATABASE_URL`          | SQLite database URI                                        | `sqlite://assets/main.sqlite?mode=rwc` |
-| `QUEUE_URL`             | SQLite job queue URI                                       | `sqlite://assets/queue.sqlite?mode=rwc` |
-| `VAULT_LOC`             | Storage root directory for downloaded vault files          | `vault`              |
-| `MAL_CLIENT_ID`         | MyAnimeList API client ID                                  |                      |
-| `MAL_CLIENT_SECRET`     | MyAnimeList API client secret                              |                      |
-| `ANILIST_CLIENT_ID`     | AniList OAuth client ID                                    |                      |
-| `ANILIST_CLIENT_SECRET` | AniList OAuth client secret                                |                      |
+| Variable                | Description                                       | Default                                 |
+| ----------------------- | ------------------------------------------------- | --------------------------------------- |
+| `PORT`                  | Server port                                       | `5150`                                  |
+| `BINDING`               | Server bind address                               | `localhost`                             |
+| `DATABASE_URL`          | SQLite database URI                               | `sqlite://assets/main.sqlite?mode=rwc`  |
+| `QUEUE_URL`             | SQLite job queue URI                              | `sqlite://assets/queue.sqlite?mode=rwc` |
+| `VAULT_LOC`             | Storage root directory for downloaded vault files | `vault`                                 |
+| `MAL_CLIENT_ID`         | MyAnimeList API client ID                         |                                         |
+| `MAL_CLIENT_SECRET`     | MyAnimeList API client secret                     |                                         |
+| `ANILIST_CLIENT_ID`     | AniList OAuth client ID                           |                                         |
+| `ANILIST_CLIENT_SECRET` | AniList OAuth client secret                       |                                         |
 
 ## Development & Testing
 

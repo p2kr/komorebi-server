@@ -5,17 +5,20 @@ use sea_orm::{
     ActiveModelTrait,
     DbErr::{self},
 };
-use tokio::{sync::broadcast::Sender, time::sleep};
+use tokio::{sync::broadcast::Sender, time::interval};
 
 use crate::{
-    downloaders::manager::DownloadManager,
-    models::vault::{self, VaultItem, VaultItemStatus},
+    downloaders::{manager::DownloadManager, remove_vault_contents},
+    models::{
+        events::AppEvent,
+        vault::{self, VaultItemStatus},
+    },
 };
 
-pub fn start_daemon(ctx: AppContext, manager: Arc<DownloadManager>, ws: Sender<Vec<VaultItem>>) {
+pub fn start_daemon(ctx: AppContext, manager: Arc<DownloadManager>, ws: Sender<AppEvent>) {
     tokio::spawn(async move {
         tracing::info!("starting download manger polling daemon");
-
+        let mut timer = interval(Duration::from_secs(2));
         loop {
             let mut all_stats = vec![];
             for engine in manager.get_all_engines() {
@@ -23,11 +26,12 @@ pub fn start_daemon(ctx: AppContext, manager: Arc<DownloadManager>, ws: Sender<V
                 all_stats.append(&mut engine_stats);
             }
 
-            let _ = ws.send(all_stats.clone());
+            // TODO:REMOVE: Not required since all items are polled every 2 secs
+            let _ = ws.send(AppEvent::VaultActiveItems(all_stats.clone()));
 
             if all_stats.is_empty() {
                 tracing::info!("no active downloads, waiting for wakeup signal");
-                manager.wakeup.notified().await;
+                manager.notification().await;
                 tracing::info!("wakeup signal received, resuming polling");
                 continue;
             }
@@ -43,7 +47,7 @@ pub fn start_daemon(ctx: AppContext, manager: Arc<DownloadManager>, ws: Sender<V
                 let id = item.id;
                 let download_type = item.download_type.clone();
                 // save to db
-                if let Err(e) = vault::ActiveModel::from(item)
+                if let Err(e) = vault::ActiveModel::from(item.clone())
                     .update_progress_mut()
                     .update(&ctx.db)
                     .await
@@ -58,13 +62,16 @@ pub fn start_daemon(ctx: AppContext, manager: Arc<DownloadManager>, ws: Sender<V
                                 let _ = engine.delete(&id).await;
                             }
                             manager.active_items.remove(&id);
+
+                            // also delete its files
+                            remove_vault_contents(item);
                         }
                         _ => tracing::error!("failed to update vault item {}: {}", id, e),
                     }
                 }
             }
 
-            sleep(Duration::from_secs(2)).await;
+            timer.tick().await;
         }
     });
 }

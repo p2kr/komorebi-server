@@ -4,6 +4,7 @@ use loco_rs::prelude::*;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use reqwest::{Client, Url};
 use tokio::task::JoinSet;
+use url::form_urlencoded;
 
 use crate::{
     core::ResultExt,
@@ -70,7 +71,10 @@ impl CrawlerEngine {
                 continue;
             }
 
-            let url_str = config.base_url.replace("{query}", &self.query);
+            let encoded_query: String =
+                form_urlencoded::byte_serialize(self.query.as_bytes()).collect();
+
+            let url_str = config.base_url.replace("{query}", &encoded_query);
 
             let url = match Url::parse(&url_str) {
                 Ok(u) => u,

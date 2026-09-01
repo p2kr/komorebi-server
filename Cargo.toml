@@ -56,6 +56,8 @@ librqbit = "9.0.1"
 dashmap = "6.2.1"
 futures = "0.3.34"
 rayon = "1.12.0"
+url = "2.5.8"
+async-stream = "0.3.6"
 
 [[bin]]
 name = "komorebi_server-cli"
@@ -75,3 +77,9 @@ ts-rs = { workspace = true, features = ["format"] }
 
 [build-dependencies]
 dotenv-build = "0.1.1"
+
+[profile.release]
+strip = true
+opt-level = "s"
+lto = true
+codegen-units = 1

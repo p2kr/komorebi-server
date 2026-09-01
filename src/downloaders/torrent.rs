@@ -85,7 +85,7 @@ impl DownloadEngine for TorrentDownloader {
                 self.handles.insert(vault_item.id, handle);
                 self.active_items.insert(vault_item.id, vault_item.clone());
             }
-            AddTorrentResponse::AlreadyManaged(_, _) => {
+            AddTorrentResponse::AlreadyManaged(_, _m) => {
                 return Err(Error::Unauthorized("Torrent already added".into()));
             }
             _ => return Err(Error::BadRequest("Failed to add torrent to session".into())),

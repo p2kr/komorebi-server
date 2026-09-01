@@ -5,6 +5,7 @@
 `komorebi-server` is a high-performance, unified media backend server written in Rust, built on the [Loco](https://loco.rs) 1.1 framework (backed by Axum 0.8 and Sea-ORM 2.0).
 
 The system serves five core functions:
+
 1. **Media Provider Normalization**: Aggregates, synchronizes, and normalizes anime and manga list data across multiple upstream third-party providers (MyAnimeList and AniList) into a single unified REST API.
 2. **User & Identity Management**: Manages user profiles with linked provider accounts, optional Argon2 passcode protection, and dual-mode access (token authenticated vs. unauthenticated sandbox mode).
 3. **Web Crawler & Torrent Parsing**: Scrapes media/torrent sites (e.g. Nyaa.si) using declarative YAML configs, CSS/JSON selectors, and deep filename parsing via Anitomy.
@@ -15,22 +16,22 @@ The system serves five core functions:
 
 ## 2. Technology Stack
 
-| Layer                | Technology                         | Description / Usage                                      |
-| -------------------- | ---------------------------------- | -------------------------------------------------------- |
-| **Language**         | Rust (Edition 2024)                | Modern Rust with strict compiler checks                  |
-| **Web Framework**    | [Loco](https://loco.rs) 1.1        | Rails-inspired batteries-included Rust framework         |
-| **Web & WS**         | Axum 0.8                           | Async HTTP routing and WebSocket connection upgrades     |
-| **Async Runtime**    | Tokio 1.53                         | Multi-threaded runtime, tasks, broadcast channels        |
-| **Database**         | SQLite via Sea-ORM 2.0             | Async connection pooling, schema migrations, and ORM     |
-| **HTTP Client**      | reqwest 0.13                       | Connection pooled HTTP client with query/JSON/form       |
-| **BitTorrent Engine**| librqbit 9.0                       | Embedded BitTorrent engine with DHT session persistence  |
-| **Identifiers**      | UUID v7 (`uuid` crate)             | Time-sortable primary keys for all database entities     |
-| **Timestamps**       | chrono 0.4                         | Millisecond-precision timestamps (fixed offset / UTC)    |
-| **HTML Parsing**     | scraper 0.27                       | CSS selector extraction for web scraping                 |
-| **Title Parsing**    | anitomy-rs                         | Torrent filename tokenizer and anime metadata extractor  |
-| **Serialization**    | serde / serde_json / yaml_serde    | Strong typing across JSON APIs and YAML configurations   |
-| **Enum Tools**       | strum / strum_macros 0.28          | String serialization and case-insensitive parsing        |
-| **TS Bindings**      | ts-rs 12                           | Emits TypeScript interface definitions to frontend       |
+| Layer                 | Technology                      | Description / Usage                                     |
+| --------------------- | ------------------------------- | ------------------------------------------------------- |
+| **Language**          | Rust (Edition 2024)             | Modern Rust with strict compiler checks                 |
+| **Web Framework**     | [Loco](https://loco.rs) 1.1     | Rails-inspired batteries-included Rust framework        |
+| **Web & WS**          | Axum 0.8                        | Async HTTP routing and WebSocket connection upgrades    |
+| **Async Runtime**     | Tokio 1.53                      | Multi-threaded runtime, tasks, broadcast channels       |
+| **Database**          | SQLite via Sea-ORM 2.0          | Async connection pooling, schema migrations, and ORM    |
+| **HTTP Client**       | reqwest 0.13                    | Connection pooled HTTP client with query/JSON/form      |
+| **BitTorrent Engine** | librqbit 9.0                    | Embedded BitTorrent engine with DHT session persistence |
+| **Identifiers**       | UUID v7 (`uuid` crate)          | Time-sortable primary keys for all database entities    |
+| **Timestamps**        | chrono 0.4                      | Millisecond-precision timestamps (fixed offset / UTC)   |
+| **HTML Parsing**      | scraper 0.27                    | CSS selector extraction for web scraping                |
+| **Title Parsing**     | anitomy-rs                      | Torrent filename tokenizer and anime metadata extractor |
+| **Serialization**     | serde / serde_json / yaml_serde | Strong typing across JSON APIs and YAML configurations  |
+| **Enum Tools**        | strum / strum_macros 0.28       | String serialization and case-insensitive parsing       |
+| **TS Bindings**       | ts-rs 12                        | Emits TypeScript interface definitions to frontend      |
 
 ---
 
@@ -165,6 +166,7 @@ The database is SQLite managed asynchronously through Sea-ORM.
 ### 5.1 Tables & Constraints
 
 #### `users` Table
+
 ```sql
 CREATE TABLE IF NOT EXISTS users (
     id           BLOB    PRIMARY KEY NOT NULL, -- UUID v7
@@ -184,6 +186,7 @@ ON users (username, provider, is_sandbox);
 ```
 
 #### `vault` Table
+
 ```sql
 CREATE TABLE IF NOT EXISTS vault (
     id                BLOB    PRIMARY KEY NOT NULL, -- UUID v7
@@ -242,24 +245,24 @@ All JSON responses strictly follow standardized envelope structures:
 
 ### 6.2 Endpoints Summary
 
-| Controller | Method | Path | Description |
-| :--- | :--- | :--- | :--- |
-| **User** | `POST` | `/api/v1/user/login` | Authenticate by username, provider, sandbox flag, and passcode |
-| **User** | `POST` | `/api/v1/user/add` | Validate user against upstream provider and upsert record |
-| **User** | `POST` | `/api/v1/user/all` | Return all registered users in database |
-| **User** | `POST` | `/api/v1/user/one` | Fetch single user by UUID |
-| **User** | `POST` | `/api/v1/user/delete` | Delete user by UUID (cascades to user's vault items) |
-| **User** | `POST` | `/api/v1/user/oauth/exchange` | Exchange OAuth authorization code + PKCE verifier for access token |
-| **Media** | `POST` | `/api/v1/media/anime` | Fetch user's anime list with pagination and filtering |
-| **Media** | `POST` | `/api/v1/media/manga` | Fetch user's manga list with pagination and filtering |
-| **Crawler** | `POST` | `/api/v1/crawler/search` | Search external torrent/media crawlers and parse titles |
-| **Vault** | `POST` | `/api/v1/vault/add` | Add download item to vault and dispatch to download engine |
-| **Vault** | `POST` | `/api/v1/vault/one` | Fetch vault item by UUID |
-| **Vault** | `POST` | `/api/v1/vault/all` | List all vault items in database |
-| **Vault** | `POST` | `/api/v1/vault/pause` | Pause active direct or torrent download |
-| **Vault** | `POST` | `/api/v1/vault/resume` | Resume paused download |
-| **Vault** | `POST` | `/api/v1/vault/delete` | Cancel/delete download task and delete files from disk |
-| **Vault** | `GET` | `/api/v1/vault/ws` | WebSocket upgrade endpoint streaming real-time download progress |
+| Controller  | Method | Path                          | Description                                                        |
+| :---------- | :----- | :---------------------------- | :----------------------------------------------------------------- |
+| **User**    | `POST` | `/api/v1/user/login`          | Authenticate by username, provider, sandbox flag, and passcode     |
+| **User**    | `POST` | `/api/v1/user/add`            | Validate user against upstream provider and upsert record          |
+| **User**    | `POST` | `/api/v1/user/all`            | Return all registered users in database                            |
+| **User**    | `POST` | `/api/v1/user/one`            | Fetch single user by UUID                                          |
+| **User**    | `POST` | `/api/v1/user/delete`         | Delete user by UUID (cascades to user's vault items)               |
+| **User**    | `POST` | `/api/v1/user/oauth/exchange` | Exchange OAuth authorization code + PKCE verifier for access token |
+| **Media**   | `POST` | `/api/v1/media/anime`         | Fetch user's anime list with pagination and filtering              |
+| **Media**   | `POST` | `/api/v1/media/manga`         | Fetch user's manga list with pagination and filtering              |
+| **Crawler** | `POST` | `/api/v1/crawler/search`      | Search external torrent/media crawlers and parse titles            |
+| **Vault**   | `POST` | `/api/v1/vault/add`           | Add download item to vault and dispatch to download engine         |
+| **Vault**   | `POST` | `/api/v1/vault/one`           | Fetch vault item by UUID                                           |
+| **Vault**   | `POST` | `/api/v1/vault/all`           | List all vault items in database                                   |
+| **Vault**   | `POST` | `/api/v1/vault/pause`         | Pause active direct or torrent download                            |
+| **Vault**   | `POST` | `/api/v1/vault/resume`        | Resume paused download                                             |
+| **Vault**   | `POST` | `/api/v1/vault/delete`        | Cancel/delete download task and delete files from disk             |
+| **Vault**   | `GET`  | `/api/v1/vault/ws`            | WebSocket upgrade endpoint streaming real-time download progress   |
 
 ---
 
@@ -281,6 +284,7 @@ pub trait MediaClient: Send + Sync {
 Use `user.provider.new_client(client, user)` to dynamically instantiate `Box<dyn MediaClient>`.
 
 ### 7.2 Implementations
+
 - **`MalClient`**: Queries MyAnimeList REST API (`/v2/users/{username}/animelist`, `/v2/users/{username}/mangalist`). Maps scores directly (0.0–10.0) and uses cursor-based pagination.
 - **`AniListClient`**: Queries AniList GraphQL API (`https://graphql.anilist.co`). Normalizes 0–100 scores to 0.0–10.0 and converts page-based pagination.
 
@@ -368,13 +372,17 @@ The download management subsystem provides robust, multi-backend file acquisitio
 ## 10. Shared State & Application Lifecycle (`src/app.rs`)
 
 ### 10.1 `AppContext.shared_store`
+
 The following shared singletons are registered in `App::after_context()`:
+
 1. `reqwest::Client`: Unified HTTP client configured with pooled connections and custom headers.
 2. `Arc<DownloadManager>`: Global download orchestrator and engine dispatcher.
 3. `tokio::sync::broadcast::Sender<Vec<VaultItem>>`: Broadcast channel for WebSocket progress events.
 
 ### 10.2 Graceful Shutdown (`on_shutdown`)
+
 When the application receives a termination signal (`SIGINT` / `SIGTERM`), `App::on_shutdown()` is invoked:
+
 - Iterates over all active download engines from `DownloadManager::get_all_engines()`.
 - Calls `engine.stop()` wrapped in a 5-second timeout to flush torrent state and DHT nodes cleanly.
 
@@ -383,6 +391,7 @@ When the application receives a termination signal (`SIGINT` / `SIGTERM`), `App:
 ## 11. Development & Testing Workflow
 
 ### 11.1 Essential Commands
+
 ```sh
 # Apply database migrations
 cargo loco db migrate
@@ -402,14 +411,14 @@ cargo test
 
 ### 11.2 Environment Variables
 
-| Variable | Description | Default |
-| :--- | :--- | :--- |
-| `PORT` | Server listening port | `5150` |
-| `BINDING` | Server bind host interface | `localhost` |
-| `DATABASE_URL` | SQLite database URI | `sqlite://assets/main.sqlite?mode=rwc` |
-| `QUEUE_URL` | SQLite queue URI | `sqlite://assets/queue.sqlite?mode=rwc` |
-| `VAULT_LOC` | Root directory for downloaded vault files | `vault` |
-| `MAL_CLIENT_ID` | MyAnimeList API Client ID | (Optional for OAuth) |
-| `MAL_CLIENT_SECRET` | MyAnimeList API Client Secret | (Optional for OAuth) |
-| `ANILIST_CLIENT_ID` | AniList API Client ID | (Optional for OAuth) |
-| `ANILIST_CLIENT_SECRET` | AniList API Client Secret | (Optional for OAuth) |
+| Variable                | Description                               | Default                                 |
+| :---------------------- | :---------------------------------------- | :-------------------------------------- |
+| `PORT`                  | Server listening port                     | `5150`                                  |
+| `BINDING`               | Server bind host interface                | `localhost`                             |
+| `DATABASE_URL`          | SQLite database URI                       | `sqlite://assets/main.sqlite?mode=rwc`  |
+| `QUEUE_URL`             | SQLite queue URI                          | `sqlite://assets/queue.sqlite?mode=rwc` |
+| `VAULT_LOC`             | Root directory for downloaded vault files | `vault`                                 |
+| `MAL_CLIENT_ID`         | MyAnimeList API Client ID                 | (Optional for OAuth)                    |
+| `MAL_CLIENT_SECRET`     | MyAnimeList API Client Secret             | (Optional for OAuth)                    |
+| `ANILIST_CLIENT_ID`     | AniList API Client ID                     | (Optional for OAuth)                    |
+| `ANILIST_CLIENT_SECRET` | AniList API Client Secret                 | (Optional for OAuth)                    |

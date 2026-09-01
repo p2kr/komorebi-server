@@ -5,7 +5,10 @@ use librqbit::{DhtSessionConfig, Session, SessionOptions, dht::DhtPersistenceCon
 use loco_rs::Result;
 use reqwest::Client;
 use sea_orm::{DbConn, EntityTrait};
-use tokio::{sync::Notify, task::JoinSet};
+use tokio::{
+    sync::{Notify, futures::Notified},
+    task::JoinSet,
+};
 use uuid::Uuid;
 
 use crate::{
@@ -21,7 +24,7 @@ type ActiveItemsMap = DashMap<Uuid, VaultItem>;
 pub struct DownloadManager {
     pub active_items: Arc<ActiveItemsMap>,
     engines: Arc<SharedEngineMap>,
-    pub wakeup: Arc<Notify>,
+    wakeup: Arc<Notify>,
 }
 
 impl DownloadManager {
@@ -133,8 +136,12 @@ impl DownloadManager {
         Ok(m)
     }
 
+    pub fn notification(&self) -> Notified<'_> {
+        self.wakeup.notified()
+    }
+
     pub fn wake_daemon(&self) {
-        self.wakeup.notify_one();
+        self.wakeup.notify_waiters();
     }
 
     #[must_use]

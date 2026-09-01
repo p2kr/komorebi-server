@@ -1,3 +1,4 @@
+use futures::future::join_all;
 use loco_rs::prelude::async_trait;
 use loco_rs::{
     Result,
@@ -14,17 +15,14 @@ use migration::Migrator;
 use reqwest::Client;
 use std::{path::Path, sync::Arc, time::Duration};
 use tokio::sync::broadcast::Sender;
-use tokio::{
-    sync::broadcast::{self},
-    time::timeout,
-};
+use tokio::sync::broadcast::{self};
 
+use crate::models::events::AppEvent;
 #[allow(unused_imports)]
 use crate::{controllers, models::_entities::users, workers::downloader::DownloadWorker};
 use crate::{
     core::client,
     downloaders::{daemon::start_daemon, manager::DownloadManager},
-    models::vault::VaultItem,
 };
 
 pub struct App;
@@ -89,33 +87,32 @@ impl Hooks for App {
         ctx.shared_store.insert::<Client>(client.clone());
 
         // 100 will round off to 128.
-        let (ws, _) = broadcast::channel::<Vec<VaultItem>>(100);
-        ctx.shared_store
-            .insert::<Sender<Vec<VaultItem>>>(ws.clone());
+        let (tx, _) = broadcast::channel::<AppEvent>(100);
+        ctx.shared_store.insert::<Sender<AppEvent>>(tx.clone());
 
         let download_manager = DownloadManager::new(&ctx.db, client).await?;
         ctx.shared_store
             .insert::<Arc<DownloadManager>>(download_manager.clone());
 
         // start the download daemon
-        start_daemon(ctx.clone(), download_manager, ws);
+        start_daemon(ctx.clone(), download_manager, tx);
 
         Ok(ctx)
     }
 
     async fn on_shutdown(ctx: &AppContext) {
+        // Spawn a watchdog task that enforces a hard process exit after X seconds.
+        // If graceful shutdown completes before Xs, the Tokio runtime drops this task automatically.
+        tokio::spawn(async {
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            tracing::error!("Graceful shutdown timed out after 10 seconds. Forcing process exit.");
+            std::process::exit(1);
+        });
+
         let dm = ctx.shared_store.get::<Arc<DownloadManager>>().unwrap();
-        for engine in dm.get_all_engines() {
-            // TODO: Use join_all(...)
-            // It's fine for now since only 1 engine has stop implemented.
-            timeout(Duration::from_secs(5), engine.stop())
-                .await
-                .unwrap_or_else(|_| {
-                    panic!(
-                        "Warning: Engine [{}] took longer than 5 seconds to stop",
-                        engine
-                    )
-                });
-        }
+        let engines = dm.get_all_engines();
+        let ft = engines.iter().map(|v| v.stop());
+
+        join_all(ft).await;
     }
 }

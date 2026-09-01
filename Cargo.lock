@@ -3322,6 +3322,7 @@ name = "komorebi-server"
 version = "0.1.0"
 dependencies = [
  "anitomy",
+ "async-stream",
  "axum",
  "chrono",
  "dashmap",
@@ -3346,6 +3347,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "ts-rs",
+ "url",
  "uuid",
  "yaml_serde",
 ]

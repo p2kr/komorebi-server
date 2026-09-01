@@ -1263,4 +1263,3 @@ components:
         data:
           type: string
           example: "Resumed download"
-

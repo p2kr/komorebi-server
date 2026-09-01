@@ -1,18 +1,23 @@
-use axum::extract::ws::{Message, WebSocketUpgrade};
+use async_stream::stream;
+use axum::response::{Sse, sse::KeepAlive};
 use loco_rs::prelude::*;
-use reqwest::{StatusCode, Url};
+use reqwest::Url;
 use serde::Deserialize;
-use std::sync::Arc;
-use tokio::sync::broadcast::Sender;
+use std::{sync::Arc, time::Duration};
+use tokio::sync::broadcast::error::RecvError;
+use tokio::{sync::broadcast::Sender, time::interval};
 use ts_rs::TS;
 use uuid::Uuid;
 
+use crate::downloaders::remove_vault_contents;
 use crate::{
-    controllers::{fail, success},
+    controllers::success,
     core::vault_path_resolver::get_dest_path,
     downloaders::manager::DownloadManager,
+    loco_err, loco_err_msg,
     models::{
         crawler::{CrawlerResult, ParsedTitle},
+        events::AppEvent,
         media::MediaType,
         vault::{self, VaultDownloadType, VaultItem, VaultItemStatus},
     },
@@ -75,6 +80,16 @@ pub async fn add(
     State(ctx): State<AppContext>,
     Json(params): Json<VaultAddPayload>,
 ) -> Result<Response> {
+    // Check if already in db
+    let existing_items = vault::Entity::find()
+        .filter(vault::Column::SourceUrl.eq(params.crawler_result.link.clone()))
+        .all(&ctx.db)
+        .await?;
+
+    if !existing_items.is_empty() {
+        return loco_err!("Item already exists in vault/queue");
+    }
+
     let title = params
         .crawler_result
         .parsed_title
@@ -101,44 +116,35 @@ pub async fn add(
         ..Default::default()
     };
 
-    // 1. Create a new VaultItem in the database with PENDING status
-    let inserted_item = vault::ActiveModel::from(vault_item).insert(&ctx.db).await?;
-
-    // 2. Fetch the Download Manager
     let manager = ctx.shared_store.get::<Arc<DownloadManager>>().unwrap();
 
-    // 3. Delegate to the correct engine
-    let err_msg = match manager.get_engine(&download_type) {
-        Some(engine) => match engine.add(&inserted_item).await {
-            Ok(_) => None,
-            Err(e) => Some(e.to_string()),
-        },
-        None => Some("Download engine not found for this item".into()),
-    };
+    // Delegate to the correct engine
+    let engine = manager
+        .get_engine(&download_type)
+        .ok_or(loco_err_msg!("Download engine not found for this item"))?;
 
-    // If there's an error, remove from db and return fail() early
-    if let Some(msg) = err_msg {
-        vault::ActiveModel::from(inserted_item)
-            .delete(&ctx.db)
-            .await?;
+    // Create a new VaultItem in the database with PENDING status
+    let inserted_item = vault::ActiveModel::from(vault_item).insert(&ctx.db).await?;
 
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "ERROR_VAULT_ADD",
-            Some(&msg),
-        );
-    }
+    let bg_inserted_item = inserted_item.clone();
+    tokio::spawn(async move {
+        if let Err(e) = engine.add(&bg_inserted_item).await {
+            tracing::error!("Failed to add new torrent {}: {}", bg_inserted_item.id, e);
 
-    // Success path: Update DB, wake daemon, and return success()
-    let resp_model = vault::ActiveModel::from(inserted_item)
-        .update_status(VaultItemStatus::DOWNLOADING, None)
-        .update(&ctx.db)
-        .await?;
+            // Fail in db
+            vault::ActiveModel::from(bg_inserted_item)
+                .update_status(VaultItemStatus::FAILED, Some(e.to_string()))
+                .update(&ctx.db)
+                .await
+                .inspect_err(|e| tracing::error!("Error adding torrent {}", e))
+                .ok();
+        } else {
+            // Wake up the daemon so it starts polling this new download!
+            manager.wake_daemon();
+        }
+    });
 
-    // 4. Wake up the daemon so it starts polling this new download!
-    manager.wake_daemon();
-
-    success(resp_model)
+    success(inserted_item)
 }
 
 #[debug_handler]
@@ -152,12 +158,24 @@ pub async fn pause(
         .await?
         .ok_or(Error::NotFound)?;
 
-    let manager = ctx.shared_store.get::<Arc<DownloadManager>>().unwrap();
-
-    // Route it to the correct engine!
-    if let Some(engine) = manager.get_engine(&item.download_type) {
-        engine.pause(&params.vault_id).await?;
+    if matches!(
+        item.status,
+        VaultItemStatus::COMPLETED | VaultItemStatus::PENDING | VaultItemStatus::PAUSED
+    ) {
+        return loco_err!("Cannot pause a completed/pending/paused download");
     }
+
+    let manager = ctx.shared_store.get::<Arc<DownloadManager>>().unwrap();
+    let engine = manager
+        .get_engine(&item.download_type)
+        .ok_or(Error::NotFound)?;
+
+    tokio::spawn(async move {
+        if let Err(e) = engine.pause(&params.vault_id).await {
+            tracing::error!("Failed to pause download {}: {}", params.vault_id, e);
+        }
+        manager.wake_daemon();
+    });
 
     success(serde_json::json!("Paused download"))
 }
@@ -173,14 +191,27 @@ pub async fn resume(
         .await?
         .ok_or(Error::NotFound)?;
 
-    let manager = ctx.shared_store.get::<Arc<DownloadManager>>().unwrap();
-
-    // Route it to the correct engine!
-    if let Some(engine) = manager.get_engine(&item.download_type) {
-        engine.resume(&params.vault_id).await?;
+    if matches!(
+        item.status,
+        VaultItemStatus::COMPLETED | VaultItemStatus::PENDING | VaultItemStatus::DOWNLOADING
+    ) {
+        return loco_err!("Cannot resume a completed/ongoing download");
     }
 
-    success(serde_json::json!("Resumed download"))
+    let manager = ctx.shared_store.get::<Arc<DownloadManager>>().unwrap();
+
+    let engine = manager
+        .get_engine(&item.download_type)
+        .ok_or(Error::NotFound)?;
+
+    tokio::spawn(async move {
+        if let Err(e) = engine.resume(&params.vault_id).await {
+            tracing::error!("Failed to resume download {}: {}", params.vault_id, e);
+        }
+        manager.wake_daemon();
+    });
+
+    success(serde_json::json!("Download Queued for Resume"))
 }
 
 #[debug_handler]
@@ -196,71 +227,104 @@ pub async fn delete(
 
     let manager = ctx.shared_store.get::<Arc<DownloadManager>>().unwrap();
 
-    // Route it to the correct engine!
-    if let Some(engine) = manager.get_engine(&item.download_type) {
-        engine.delete(&params.vault_id).await?;
-    }
+    let engine = manager
+        .get_engine(&item.download_type)
+        .ok_or(Error::NotFound)?;
+
+    tokio::spawn(async move {
+        if let Err(e) = engine.delete(&item.id).await {
+            tracing::error!(
+                "Failed to delete/cancel download {}: {}",
+                params.vault_id,
+                e
+            );
+        }
+        // Remove from db:
+        // We can remove it from the db regardless of whether the engine delete succeeded or not,
+        // because if the engine delete failed, it might be because the download was already completed
+        // or not found, in which case we still want to remove it from our vault.
+        if let Err(e) = vault::Entity::delete_by_id(item.id).exec(&ctx.db).await {
+            tracing::error!(
+                "Failed to delete vault item {} from db: {}",
+                params.vault_id,
+                e
+            );
+        }
+
+        manager.wake_daemon();
+
+        // also delete the destination path if it exists
+        remove_vault_contents(item);
+    });
 
     success(serde_json::json!("Deleted/Cancelled download"))
 }
 
-// --- WebSockets ---
 #[axum::debug_handler]
-pub async fn ws(State(ctx): State<AppContext>, ws: WebSocketUpgrade) -> Response {
+pub async fn active(State(ctx): State<AppContext>) -> impl IntoResponse {
     // Fetch the broadcast receiver from shared store
-    let tx = ctx.shared_store.get::<Sender<Vec<VaultItem>>>().unwrap();
-    let mut rx = tx.subscribe();
+    let tx = ctx.shared_store.get::<Sender<AppEvent>>().unwrap();
 
     let manager = ctx.shared_store.get::<Arc<DownloadManager>>().unwrap();
+    let initial_items: Vec<VaultItem> = manager
+        .active_items
+        .iter()
+        .map(|v| v.value().clone())
+        .collect();
 
-    ws.on_upgrade(move |mut socket| async move {
-        // Send initial state
-        let items: Vec<VaultItem> = manager
-            .active_items
-            .iter()
-            .map(|v| v.value().clone())
-            .collect();
+    let stream = stream! {
+        yield AppEvent::VaultActiveItems(initial_items).to_sse();
 
-        if let Ok(json) = serde_json::to_string(&items) {
-            let _ = socket.send(Message::Text(json.into())).await;
-        }
-
-        // Stream progress updates to the frontend
-        while let Ok(stats) = rx.recv().await {
-            if let Ok(json) = serde_json::to_string(&stats)
-                && socket.send(Message::Text(json.into())).await.is_err()
-            {
-                break;
+        let mut rx = tx.subscribe();
+        loop {
+            match rx.recv().await {
+              Ok(v) =>  yield v.to_sse(),
+              Err(RecvError::Closed) => break,
+              _ => continue
             }
         }
-    })
-}
+    };
 
-#[axum::debug_handler]
-pub async fn one(
-    State(ctx): State<AppContext>,
-    Json(params): Json<VaultActionPayload>,
-) -> Result<Response> {
-    success(
-        vault::Entity::find_by_id(params.vault_id)
-            .require_one(&ctx.db)
-            .await?,
+    Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(10))
+            .text("keep-alive-active"),
     )
 }
 
 #[axum::debug_handler]
-pub async fn all(State(ctx): State<AppContext>) -> Result<Response> {
-    success(vault::Entity::find().all(&ctx.db).await?)
+pub async fn all(State(ctx): State<AppContext>) -> impl IntoResponse {
+    let db = ctx.db.clone();
+
+    let stream = stream! {
+        let mut timer = interval(Duration::from_secs(2));
+        loop {
+            timer.tick().await;
+
+            yield match vault::Entity::find()
+                .all(&db)
+                .await
+            {
+                Ok(v) => AppEvent::VaultItems(v).to_sse(),
+                Err(e) => AppEvent::Error(format!("error in db : {}", e)).to_sse(),
+            }
+        }
+    };
+
+    Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(10))
+            .text("keep-alive-all"),
+    )
 }
 
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("vault")
         .add("add", post(add))
-        .add("one", post(one))
-        .add("all", post(all))
+        .add("all", get(all))
         .add("pause", post(pause))
         .add("resume", post(resume))
         .add("delete", post(delete))
-        .add("ws", get(ws)) // WS upgrade MUST be GET. Shows all active items
+        .add("active", get(active))
 }

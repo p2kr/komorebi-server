@@ -1,4 +1,4 @@
-pub use super::_entities::vault::{ActiveModel, Entity, Model};
+pub use super::_entities::vault::{ActiveModel, Column, Entity, Model};
 use chrono::Utc;
 use loco_rs::prelude::async_trait;
 use loco_rs::prelude::*;
