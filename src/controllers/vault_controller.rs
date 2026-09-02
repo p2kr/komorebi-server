@@ -1,11 +1,14 @@
 use async_stream::stream;
+use axum::body::Body;
 use axum::response::{Sse, sse::KeepAlive};
 use loco_rs::prelude::*;
 use reqwest::Url;
 use serde::Deserialize;
 use std::{sync::Arc, time::Duration};
+use tokio::fs;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::{sync::broadcast::Sender, time::interval};
+use tokio_util::io::ReaderStream;
 use ts_rs::TS;
 use uuid::Uuid;
 
@@ -318,6 +321,35 @@ pub async fn all(State(ctx): State<AppContext>) -> impl IntoResponse {
     )
 }
 
+pub async fn stream(
+    State(ctx): State<AppContext>,
+    Query(params): Query<VaultActionPayload>,
+) -> Result<impl IntoResponse> {
+    let item = vault::Entity::find_by_id(params.vault_id)
+        .one(&ctx.db)
+        .await?
+        .ok_or(Error::NotFound)?;
+
+    let mut dir = fs::read_dir(&item.destination_path).await?;
+
+    while let Some(file) = dir.next_entry().await? {
+        let file_path = file.path();
+        if file_path.is_file()
+            && file_path
+                .extension()
+                .is_some_and(|v| v.eq_ignore_ascii_case("mp4") || v.eq_ignore_ascii_case("mkv"))
+        {
+            // Here you can stream the file content to the client
+            // For example, you can use `axum::body::StreamBody` to stream the file]
+            let file = fs::File::open(file_path).await?;
+            let stream = ReaderStream::new(file);
+            return Ok(Body::from_stream(stream));
+        }
+    }
+
+    not_found()
+}
+
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("vault")
@@ -327,4 +359,5 @@ pub fn routes() -> Routes {
         .add("resume", post(resume))
         .add("delete", post(delete))
         .add("active", get(active))
+        .add("stream", get(stream))
 }
