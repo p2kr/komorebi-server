@@ -33,7 +33,7 @@ pub struct Model {
     pub progress: f64,
     pub speed_bps: i64,
     pub eta_seconds: Option<i64>,
-    pub temp_path: String,
+    pub temp_path: Option<String>,
     pub error_msg: Option<String>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,

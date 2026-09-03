@@ -62,7 +62,7 @@ impl MigrationTrait for Migration {
             .col(float(Vault::Progress).default(0.0))
             .col(big_integer(Vault::SpeedBps).default(0))
             .col(big_integer_null(Vault::EtaSeconds))
-            .col(string(Vault::TempPath))
+            .col(string_null(Vault::TempPath))
             .col(string_null(Vault::ErrorMsg))
             .col(timestamp_with_time_zone_default_now(Vault::CreatedAt))
             .col(timestamp_with_time_zone_default_now(Vault::UpdatedAt))

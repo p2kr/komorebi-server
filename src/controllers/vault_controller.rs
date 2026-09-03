@@ -1,18 +1,20 @@
 use async_stream::stream;
 use axum::body::Body;
+use axum::http::Request;
 use axum::response::{Sse, sse::KeepAlive};
 use loco_rs::prelude::*;
 use reqwest::Url;
 use serde::Deserialize;
+use std::path::PathBuf;
 use std::{sync::Arc, time::Duration};
-use tokio::fs;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::{sync::broadcast::Sender, time::interval};
-use tokio_util::io::ReaderStream;
+use tower_http::services::ServeFile;
 use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::downloaders::remove_vault_contents;
+use crate::streaming::processor::Streaming;
 use crate::{
     controllers::success,
     core::vault_path_resolver::get_dest_path,
@@ -163,7 +165,11 @@ pub async fn pause(
 
     if matches!(
         item.status,
-        VaultItemStatus::COMPLETED | VaultItemStatus::PENDING | VaultItemStatus::PAUSED
+        VaultItemStatus::COMPLETED
+            | VaultItemStatus::PROCESSING
+            | VaultItemStatus::READY
+            | VaultItemStatus::PENDING
+            | VaultItemStatus::PAUSED
     ) {
         return loco_err!("Cannot pause a completed/pending/paused download");
     }
@@ -196,7 +202,7 @@ pub async fn resume(
 
     if matches!(
         item.status,
-        VaultItemStatus::COMPLETED | VaultItemStatus::PENDING | VaultItemStatus::DOWNLOADING
+        |VaultItemStatus::READY| VaultItemStatus::PENDING | VaultItemStatus::DOWNLOADING
     ) {
         return loco_err!("Cannot resume a completed/ongoing download");
     }
@@ -324,30 +330,30 @@ pub async fn all(State(ctx): State<AppContext>) -> impl IntoResponse {
 pub async fn stream(
     State(ctx): State<AppContext>,
     Query(params): Query<VaultActionPayload>,
+    req: Request<Body>,
 ) -> Result<impl IntoResponse> {
     let item = vault::Entity::find_by_id(params.vault_id)
         .one(&ctx.db)
         .await?
         .ok_or(Error::NotFound)?;
 
-    let mut dir = fs::read_dir(&item.destination_path).await?;
-
-    while let Some(file) = dir.next_entry().await? {
-        let file_path = file.path();
-        if file_path.is_file()
-            && file_path
-                .extension()
-                .is_some_and(|v| v.eq_ignore_ascii_case("mp4") || v.eq_ignore_ascii_case("mkv"))
-        {
-            // Here you can stream the file content to the client
-            // For example, you can use `axum::body::StreamBody` to stream the file]
-            let file = fs::File::open(file_path).await?;
-            let stream = ReaderStream::new(file);
-            return Ok(Body::from_stream(stream));
+    let file_path = match item.temp_path {
+        Some(v) => PathBuf::from(v),
+        None => {
+            tracing::warn!(
+                temp_path = ?item.temp_path,
+                "unable to server from temp_path. switching to  raw file"
+            );
+            Streaming::resolve_file_path(&item.destination_path)
+                .await?
+                .0
         }
-    }
+    };
+    let mut sf = ServeFile::new(file_path);
 
-    not_found()
+    let resp = sf.try_call(req).await?;
+
+    Ok(resp)
 }
 
 pub fn routes() -> Routes {

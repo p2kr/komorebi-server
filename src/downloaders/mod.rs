@@ -3,7 +3,7 @@ pub mod direct;
 pub mod manager;
 pub mod torrent;
 
-use std::fmt::Display;
+use std::{any::Any, fmt::Display};
 
 use loco_rs::{Result, prelude::async_trait};
 use tokio::fs;
@@ -13,6 +13,8 @@ use crate::models::vault::VaultItem;
 
 #[async_trait]
 pub trait DownloadEngine: Display {
+    fn as_any(&self) -> &dyn Any;
+
     async fn add(&self, vault_item: &VaultItem) -> Result<()>;
 
     async fn pause(&self, vault_id: &Uuid) -> Result<()>;
@@ -21,7 +23,7 @@ pub trait DownloadEngine: Display {
 
     async fn delete(&self, vault_id: &Uuid) -> Result<()>;
 
-    async fn get_stats(&self) -> Vec<VaultItem>;
+    fn update_stats(&self);
 
     /// stop session/client
     async fn stop(&self) {}

@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS vault (
     progress          REAL    NOT NULL DEFAULT 0.0, -- 0.0 to 100.0
     speed_bps         INTEGER NOT NULL DEFAULT 0,   -- Transfer speed in bytes per second
     eta_seconds       INTEGER,                      -- Estimated seconds remaining
-    temp_path         TEXT    NOT NULL,             -- Temporary download folder path
+    temp_path         TEXT,                         -- Temporary download folder path
     error_msg         TEXT,                         -- Error description on failure
     created_at        INTEGER NOT NULL DEFAULT (unixepoch('subsec') * 1000),
     updated_at        INTEGER NOT NULL DEFAULT (unixepoch('subsec') * 1000),

@@ -71,11 +71,21 @@ pub enum VaultDownloadType {
 )]
 pub enum VaultItemStatus {
     #[default]
+    /// added to queue, not yet downloading
     PENDING,
+    /// actively downloading
     DOWNLOADING,
+    /// user paused
     PAUSED,
+    /// download bytes done (internal transient — daemon picks this up)
     COMPLETED,
+    /// remux/transcode in progress
+    PROCESSING,
+    /// stream-ready
+    READY,
+    /// download or post-process error
     FAILED,
+    /// user deleted
     CANCELLED,
 }
 
@@ -120,6 +130,8 @@ impl ActiveModel {
         self.speed_bps.reset();
         self.eta_seconds.reset();
         self.status.reset();
+        self.temp_path.reset();
+        self.error_msg.reset();
 
         self
     }
@@ -127,3 +139,4 @@ impl ActiveModel {
 
 // implement your custom finders, selectors oriented logic here
 impl Entity {}
+

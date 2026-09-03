@@ -1,4 +1,4 @@
-use std::{fmt::Display, io::SeekFrom, sync::Arc, time::Duration};
+use std::{any::Any, fmt::Display, io::SeekFrom, sync::Arc, time::Duration};
 
 use dashmap::DashMap;
 use loco_rs::Result;
@@ -15,7 +15,7 @@ use uuid::Uuid;
 use crate::{
     core::{ResultExt, vault_path_resolver::get_file_path},
     downloaders::DownloadEngine,
-    models::vault::{VaultDownloadType, VaultItem, VaultItemStatus},
+    models::vault::{VaultItem, VaultItemStatus},
 };
 
 pub struct DirectDownloader {
@@ -47,6 +47,10 @@ impl DirectDownloader {
 
 #[async_trait]
 impl DownloadEngine for DirectDownloader {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     async fn add(&self, vault_item: &VaultItem) -> Result<()> {
         let url = Url::parse(&vault_item.source_url).to_loco_err()?;
 
@@ -159,7 +163,7 @@ impl DownloadEngine for DirectDownloader {
             loop {
                 tokio::select! {
                     _ = cancel_token.cancelled() => {
-                        let msg = format!("Download paused/cancelled for vault_id: {}", vault_id);
+                        let msg = format!("Download paused for vault_id: {}", vault_id);
                         tracing::error!(msg);
                         if let Some(mut item) = active_items.get_mut(&vault_id) {
                             item.status = VaultItemStatus::PAUSED;
@@ -215,7 +219,6 @@ impl DownloadEngine for DirectDownloader {
                                     item.progress = 100.0;
                                     item.status = VaultItemStatus::COMPLETED;
                                 }
-                                active_items.remove(&vault_id);
                                 break;
                             }
                             Err(e) => {
@@ -261,20 +264,15 @@ impl DownloadEngine for DirectDownloader {
         self.pause(vault_id).await?;
 
         // 2. Remove from stats
-        if let Some((_, item)) = self.active_items.remove(vault_id) {
+        if let Some(mut item) = self.active_items.get_mut(vault_id) {
             // 3. Delete files from disk
-            let _ = fs::remove_dir_all(&item.destination_path).await;
+            item.status = VaultItemStatus::CANCELLED;
         }
         Ok(())
     }
 
-    async fn get_stats(&self) -> Vec<VaultItem> {
+    fn update_stats(&self) {
         // Our background task updates active_items in real-time,
         // so we can just blindly return what's in the map!
-        self.active_items
-            .iter()
-            .filter(|item| matches!(item.download_type, VaultDownloadType::DIRECT))
-            .map(|item| item.value().clone())
-            .collect()
     }
 }

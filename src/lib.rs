@@ -8,6 +8,7 @@ pub mod downloaders;
 pub mod dtos;
 pub mod initializers;
 pub mod models;
+pub mod streaming;
 pub mod tasks;
 pub mod views;
 pub mod workers;

@@ -35,7 +35,7 @@ impl DownloadManager {
             for item in v {
                 if !matches!(
                     item.status,
-                    VaultItemStatus::COMPLETED | VaultItemStatus::CANCELLED
+                    VaultItemStatus::READY | VaultItemStatus::CANCELLED
                 ) {
                     map.insert(item.id, item);
                 }
@@ -100,7 +100,19 @@ impl DownloadManager {
 
         tokio::spawn(async move {
             // 1. Extract items quickly to drop the DashMap lock
-            let items: Vec<VaultItem> = active_items.iter().map(|v| v.value().clone()).collect();
+            let items: Vec<VaultItem> = active_items
+                .iter()
+                .filter_map(|v| {
+                    if v.value().status != VaultItemStatus::PAUSED {
+                        Some(v.value().clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            // Wake the daemon before all items are loaded
+            bg_m.wake_daemon();
 
             let mut set = JoinSet::new();
 

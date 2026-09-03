@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
-use loco_rs::prelude::async_trait;
 use regex::Regex;
 use reqwest::Url;
 
@@ -58,7 +57,6 @@ fn build_selectors(configured: &str, defaults: &[&str]) -> Vec<scraper::Selector
     parse_selectors(defaults)
 }
 
-#[async_trait]
 impl Crawler for HtmlCrawler {
     fn can_crawl(content: &str) -> bool {
         let sample_size = content.len().min(500);

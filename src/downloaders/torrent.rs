@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::{fmt::Display, sync::Arc};
 
 use dashmap::DashMap;
@@ -49,10 +50,24 @@ impl TorrentDownloader {
             handles: DashMap::new(),
         })
     }
+
+    pub async fn remove_handle(&self, id: Uuid) -> Result<()> {
+        if let Some(handle) = self.handles.get(&id) {
+            self.session
+                .delete(handle.info_hash().into(), false)
+                .await
+                .to_loco_string()?;
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]
 impl DownloadEngine for TorrentDownloader {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     async fn add(&self, vault_item: &VaultItem) -> Result<()> {
         let url = Url::parse(&vault_item.source_url).to_loco_string()?;
 
@@ -120,7 +135,9 @@ impl DownloadEngine for TorrentDownloader {
     async fn delete(&self, vault_id: &Uuid) -> Result<()> {
         // 1. Remove it from our tracking maps
         if let Some((_, handle)) = self.handles.remove(vault_id) {
-            self.active_items.remove(vault_id);
+            if let Some(mut item) = self.active_items.get_mut(vault_id) {
+                item.status = VaultItemStatus::CANCELLED;
+            }
 
             // 2. Tell librqbit to delete it entirely (including files!)
             self.session
@@ -131,9 +148,7 @@ impl DownloadEngine for TorrentDownloader {
         Ok(())
     }
 
-    async fn get_stats(&self) -> Vec<VaultItem> {
-        let mut stats = vec![];
-
+    fn update_stats(&self) {
         for entry in self.handles.iter() {
             let (vault_id, handle) = (entry.key(), entry.value());
             let t_stats = handle.stats();
@@ -179,11 +194,8 @@ impl DownloadEngine for TorrentDownloader {
                 } else {
                     item.status = VaultItemStatus::DOWNLOADING;
                 }
-
-                stats.push(item.to_owned());
             }
         }
-        stats
     }
 
     async fn stop(&self) {
