@@ -106,6 +106,145 @@ impl VideoProcessor {
         .await
         .to_loco_err()?
     }
+
+    /// Checks whether the video codec and pixel format can be copied directly
+    /// without re-encoding, targeting modern browsers (last 2 years: Chrome, Safari, Edge, Firefox).
+    pub fn is_compatible_video(codec_name: &str, pix_fmt: Option<&str>) -> bool {
+        let codec = codec_name.to_ascii_lowercase();
+        let fmt = pix_fmt.unwrap_or("").to_ascii_lowercase();
+
+        match codec.as_str() {
+            // H.264 / AVC: 8-bit 4:2:0 is supported in all browsers.
+            // 10-bit H.264 (Hi10P) has no browser hardware/software decoder and must be re-encoded to 8-bit.
+            "h264" | "avc" => matches!(fmt.as_str(), "yuv420p" | "yuvj420p"),
+
+            // HEVC (H.265): modern browsers (Chrome 107+, Safari, Edge, Firefox 120+) support 8-bit
+            // and 10-bit (Main / Main 10).
+            "hevc" | "h265" => matches!(fmt.as_str(), "yuv420p" | "yuvj420p" | "yuv420p10le"),
+
+            // VP9: modern browsers support 8-bit and 10-bit (Profile 0 / Profile 2).
+            "vp9" => matches!(fmt.as_str(), "yuv420p" | "yuvj420p" | "yuv420p10le"),
+
+            // AV1: modern browsers support 8-bit and 10-bit (Main profile).
+            "av1" => matches!(fmt.as_str(), "yuv420p" | "yuvj420p" | "yuv420p10le"),
+
+            _ => false,
+        }
+    }
+
+    /// Checks whether the audio codec can be copied directly into an MP4 container for modern browsers.
+    pub fn is_compatible_audio(codec_name: &str) -> bool {
+        let codec = codec_name.to_ascii_lowercase();
+        matches!(codec.as_str(), "aac" | "opus" | "mp3" | "flac")
+    }
+
+    /// Determines the video codec arguments for FFmpeg.
+    /// Prefers stream copy (`-c:v copy`), adding `-tag:v hvc1` for HEVC streams on Apple/Safari.
+    /// Incompatible video streams are re-encoded to universal 8-bit H.264 (`yuv420p`).
+    pub fn build_video_codec_args(probe: &ffprobe::FfProbe) -> Vec<String> {
+        let primary_video = probe
+            .streams
+            .iter()
+            .filter(|s| s.codec_type.as_deref() == Some("video") && s.disposition.attached_pic != 1)
+            .max_by_key(|s| s.width.unwrap_or(0) * s.height.unwrap_or(0))
+            .or_else(|| {
+                probe
+                    .streams
+                    .iter()
+                    .find(|s| s.codec_type.as_deref() == Some("video"))
+            });
+
+        let is_video_copyable = primary_video
+            .and_then(|s| s.codec_name.as_deref().map(|c| (c, s.pix_fmt.as_deref())))
+            .map(|(codec, pix_fmt)| Self::is_compatible_video(codec, pix_fmt))
+            .unwrap_or(false);
+
+        let is_hevc = primary_video
+            .and_then(|s| s.codec_name.as_deref())
+            .map(|c| matches!(c.to_ascii_lowercase().as_str(), "hevc" | "h265"))
+            .unwrap_or(false);
+
+        if is_video_copyable {
+            let mut args = vec!["-c:v".into(), "copy".into()];
+            if is_hevc {
+                // Apple devices / Safari require the hvc1 tag for HEVC playback in MP4
+                args.push("-tag:v".into());
+                args.push("hvc1".into());
+            }
+            args
+        } else {
+            // CRF 18 = visually lossless; veryfast ensures speedy encode when recoding is mandatory
+            [
+                "-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
+        }
+    }
+
+    /// Determines the audio codec arguments for FFmpeg.
+    /// Stream copies compatible audio (AAC, Opus, MP3, FLAC).
+    /// If audio is incompatible (e.g. AC3, DTS, TrueHD), re-encodes to 192k AAC.
+    /// If no audio stream is present, passes `-an`.
+    pub fn build_audio_codec_args(probe: &ffprobe::FfProbe) -> Vec<String> {
+        let has_audio = probe
+            .streams
+            .iter()
+            .any(|s| s.codec_type.as_deref() == Some("audio"));
+
+        if !has_audio {
+            return vec!["-an".into()];
+        }
+
+        let primary_audio = probe
+            .streams
+            .iter()
+            .filter(|s| s.codec_type.as_deref() == Some("audio"))
+            .max_by_key(|s| (s.disposition.default, s.channels.unwrap_or(0)));
+
+        let is_audio_copyable = primary_audio
+            .and_then(|s| s.codec_name.as_deref())
+            .map(Self::is_compatible_audio)
+            .unwrap_or(false);
+
+        if is_audio_copyable {
+            vec!["-c:a".into(), "copy".into()]
+        } else {
+            ["-c:a", "aac", "-b:a", "192k"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect()
+        }
+    }
+
+    /// Assembles the complete FFmpeg command arguments for post-processing.
+    pub fn build_ffmpeg_args(input: &str, output: &str, probe: &ffprobe::FfProbe) -> Vec<String> {
+        let mut args = vec!["-y".into(), "-i".into(), input.to_string()];
+        args.extend(Self::build_video_codec_args(probe));
+        args.extend(Self::build_audio_codec_args(probe));
+
+        // Disable subtitle streams (-sn) to prevent MP4 container muxing failures with ASS/PGS
+        args.push("-sn".into());
+
+        // Streamable MP4 (moov atom at start) and machine-readable progress on stdout
+        args.extend(
+            [
+                "-movflags",
+                "+faststart",
+                "-progress",
+                "pipe:1",
+                "-nostats",
+                "-stats_period",
+                "2",
+            ]
+            .iter()
+            .map(|s| s.to_string()),
+        );
+
+        args.push(output.to_string());
+        args
+    }
 }
 
 impl PostProcessor for VideoProcessor {
@@ -177,76 +316,9 @@ impl PostProcessor for VideoProcessor {
                 0
             });
 
-        // Default to "needs recode" -- cleared when the codec is already compatible.
-        let mut needs_video_recode = true;
-        let mut needs_audio_recode = true;
+        let args = Self::build_ffmpeg_args(&input, &output, &probe_res);
 
-        const COMPATIBLE_VIDEO: &[&str] = &["h264", "vp9", "av1"];
-        const COMPATIBLE_AUDIO: &[&str] = &["aac", "opus", "mp3", "flac"];
-
-        for stream in probe_res.streams {
-            if stream.codec_type == Some("video".into())
-                && let Some(ref name) = stream.codec_name
-                && COMPATIBLE_VIDEO.contains(&name.as_str())
-                && stream.pix_fmt == Some("yuv420p".into())
-            {
-                needs_video_recode = false;
-            }
-            if stream.codec_type == Some("audio".into())
-                && let Some(ref name) = stream.codec_name
-                && COMPATIBLE_AUDIO.contains(&name.as_str())
-            {
-                needs_audio_recode = false;
-            }
-        }
-
-        tracing::debug!(
-            vault_id = %vault_id,
-            needs_video_recode,
-            needs_audio_recode,
-            "codec decision"
-        );
-
-        let video_codec: &[&str] = if needs_video_recode {
-            // CRF 18 = visually lossless; preset slow gives ~15% smaller file vs fast at same CRF.
-            // pix_fmt yuv420p is required for playback in Safari, QuickTime, iOS, and most
-            // consumer players — without it 10-bit sources silently fail in those contexts.
-            &[
-                "-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-pix_fmt", "yuv420p",
-            ]
-        } else {
-            &["-c:v", "copy"]
-        };
-
-        let audio_codec: &[&str] = if needs_audio_recode {
-            &["-c:a", "aac", "-b:a", "192k"]
-        } else {
-            &["-c:a", "copy"]
-        };
-
-        // -movflags +faststart  moves moov atom to the front so the player can
-        //                       start streaming before the full file is downloaded.
-        // -progress pipe:1      streams key=value stats to stdout every 2 s.
-        // -nostats / -stats_period  suppress the default stderr progress line.
-        let mut args: Vec<String> = vec!["-y".into(), "-i".into(), input];
-        args.extend(video_codec.iter().map(|s| s.to_string()));
-        args.extend(audio_codec.iter().map(|s| s.to_string()));
-        args.extend(
-            [
-                "-movflags",
-                "+faststart",
-                "-progress",
-                "pipe:1",
-                "-nostats",
-                "-stats_period",
-                "2",
-            ]
-            .iter()
-            .map(|s| s.to_string()),
-        );
-        args.push(output.clone());
-
-        tracing::info!(vault_id = %vault_id, output, "spawning ffmpeg");
+        tracing::info!(vault_id = %vault_id, output, ?args, "spawning ffmpeg");
 
         let mut child = tokio::process::Command::new(FFMPEG.as_path())
             .args(&args)
