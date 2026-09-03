@@ -180,6 +180,7 @@ pub async fn pause(
         .ok_or(Error::NotFound)?;
 
     tokio::spawn(async move {
+        manager.active_items.insert(item.id, item);
         if let Err(e) = engine.pause(&params.vault_id).await {
             tracing::error!("Failed to pause download {}: {}", params.vault_id, e);
         }
@@ -214,6 +215,7 @@ pub async fn resume(
         .ok_or(Error::NotFound)?;
 
     tokio::spawn(async move {
+        manager.active_items.insert(item.id, item);
         if let Err(e) = engine.resume(&params.vault_id).await {
             tracing::error!("Failed to resume download {}: {}", params.vault_id, e);
         }
