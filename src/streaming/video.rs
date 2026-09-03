@@ -12,7 +12,7 @@ use walkdir::WalkDir;
 use which::which;
 
 use crate::{
-    core::ResultExt,
+    core::{ResultExt, constants::ENCODED_LOC},
     downloaders::manager::DownloadManager,
     loco_err, loco_err_msg,
     models::{
@@ -51,11 +51,11 @@ fn cached_resolve_file_path(folder: &str) -> Result<(PathBuf, MediaType)> {
     let dir = PathBuf::from_str(folder).to_loco_err()?;
     for entry in WalkDir::new(&dir)
         .into_iter()
-        .filter_entry(|v| v.file_name() != "temp")
+        .filter_entry(|v| v.file_name() != ENCODED_LOC.as_str())
         .filter_map(|v| v.ok())
     {
         let path = entry.path();
-        if path.is_file() {
+        if path.is_file() && entry.metadata().map(|m| m.len() > 0).unwrap_or(false) {
             let file_ext = path
                 .extension()
                 .map(|v| v.to_ascii_lowercase())
@@ -73,6 +73,39 @@ fn cached_resolve_file_path(folder: &str) -> Result<(PathBuf, MediaType)> {
     }
 
     loco_err!("No video file found in the specified folder.")
+}
+
+impl VideoProcessor {
+    pub async fn find_processed_file(folder: &str) -> Result<Option<PathBuf>> {
+        let f = folder.to_string();
+        task::spawn_blocking(move || {
+            let dir = PathBuf::from_str(&f).to_loco_err()?;
+            let sub_dir = dir.join(ENCODED_LOC.as_str());
+            if sub_dir.is_dir() {
+                for entry in WalkDir::new(&sub_dir).into_iter().filter_map(|v| v.ok()) {
+                    let path = entry.path();
+                    if path.is_file() && entry.metadata().map(|m| m.len() > 0).unwrap_or(false) {
+                        let file_ext = path
+                            .extension()
+                            .map(|v| v.to_ascii_lowercase())
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_lowercase();
+
+                        if EXT_VS_TYPE
+                            .get(file_ext.as_ref())
+                            .is_some_and(|v| v.eq(&MediaType::Anime))
+                        {
+                            return Ok(Some(path.to_path_buf()));
+                        }
+                    }
+                }
+            }
+            Ok(None)
+        })
+        .await
+        .to_loco_err()?
+    }
 }
 
 impl PostProcessor for VideoProcessor {
@@ -112,9 +145,9 @@ impl PostProcessor for VideoProcessor {
             .ok_or(loco_err_msg!("unable to extract file stem"))?;
 
         let mut new_file = PathBuf::from(&item.destination_path);
-        new_file.push("temp");
+        new_file.push(ENCODED_LOC.as_str());
 
-        //  Truncate temp dir.
+        //  Truncate encoded dir.
         if new_file.is_dir() {
             fs::remove_dir_all(&new_file).await?;
         }

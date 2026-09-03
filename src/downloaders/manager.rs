@@ -15,6 +15,7 @@ use crate::{
     core::{ResultExt, constants::VAULT_LOC},
     downloaders::{DownloadEngine, direct::DirectDownloader, torrent::TorrentDownloader},
     models::vault::{self, VaultDownloadType, VaultItem, VaultItemStatus},
+    streaming::processor::Streaming,
 };
 
 type SharedEngine = Arc<dyn DownloadEngine + Send + Sync>;
@@ -28,15 +29,19 @@ pub struct DownloadManager {
 }
 
 impl DownloadManager {
+    pub fn is_active_status(status: &VaultItemStatus) -> bool {
+        !matches!(
+            status,
+            VaultItemStatus::READY | VaultItemStatus::CANCELLED | VaultItemStatus::FAILED
+        )
+    }
+
     async fn get_active_items(db: &DbConn) -> ActiveItemsMap {
         let map = DashMap::new();
 
         if let Ok(v) = vault::Entity::find().all(db).await {
             for item in v {
-                if !matches!(
-                    item.status,
-                    VaultItemStatus::READY | VaultItemStatus::CANCELLED
-                ) {
+                if Self::is_active_status(&item.status) {
                     map.insert(item.id, item);
                 }
             }
@@ -98,6 +103,7 @@ impl DownloadManager {
 
         let bg_m = m.clone();
 
+        // Auto resume on server start.
         tokio::spawn(async move {
             // 1. Extract items quickly to drop the DashMap lock
             let items: Vec<VaultItem> = active_items
@@ -118,19 +124,35 @@ impl DownloadManager {
 
             // 2. Iterate and spawn isolated tasks
             for item in items {
-                // Deref the DashMap guard and clone the engine so we own it for the async block
-                if let Some(engine) = engines.get(&item.download_type).cloned() {
-                    set.spawn(async move {
-                        if let Err(e) = engine.add(&item).await {
-                            tracing::error!("Failed to resume item {} for engine: {}", item.id, e);
+                match item.status {
+                    VaultItemStatus::COMPLETED | VaultItemStatus::PROCESSING => {
+                        tracing::info!(
+                            "Resuming post-processing for vault item: {}",
+                            item.raw_title
+                        );
+                        let bg_m = bg_m.clone();
+                        Streaming::post_process(bg_m, item);
+                    }
+                    VaultItemStatus::PENDING | VaultItemStatus::DOWNLOADING => {
+                        if let Some(engine) = engines.get(&item.download_type).cloned() {
+                            set.spawn(async move {
+                                if let Err(e) = engine.add(&item).await {
+                                    tracing::error!(
+                                        "Failed to resume item {} for engine: {}",
+                                        item.id,
+                                        e
+                                    );
+                                }
+                            });
+                        } else {
+                            tracing::warn!(
+                                "No download engine found for type {:?} for item {}",
+                                item.download_type,
+                                item.id
+                            );
                         }
-                    });
-                } else {
-                    tracing::warn!(
-                        "No download engine found for type {:?} for item {}",
-                        item.download_type,
-                        item.id
-                    );
+                    }
+                    _ => {}
                 }
             }
 

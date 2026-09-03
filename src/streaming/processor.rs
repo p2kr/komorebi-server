@@ -59,19 +59,42 @@ impl Streaming {
                             )
                             .await;
                         }
+                        manager.wake_daemon();
                     }
                     _ => {
                         tracing::warn!("not yet implemented");
                         if let Some(mut item) = manager.active_items.get_mut(&item.id) {
                             item.status = VaultItemStatus::CANCELLED;
                         }
+                        manager.wake_daemon();
                     }
                 },
                 Err(e) => {
+                    // Check if already-converted file exists in encoded dir
+                    if let Ok(Some(processed_path)) =
+                        VideoProcessor::find_processed_file(&item.destination_path).await
+                    {
+                        tracing::info!(
+                            vault_id = %item.id,
+                            path = %processed_path.display(),
+                            "original video removed, found already processed file"
+                        );
+                        if let Some(mut it) = manager.active_items.get_mut(&item.id) {
+                            it.temp_path = Some(processed_path.to_string_lossy().to_string());
+                            it.progress = 100.0;
+                            it.status = VaultItemStatus::READY;
+                            it.error_msg = None;
+                        }
+                        manager.wake_daemon();
+                        return;
+                    }
+
                     tracing::error!("Error resolving path {}", e);
                     if let Some(mut item) = manager.active_items.get_mut(&item.id) {
                         item.status = VaultItemStatus::FAILED;
+                        item.error_msg = Some(e.to_string());
                     }
+                    manager.wake_daemon();
                 }
             };
         })
