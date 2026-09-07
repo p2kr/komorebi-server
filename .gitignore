@@ -25,3 +25,4 @@ examples/*
 vault/
 assets/*
 !assets/crawler_configs.yaml
+!assets/vault_metadata.schema.json

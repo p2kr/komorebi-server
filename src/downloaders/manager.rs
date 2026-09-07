@@ -2,9 +2,9 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use dashmap::DashMap;
 use librqbit::{DhtSessionConfig, Session, SessionOptions, dht::DhtPersistenceConfig};
-use loco_rs::Result;
+use loco_rs::{Result, app::AppContext};
 use reqwest::Client;
-use sea_orm::{DbConn, EntityTrait};
+use sea_orm::{ColumnTrait, DbConn, EntityTrait, QueryFilter};
 use tokio::{
     sync::{Notify, futures::Notified},
     task::JoinSet,
@@ -12,10 +12,12 @@ use tokio::{
 use uuid::Uuid;
 
 use crate::{
-    core::{ResultExt, constants::VAULT_LOC},
+    core::{ResultExt, constants::VAULT_LOC, is_active_status},
     downloaders::{DownloadEngine, direct::DirectDownloader, torrent::TorrentDownloader},
-    models::vault::{self, VaultDownloadType, VaultItem, VaultItemStatus},
-    streaming::processor::Streaming,
+    models::vault::{
+        Column as VaultColumn, Entity as VaultEntity, VaultDownloadType, VaultItem, VaultItemStatus,
+    },
+    streaming::processor::MediaProcessor,
 };
 
 type SharedEngine = Arc<dyn DownloadEngine + Send + Sync>;
@@ -29,19 +31,21 @@ pub struct DownloadManager {
 }
 
 impl DownloadManager {
-    pub fn is_active_status(status: &VaultItemStatus) -> bool {
-        !matches!(
-            status,
-            VaultItemStatus::READY | VaultItemStatus::CANCELLED | VaultItemStatus::FAILED
-        )
-    }
-
     async fn get_active_items(db: &DbConn) -> ActiveItemsMap {
         let map = DashMap::new();
 
-        if let Ok(v) = vault::Entity::find().all(db).await {
+        if let Ok(v) = VaultEntity::find()
+            .filter(VaultColumn::Status.is_not_in([
+                VaultItemStatus::READY,
+                VaultItemStatus::CANCELLED,
+                VaultItemStatus::FAILED,
+            ]))
+            .all(db)
+            .await
+        {
             for item in v {
-                if Self::is_active_status(&item.status) {
+                // TODO: Remove after finalizing what constitutes as active.
+                if is_active_status(&item.status) {
                     map.insert(item.id, item);
                 }
             }
@@ -50,7 +54,11 @@ impl DownloadManager {
         map
     }
 
-    pub async fn new(db: &DbConn, client: Client) -> Result<Arc<Self>> {
+    pub async fn new(ctx: &AppContext) -> Result<Arc<Self>> {
+        let db = &ctx.db;
+        let client: Client = ctx.shared_store.get().unwrap();
+        let media_processor: Arc<MediaProcessor> = ctx.shared_store.get().unwrap();
+
         let active_items = Arc::new(Self::get_active_items(db).await);
 
         tracing::info!("loading {} active items", active_items.len());
@@ -102,7 +110,6 @@ impl DownloadManager {
         });
 
         let bg_m = m.clone();
-
         // Auto resume on server start.
         tokio::spawn(async move {
             // 1. Extract items quickly to drop the DashMap lock
@@ -126,12 +133,18 @@ impl DownloadManager {
             for item in items {
                 match item.status {
                     VaultItemStatus::COMPLETED | VaultItemStatus::PROCESSING => {
-                        tracing::info!(
-                            "Resuming post-processing for vault item: {}",
-                            item.raw_title
-                        );
+                        tracing::info!("Resuming post-processing for vault item: {}", item.title);
+                        let proc = media_processor.clone();
                         let bg_m = bg_m.clone();
-                        Streaming::post_process(bg_m, item);
+                        set.spawn(async move {
+                            if let Err(e) = proc.post_process(bg_m, &item).await {
+                                tracing::error!(
+                                    "Failed to resume post-processing for item {}: {}",
+                                    item.id,
+                                    e
+                                );
+                            }
+                        });
                     }
                     VaultItemStatus::PENDING | VaultItemStatus::DOWNLOADING => {
                         if let Some(engine) = engines.get(&item.download_type).cloned() {

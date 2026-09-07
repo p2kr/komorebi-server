@@ -3,22 +3,21 @@
 pub mod processor;
 pub mod video;
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use loco_rs::Result;
 use phf::{Map, phf_map};
 
 use crate::{
     downloaders::manager::DownloadManager,
-    models::{media::MediaType, vault::VaultItem},
+    models::{media::MediaType, vault_sub_item::VaultSubItem},
 };
 
 pub trait PostProcessor {
-    fn resolve_file_path(folder: &str) -> impl Future<Output = Result<(PathBuf, MediaType)>>;
     fn post_process(
         file_path: PathBuf,
-        manager: &DownloadManager,
-        item: VaultItem,
+        manager: Arc<DownloadManager>,
+        item: VaultSubItem,
     ) -> impl Future<Output = Result<()>>;
 }
 

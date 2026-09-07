@@ -8,3 +8,7 @@ pub static ENCODED_LOC: LazyLock<String> = LazyLock::new(|| {
         .or_else(|_| env::var("ENCODED_PATH"))
         .unwrap_or("encoded".into())
 });
+
+pub const FONTS_LOC: &str = "fonts";
+pub const SUBTITLES_LOC: &str = "subs";
+pub const METADATA_LOC: &str = "metadata.json";

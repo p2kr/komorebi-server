@@ -1,9 +1,9 @@
 use komorebi_server::{
     app::App,
-    models::{media::MediaProvider, users::users},
+    models::{media::MediaProvider, users},
 };
 use loco_rs::{hash, testing::prelude::*};
-use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
+use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait, IntoActiveModel};
 use serial_test::serial;
 use uuid::Uuid;
 
@@ -46,7 +46,7 @@ async fn test_user_model_crud_and_passcode() {
     assert_eq!(found_by_id.id, user.id);
 
     // Test find_by_username_and_provider_and_sandbox
-    let found_by_prov = users::Model::find_by_username_and_provider_and_sandbox(
+    let found_by_prov = users::Entity::find_by_username_and_provider_and_sandbox(
         &boot.app_context.db,
         username,
         MediaProvider::MAL,
@@ -150,7 +150,9 @@ async fn test_save_user_upsert_updates_token() {
         access_token: Some("token_v1".into()),
         ..Default::default()
     };
-    let saved1 = users::Model::save_user(&boot.app_context.db, u1)
+    let saved1 = u1
+        .into_active_model()
+        .save_user(&boot.app_context.db)
         .await
         .expect("first save");
 
@@ -163,7 +165,9 @@ async fn test_save_user_upsert_updates_token() {
         access_token: Some("token_v2".into()),
         ..Default::default()
     };
-    let saved2 = users::Model::save_user(&boot.app_context.db, u2)
+    let saved2 = u2
+        .into_active_model()
+        .save_user(&boot.app_context.db)
         .await
         .expect("second save");
 

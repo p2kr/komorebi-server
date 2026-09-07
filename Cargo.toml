@@ -18,20 +18,20 @@ loco-rs = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
 tokio = { version = "1.53", default-features = false, features = [
-  "rt-multi-thread",
-  "process",
-  "io-util",
+    "rt-multi-thread",
+    "process",
+    "io-util",
 ] }
 axum = "0.8"
 tracing = { version = "0.1" }
 regex = { version = "1.13" }
 migration = { path = "migration" }
 sea-orm = { version = "2.0", features = [
-  "sqlx-sqlite",
-  "runtime-tokio-rustls",
-  "macros",
-  "with-uuid",
-  "debug-print",
+    "sqlx-sqlite",
+    "runtime-tokio-rustls",
+    "macros",
+    "with-uuid",
+    "debug-print",
 ] }
 chrono = { version = "0.4", features = ["now"] }
 # validator = { version = "0.20" }
@@ -41,11 +41,11 @@ uuid = { version = "1.26", features = ["v7", "std", "serde"] }
 # contract). Present for every db app; the SPA frontend consumes the exports,
 # and a headless app can still emit them for external consumers.
 ts-rs = { workspace = true, features = [
-  "chrono-impl",
-  "serde-compat",
-  "uuid-impl",
-  "serde-json-impl",
-  "indexmap-impl",
+    "chrono-impl",
+    "serde-compat",
+    "uuid-impl",
+    "serde-json-impl",
+    "indexmap-impl",
 ] }
 
 # include_dir = { version = "0.7" }
@@ -54,7 +54,7 @@ yaml_serde = "0.10.7"
 indexmap = { version = "2.14.1", features = ["serde"] }
 scraper = "0.27.0"
 strum = { version = "0.28", features = ["derive"] }
-anitomy = { git = "https://github.com/Rapptz/anitomy-rs"}
+anitomy = { git = "https://github.com/Rapptz/anitomy-rs" }
 tokio-util = "0.7.19"
 librqbit = "9.0.1"
 dashmap = "6.2.1"
@@ -66,8 +66,11 @@ tower-http = { version = "0.7.1", features = ["fs"] }
 phf = { version = "0.14.0", features = ["macros"] }
 which = "8.0.6"
 walkdir = "2.5.0"
-ffprobe = "0.4.0"
+# ffprobe = "0.4.0"
 cached = { version = "3.1.1", features = ["async"] }
+ffprobe = { package = "rust_ffprobe", version = "1.0.0" }
+ffmpeg = { package = "rust_ffmpeg", version = "1.0.0" }
+derive_more = { version = "2.1.1", features = ["debug"] }
 
 [[bin]]
 name = "komorebi_server-cli"

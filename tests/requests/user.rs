@@ -1,6 +1,6 @@
 use komorebi_server::{
     app::App,
-    models::{_entities::users::ActiveModel, media::MediaProvider},
+    models::{media::MediaProvider, users::ActiveModel},
 };
 use loco_rs::{hash, testing::prelude::*};
 use sea_orm::{ActiveModelTrait, ActiveValue};

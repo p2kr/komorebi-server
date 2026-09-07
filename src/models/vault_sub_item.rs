@@ -1,34 +1,39 @@
 use chrono::Utc;
 use loco_rs::prelude::async_trait;
 use loco_rs::prelude::*;
+use sea_orm::{ActiveValue, DbConn};
+
+use crate::models::vault::{VaultDownloadType, VaultItemStatus};
+
+use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use sea_orm::entity::prelude::*;
-
 use crate::models::media::MediaType;
 
-pub type VaultItem = Model;
+pub type VaultSubItem = Model;
 
 #[sea_orm::model]
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize, TS)]
-#[sea_orm(table_name = "vault")]
-#[ts(export, rename = "VaultItem")]
+#[sea_orm(table_name = "vault_sub_item")]
+#[ts(export, rename = "VaultSubItem")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
-    pub user_id: Uuid,
+    pub vault_id: Uuid,
     #[sea_orm(unique)]
-    pub destination_path: String,
+    pub source_path: String,
+    pub dest_path: Option<String>,
     pub media_type: Option<MediaType>,
-    pub media_id: String,
+    pub media_id: Option<String>,
     pub title: String,
+    pub raw_title: String,
+    pub season: Option<String>,
+    pub episode: Option<String>,
     pub source_url: String,
     pub download_type: VaultDownloadType,
     pub status: VaultItemStatus,
     pub total_bytes: i64,
-    pub downloaded_bytes: i64,
-    #[sea_orm(column_type = "Float")]
     pub progress: f64,
     pub speed_bps: i64,
     pub eta_seconds: Option<i64>,
@@ -36,90 +41,36 @@ pub struct Model {
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 
-    #[sea_orm(has_many)]
-    #[ts(as = "Vec<super::vault_sub_item::Model>")]
-    pub sub_items: HasMany<super::vault_sub_item::Entity>,
-
     #[sea_orm(has_one)]
-    #[ts(as = "super::users::Model")]
-    pub user: HasOne<super::users::Entity>,
+    #[ts(as = "super::vault::Model")]
+    pub vault_item: HasOne<super::vault::Entity>,
 }
 
 impl Default for Model {
     fn default() -> Self {
         Self {
             id: Default::default(),
-            user_id: Default::default(),
-            destination_path: Default::default(),
+            vault_id: Default::default(),
+            source_path: Default::default(),
             media_type: Default::default(),
-            media_id: Default::default(),
+            media_id: None,
             title: Default::default(),
+            raw_title: Default::default(),
+            season: Some("?".into()),
+            episode: Some("?".into()),
             source_url: Default::default(),
             download_type: VaultDownloadType::MAGNET,
             status: VaultItemStatus::PENDING,
             total_bytes: 0,
-            downloaded_bytes: 0,
             progress: 0.0,
             speed_bps: 0,
             eta_seconds: None,
+            dest_path: Default::default(),
             error_msg: None,
             created_at: Utc::now().into(),
             updated_at: Utc::now().into(),
         }
     }
-}
-
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    Default,
-    DeriveActiveEnum,
-    EnumIter,
-    TS,
-)]
-#[sea_orm(
-    rs_type = "String",
-    db_type = "String(StringLen::None)",
-    rename_all = "UPPERCASE"
-)]
-pub enum VaultDownloadType {
-    DIRECT, // HTTP/HTTPS direct download
-    #[default]
-    MAGNET, // Magnet link
-    TFILE,  // Torrent file
-}
-
-#[derive(
-    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, DeriveActiveEnum, EnumIter, TS,
-)]
-#[sea_orm(
-    rs_type = "String",
-    db_type = "String(StringLen::None)",
-    rename_all = "UPPERCASE"
-)]
-pub enum VaultItemStatus {
-    #[default]
-    /// added to queue, not yet downloading
-    PENDING,
-    /// actively downloading
-    DOWNLOADING,
-    /// user paused
-    PAUSED,
-    /// download bytes done (internal transient — daemon picks this up)
-    COMPLETED,
-    /// remux/transcode in progress
-    PROCESSING,
-    /// stream-ready
-    READY,
-    /// download or post-process error
-    FAILED,
-    /// user deleted
-    CANCELLED,
 }
 
 #[async_trait]
@@ -151,7 +102,11 @@ impl Model {}
 
 // implement your write-oriented logic here
 impl ActiveModel {
-    pub fn update_status(mut self, new_status: VaultItemStatus, error_msg: Option<String>) -> Self {
+    pub fn update_status_mut(
+        mut self,
+        new_status: VaultItemStatus,
+        error_msg: Option<String>,
+    ) -> Self {
         self.status = ActiveValue::Set(new_status);
         if let Some(msg) = error_msg {
             self.error_msg = ActiveValue::Set(Some(msg));
@@ -162,11 +117,11 @@ impl ActiveModel {
 
     pub fn update_progress_mut(mut self) -> Self {
         self.total_bytes.reset();
-        self.downloaded_bytes.reset();
         self.progress.reset();
         self.speed_bps.reset();
         self.eta_seconds.reset();
         self.status.reset();
+        self.dest_path.reset();
         self.error_msg.reset();
 
         self
@@ -174,4 +129,30 @@ impl ActiveModel {
 }
 
 // implement your custom finders, selectors oriented logic here
-impl Entity {}
+impl Entity {
+    pub async fn find_by_vault_id(db: &DbConn, vault_id: Uuid) -> Vec<Model> {
+        Self::find()
+            .filter(Column::VaultId.eq(vault_id))
+            .all(db)
+            .await
+            .unwrap_or_default()
+    }
+
+    pub async fn find_incomplete_by_vault_id(db: &DbConn, vault_id: Uuid) -> Vec<Model> {
+        Self::find()
+            .filter(Column::VaultId.eq(vault_id))
+            .filter(Column::Status.ne(VaultItemStatus::READY))
+            .all(db)
+            .await
+            .unwrap_or_default()
+    }
+
+    pub async fn purge_vault_sub_items(db: &DbConn, vault_id: Uuid) -> Result<()> {
+        Self::delete_many()
+            .filter(Column::VaultId.eq(vault_id))
+            .exec(db)
+            .await?;
+
+        Ok(())
+    }
+}

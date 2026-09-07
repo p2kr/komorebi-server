@@ -26,21 +26,17 @@ CREATE TABLE IF NOT EXISTS vault (
     id                BLOB    PRIMARY KEY NOT NULL, -- UUID v7
     user_id           BLOB    NOT NULL,             -- Foreign key to users.id
     destination_path  TEXT    NOT NULL UNIQUE,      -- Full file/folder path (inside {vault_root}/{id}/)
-    media_type        TEXT    NOT NULL,             -- Media type (e.g. 'ANIME', 'MANGA', 'NOVEL')
+    media_type        TEXT    NOT NULL DEFAULT 'ANIME', -- Media type (e.g. 'ANIME', 'MANGA', 'NOVEL')
     media_id          TEXT,                         -- Provider media ID (e.g. MAL / AniList ID)
     title             TEXT    NOT NULL,             -- Display title
-    raw_title         TEXT    NOT NULL,             -- Raw unparsed title
-    season            TEXT,                         -- Optional season (e.g. "1", "S01", "2")
-    episode           TEXT,                         -- Optional episode (e.g. "1", "E01-E12")
-    source_url        TEXT,                         -- URL, magnet link, or .torrent file path/URL
-    download_type     TEXT    NOT NULL,             -- 'DIRECT', 'MAGNET', 'TFILE'
+    source_url        TEXT    NOT NULL,             -- URL, magnet link, or .torrent file path/URL
+    download_type     TEXT    NOT NULL DEFAULT 'MAGNET', -- 'DIRECT', 'MAGNET', 'TFILE'
     status            TEXT    NOT NULL DEFAULT 'PENDING', -- 'PENDING', 'DOWNLOADING', 'PAUSED', 'COMPLETED', 'FAILED', 'CANCELLED'
     total_bytes       INTEGER NOT NULL DEFAULT 0,   -- Total file size in bytes
     downloaded_bytes  INTEGER NOT NULL DEFAULT 0,   -- Bytes downloaded so far
     progress          REAL    NOT NULL DEFAULT 0.0, -- 0.0 to 100.0
     speed_bps         INTEGER NOT NULL DEFAULT 0,   -- Transfer speed in bytes per second
     eta_seconds       INTEGER,                      -- Estimated seconds remaining
-    temp_path         TEXT,                         -- Temporary download folder path
     error_msg         TEXT,                         -- Error description on failure
     created_at        INTEGER NOT NULL DEFAULT (unixepoch('subsec') * 1000),
     updated_at        INTEGER NOT NULL DEFAULT (unixepoch('subsec') * 1000),
@@ -55,4 +51,39 @@ AFTER UPDATE ON vault
 FOR EACH ROW
 BEGIN
     UPDATE vault SET updated_at = (unixepoch('subsec') * 1000) WHERE id = OLD.id;
+END;
+
+-- ------------------------------
+CREATE TABLE IF NOT EXISTS vault_sub_item (
+    id                BLOB    PRIMARY KEY NOT NULL, -- UUID v7
+    vault_id          BLOB    NOT NULL,             -- Foreign key to vault.id
+    destination_path  TEXT    NOT NULL UNIQUE,      -- File path inside vault
+    media_type        TEXT    NOT NULL DEFAULT 'ANIME', -- Media type (e.g. 'ANIME', 'MANGA', 'NOVEL')
+    media_id          TEXT,                         -- Provider media ID (e.g. MAL / AniList ID)
+    title             TEXT    NOT NULL,             -- Display title
+    raw_title         TEXT    NOT NULL,             -- Raw unparsed title
+    season            TEXT,                         -- Optional season (e.g. "1", "S01", "2")
+    episode           TEXT,                         -- Optional episode (e.g. "1", "E01-E12")
+    source_url        TEXT    NOT NULL,             -- URL, magnet link, or .torrent file path/URL
+    download_type     TEXT    NOT NULL DEFAULT 'MAGNET', -- 'DIRECT', 'MAGNET', 'TFILE'
+    status            TEXT    NOT NULL DEFAULT 'PENDING', -- 'PENDING', 'DOWNLOADING', 'PAUSED', 'COMPLETED', 'FAILED', 'CANCELLED'
+    total_bytes       INTEGER NOT NULL DEFAULT 0,   -- Total file size in bytes
+    progress          REAL    NOT NULL DEFAULT 0.0, -- 0.0 to 100.0
+    speed_bps         INTEGER NOT NULL DEFAULT 0,   -- Transfer speed in bytes per second
+    eta_seconds       INTEGER,                      -- Estimated seconds remaining
+    temp_path         TEXT,                         -- Temporary download folder path
+    error_msg         TEXT,                         -- Error description on failure
+    created_at        INTEGER NOT NULL DEFAULT (unixepoch('subsec') * 1000),
+    updated_at        INTEGER NOT NULL DEFAULT (unixepoch('subsec') * 1000),
+    FOREIGN KEY(vault_id) REFERENCES vault(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_vault_sub_item_vault_id ON vault_sub_item(vault_id);
+CREATE INDEX idx_vault_sub_item_status ON vault_sub_item(status);
+
+CREATE TRIGGER IF NOT EXISTS au_vault_sub_item
+AFTER UPDATE ON vault_sub_item
+FOR EACH ROW
+BEGIN
+    UPDATE vault_sub_item SET updated_at = (unixepoch('subsec') * 1000) WHERE id = OLD.id;
 END;

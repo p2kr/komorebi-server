@@ -1,15 +1,48 @@
 use chrono::Utc;
+use derive_more::Debug;
 use loco_rs::prelude::async_trait;
 use loco_rs::{hash, prelude::*};
 use migration::OnConflict;
 use uuid::Uuid;
 
-use crate::models::{media::MediaProvider, users::users::Column};
-
-use super::_entities::users::ActiveModel;
-pub use super::_entities::users::{self, Entity, Model};
+use crate::models::media::MediaProvider;
 
 pub type User = Model;
+
+use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+
+#[sea_orm::model]
+#[derive(Clone, PartialEq, Debug, DeriveEntityModel, Eq, Serialize, Deserialize, Default, TS)]
+#[sea_orm(table_name = "users")]
+#[serde(default)]
+#[ts(export, rename = "User")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: Uuid,
+
+    pub username: String,
+    pub provider_id: Option<String>,
+    pub avatar_url: Option<String>,
+    pub provider: MediaProvider,
+    pub is_sandbox: bool,
+
+    #[serde(skip_serializing)]
+    #[debug("[REDACTED]")]
+    pub access_token: Option<String>,
+
+    #[serde(skip_serializing)]
+    #[debug("[REDACTED]")]
+    pub passcode: Option<String>,
+
+    pub created_at: DateTimeWithTimeZone,
+    pub updated_at: DateTimeWithTimeZone,
+
+    #[sea_orm(has_many)]
+    #[ts(as = "Vec<super::vault::Model>")]
+    pub vault_items: HasMany<super::vault::Entity>,
+}
 
 #[async_trait]
 impl ActiveModelBehavior for ActiveModel {
@@ -31,7 +64,7 @@ impl ActiveModelBehavior for ActiveModel {
         };
         self.is_sandbox = ActiveValue::Set(is_sandbox);
 
-        if needs_id {
+        if insert {
             self.created_at = ActiveValue::Set(Utc::now().fixed_offset());
         }
 
@@ -42,43 +75,6 @@ impl ActiveModelBehavior for ActiveModel {
 }
 
 impl Model {
-    pub async fn save_user(db: &DatabaseConnection, user: Self) -> ModelResult<Self> {
-        let mut active_model = user.into_active_model();
-        active_model = active_model.before_save(db, true).await?;
-        let new_user = Entity::insert(active_model)
-            .on_conflict(
-                OnConflict::columns([Column::Username, Column::Provider, Column::IsSandbox])
-                    .update_columns([
-                        Column::AccessToken,
-                        Column::IsSandbox,
-                        Column::AvatarUrl,
-                        Column::UpdatedAt,
-                    ])
-                    .to_owned(),
-            )
-            .exec_with_returning(db)
-            .await?;
-
-        tracing::debug!("Saved/Updated user {:?}", new_user);
-        Ok(new_user)
-    }
-
-    /// Finds a user by username and provider
-    pub async fn find_by_username_and_provider_and_sandbox(
-        db: &DatabaseConnection,
-        username: &str,
-        provider: MediaProvider,
-        is_sandbox: bool,
-    ) -> ModelResult<Self> {
-        let user = Entity::find()
-            .filter(Column::Username.eq(username))
-            .filter(Column::Provider.eq(provider))
-            .filter(Column::IsSandbox.eq(is_sandbox))
-            .one(db)
-            .await?;
-        user.ok_or_else(|| ModelError::EntityNotFound)
-    }
-
     /// Verifies if the provided passcode matches the user's passcode.
     /// Note: An empty passcode (or None) is valid when the stored passcode is empty / None.
     #[must_use]
@@ -99,5 +95,45 @@ impl Model {
         } else {
             stored == input
         }
+    }
+}
+
+impl ActiveModel {
+    pub async fn save_user(mut self, db: &DatabaseConnection) -> ModelResult<Model> {
+        self = self.before_save(db, true).await?;
+        let new_user = Entity::insert(self)
+            .on_conflict(
+                OnConflict::columns([Column::Username, Column::Provider, Column::IsSandbox])
+                    .update_columns([
+                        Column::AccessToken,
+                        Column::IsSandbox,
+                        Column::AvatarUrl,
+                        Column::UpdatedAt,
+                    ])
+                    .to_owned(),
+            )
+            .exec_with_returning(db)
+            .await?;
+
+        tracing::debug!("Saved/Updated user {:?}", new_user);
+        Ok(new_user)
+    }
+}
+
+impl Entity {
+    /// Finds a user by username and provider
+    pub async fn find_by_username_and_provider_and_sandbox(
+        db: &DatabaseConnection,
+        username: &str,
+        provider: MediaProvider,
+        is_sandbox: bool,
+    ) -> ModelResult<Model> {
+        let user = Entity::find()
+            .filter(Column::Username.eq(username))
+            .filter(Column::Provider.eq(provider))
+            .filter(Column::IsSandbox.eq(is_sandbox))
+            .one(db)
+            .await?;
+        user.ok_or_else(|| ModelError::EntityNotFound)
     }
 }

@@ -5,6 +5,8 @@ pub mod vault_path_resolver;
 use loco_rs::Error;
 use std::fmt::Display;
 
+use crate::models::vault::VaultItemStatus;
+
 pub trait ResultExt<T, E> {
     /// Wraps the error into `loco_rs::Error::wrap`
     fn to_loco_err(self) -> loco_rs::Result<T>
@@ -41,7 +43,7 @@ impl<T, E> ResultExt<T, E> for Result<T, E> {
 #[macro_export]
 macro_rules! loco_err_msg {
     ($($arg:tt)*) => {
-            Error::Message(format!($($arg)*))
+            loco_rs::Error::Message(format!($($arg)*))
         };
 }
 
@@ -52,6 +54,14 @@ macro_rules! loco_err_msg {
 #[macro_export]
 macro_rules! loco_err {
     ($($arg:tt)*) => {
-            Err(Error::Message(format!($($arg)*)))
+            Err(loco_rs::Error::Message(format!($($arg)*)))
         };
+}
+
+/// Not in READY | CANCELLED | FAILED
+pub fn is_active_status(status: &VaultItemStatus) -> bool {
+    !matches!(
+        status,
+        VaultItemStatus::READY | VaultItemStatus::CANCELLED | VaultItemStatus::FAILED
+    )
 }

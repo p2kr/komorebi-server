@@ -14,7 +14,7 @@ use crate::{
         events::AppEvent,
         vault::{self, VaultItem, VaultItemStatus},
     },
-    streaming::processor::Streaming,
+    streaming::processor::MediaProcessor,
 };
 
 pub fn start_daemon(ctx: AppContext, manager: Arc<DownloadManager>, _ws: Sender<AppEvent>) {
@@ -41,17 +41,24 @@ pub fn start_daemon(ctx: AppContext, manager: Arc<DownloadManager>, _ws: Sender<
 
             for item in active_items.iter() {
                 if item.status == VaultItemStatus::COMPLETED {
-                    tracing::info!("Download completed for: {}", item.raw_title);
+                    tracing::info!("Download completed for: {}", item.title);
                     // Send it to post-process
                     if let Some(mut it) = manager.active_items.get_mut(&item.id) {
                         it.status = VaultItemStatus::PROCESSING;
-                        Streaming::post_process(manager.clone(), it.clone());
+                        if let Some(processor) = ctx.shared_store.get::<Arc<MediaProcessor>>() {
+                            let processor = processor.clone();
+                            let manager = manager.clone();
+                            let it_clone = it.clone();
+                            tokio::spawn(async move {
+                                let _ = processor.post_process(manager, &it_clone).await;
+                            });
+                        }
                     }
                 } else if matches!(
                     item.status,
                     VaultItemStatus::READY | VaultItemStatus::FAILED | VaultItemStatus::CANCELLED
                 ) {
-                    tracing::info!("Processing {:?} for: {}", item.status, item.raw_title);
+                    tracing::info!("Processing {:?} for: {}", item.status, item.title);
                     manager.active_items.remove(&item.id);
                 }
             }

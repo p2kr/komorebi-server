@@ -5,14 +5,14 @@ use serde::Serialize;
 use strum::AsRefStr;
 use ts_rs::TS;
 
-use crate::models::vault::VaultItem;
+use crate::models::{vault::VaultItem, vault_sub_item::VaultSubItem};
 
 #[derive(Clone, Serialize, TS, AsRefStr)]
 #[ts(export)]
 #[serde(tag = "type", content = "data")] // Creates clean JSON for the frontend
 pub enum AppEvent {
-    VaultActiveItems(Vec<VaultItem>),
     VaultItems(Vec<VaultItem>),
+    VaultSubItems(Vec<VaultSubItem>),
     Error(String),
 }
 

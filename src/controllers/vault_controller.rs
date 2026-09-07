@@ -1,20 +1,16 @@
 use async_stream::stream;
-use axum::body::Body;
-use axum::http::Request;
 use axum::response::{Sse, sse::KeepAlive};
 use loco_rs::prelude::*;
 use reqwest::Url;
 use serde::Deserialize;
-use std::path::PathBuf;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::{sync::broadcast::Sender, time::interval};
-use tower_http::services::ServeFile;
 use ts_rs::TS;
 use uuid::Uuid;
 
+use crate::controllers::vault_stream::stream;
 use crate::downloaders::remove_vault_contents;
-use crate::streaming::processor::Streaming;
 use crate::{
     controllers::success,
     core::vault_path_resolver::get_dest_path,
@@ -115,9 +111,6 @@ pub async fn add(
         title: title.clone(),
         source_url: params.crawler_result.link.clone(),
         download_type: download_type.clone(),
-        raw_title: params.crawler_result.title,
-        season: params.crawler_result.parsed_title.season.first().cloned(),
-        episode: params.crawler_result.parsed_title.episode.first().cloned(),
         ..Default::default()
     };
 
@@ -284,7 +277,7 @@ pub async fn active(State(ctx): State<AppContext>) -> impl IntoResponse {
         .collect();
 
     let stream = stream! {
-        yield AppEvent::VaultActiveItems(initial_items).to_sse();
+        yield AppEvent::VaultItems(initial_items).to_sse();
 
         let mut rx = tx.subscribe();
         loop {
@@ -329,40 +322,29 @@ pub async fn all(State(ctx): State<AppContext>) -> impl IntoResponse {
     )
 }
 
-pub async fn stream(
+#[axum::debug_handler]
+pub async fn one(
     State(ctx): State<AppContext>,
-    Query(params): Query<VaultActionPayload>,
-    req: Request<Body>,
-) -> Result<impl IntoResponse> {
-    let item = vault::Entity::find_by_id(params.vault_id)
-        .one(&ctx.db)
-        .await?
-        .ok_or(Error::NotFound)?;
+    Json(params): Json<VaultActionPayload>,
+) -> Result<Response> {
+    success(
+        vault::Entity::find_by_id(params.vault_id)
+            .require_one(&ctx.db)
+            .await?,
+    )
+}
 
-    let file_path = match item.temp_path {
-        Some(v) => PathBuf::from(v),
-        None => {
-            tracing::warn!(
-                temp_path = ?item.temp_path,
-                "unable to server from temp_path. switching to  raw file"
-            );
-            Streaming::resolve_file_path(&item.destination_path)
-                .await?
-                .0
-        }
-    };
-    let mut sf = ServeFile::new(file_path);
-
-    let resp = sf.try_call(req).await?;
-
-    Ok(resp)
+#[axum::debug_handler]
+pub async fn all_items(State(ctx): State<AppContext>) -> Result<Response> {
+    success(vault::Entity::find().all(&ctx.db).await?)
 }
 
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("vault")
         .add("add", post(add))
-        .add("all", get(all))
+        .add("one", post(one))
+        .add("all", get(all).post(all_items))
         .add("pause", post(pause))
         .add("resume", post(resume))
         .add("delete", post(delete))

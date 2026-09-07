@@ -1,7 +1,7 @@
 use komorebi_server::{
-    core::constants::ENCODED_LOC,
+    core::constants::{ENCODED_LOC, FONTS_LOC, SUBTITLES_LOC},
     models::media::MediaType,
-    streaming::{processor::Streaming, video::VideoProcessor},
+    streaming::{processor::cached_resolve_file_paths, video::VideoProcessor},
 };
 use std::fs;
 
@@ -19,25 +19,24 @@ async fn test_resolve_file_path_skips_encoded_and_zero_bytes() {
     fs::create_dir_all(&encoded_dir).unwrap();
     fs::write(encoded_dir.join("encoded.mp4"), b"fake video bytes").unwrap();
 
-    // Should return error because root only has 0-byte file and encoded dir is excluded
-    let res = Streaming::resolve_file_path(test_dir.to_str().unwrap()).await;
+    // Should return empty because root only has 0-byte file and encoded dir is excluded
+    let res = cached_resolve_file_paths(test_dir.to_str().unwrap()).await;
     assert!(
-        res.is_err(),
-        "Expected error when only 0-byte files or encoded files exist"
+        res.is_empty(),
+        "Expected empty when only 0-byte files or encoded files exist"
     );
 
-    // 3. Now create a valid >0 byte file in root
+    // 3. Now create a valid >0 byte file in root (>= 1MB)
     let test_dir_2 =
         std::env::temp_dir().join(format!("komorebi_test_valid_{}", uuid::Uuid::new_v4()));
     fs::create_dir_all(&test_dir_2).unwrap();
     let valid_file_2 = test_dir_2.join("valid_video.mkv");
-    fs::write(&valid_file_2, b"valid video bytes").unwrap();
+    fs::write(&valid_file_2, vec![0u8; 1_000_000]).unwrap();
 
-    let res_valid = Streaming::resolve_file_path(test_dir_2.to_str().unwrap())
-        .await
-        .unwrap();
-    assert_eq!(res_valid.0, valid_file_2);
-    assert_eq!(res_valid.1, MediaType::Anime);
+    let res_valid = cached_resolve_file_paths(test_dir_2.to_str().unwrap()).await;
+    assert_eq!(res_valid.len(), 1);
+    assert_eq!(res_valid[0].0, valid_file_2);
+    assert_eq!(res_valid[0].1, MediaType::Anime);
 
     // Cleanup
     let _ = fs::remove_dir_all(&test_dir);
@@ -80,35 +79,77 @@ async fn test_find_processed_file() {
 fn test_is_compatible_video() {
     // H.264: 8-bit is compatible; 10-bit (Hi10P) and 4:2:2 must be re-encoded
     assert!(VideoProcessor::is_compatible_video("h264", Some("yuv420p")));
-    assert!(VideoProcessor::is_compatible_video("h264", Some("yuvj420p")));
+    assert!(VideoProcessor::is_compatible_video(
+        "h264",
+        Some("yuvj420p")
+    ));
     assert!(VideoProcessor::is_compatible_video("avc", Some("yuv420p")));
-    assert!(!VideoProcessor::is_compatible_video("h264", Some("yuv420p10le")));
-    assert!(!VideoProcessor::is_compatible_video("h264", Some("yuv422p")));
-    assert!(!VideoProcessor::is_compatible_video("h264", Some("yuv444p")));
+    assert!(!VideoProcessor::is_compatible_video(
+        "h264",
+        Some("yuv420p10le")
+    ));
+    assert!(!VideoProcessor::is_compatible_video(
+        "h264",
+        Some("yuv422p")
+    ));
+    assert!(!VideoProcessor::is_compatible_video(
+        "h264",
+        Some("yuv444p")
+    ));
     assert!(!VideoProcessor::is_compatible_video("h264", None));
 
     // HEVC: 8-bit and 10-bit (Main / Main 10) are compatible; 4:2:2/4:4:4 are not
     assert!(VideoProcessor::is_compatible_video("hevc", Some("yuv420p")));
-    assert!(VideoProcessor::is_compatible_video("hevc", Some("yuvj420p")));
-    assert!(VideoProcessor::is_compatible_video("hevc", Some("yuv420p10le")));
-    assert!(VideoProcessor::is_compatible_video("h265", Some("yuv420p10le")));
-    assert!(!VideoProcessor::is_compatible_video("hevc", Some("yuv422p10le")));
-    assert!(!VideoProcessor::is_compatible_video("hevc", Some("yuv444p10le")));
+    assert!(VideoProcessor::is_compatible_video(
+        "hevc",
+        Some("yuvj420p")
+    ));
+    assert!(VideoProcessor::is_compatible_video(
+        "hevc",
+        Some("yuv420p10le")
+    ));
+    assert!(VideoProcessor::is_compatible_video(
+        "h265",
+        Some("yuv420p10le")
+    ));
+    assert!(!VideoProcessor::is_compatible_video(
+        "hevc",
+        Some("yuv422p10le")
+    ));
+    assert!(!VideoProcessor::is_compatible_video(
+        "hevc",
+        Some("yuv444p10le")
+    ));
     assert!(!VideoProcessor::is_compatible_video("hevc", None));
 
     // VP9: 8-bit and 10-bit are compatible
     assert!(VideoProcessor::is_compatible_video("vp9", Some("yuv420p")));
-    assert!(VideoProcessor::is_compatible_video("vp9", Some("yuv420p10le")));
+    assert!(VideoProcessor::is_compatible_video(
+        "vp9",
+        Some("yuv420p10le")
+    ));
     assert!(!VideoProcessor::is_compatible_video("vp9", Some("yuv444p")));
 
     // AV1: 8-bit and 10-bit are compatible
     assert!(VideoProcessor::is_compatible_video("av1", Some("yuv420p")));
-    assert!(VideoProcessor::is_compatible_video("av1", Some("yuv420p10le")));
-    assert!(!VideoProcessor::is_compatible_video("av1", Some("yuv422p10le")));
+    assert!(VideoProcessor::is_compatible_video(
+        "av1",
+        Some("yuv420p10le")
+    ));
+    assert!(!VideoProcessor::is_compatible_video(
+        "av1",
+        Some("yuv422p10le")
+    ));
 
     // Unsupported codecs must always be re-encoded
-    assert!(!VideoProcessor::is_compatible_video("mpeg4", Some("yuv420p")));
-    assert!(!VideoProcessor::is_compatible_video("mpeg2video", Some("yuv420p")));
+    assert!(!VideoProcessor::is_compatible_video(
+        "mpeg4",
+        Some("yuv420p")
+    ));
+    assert!(!VideoProcessor::is_compatible_video(
+        "mpeg2video",
+        Some("yuv420p")
+    ));
     assert!(!VideoProcessor::is_compatible_video("vc1", Some("yuv420p")));
 }
 
@@ -132,32 +173,37 @@ fn test_is_compatible_audio() {
 
 #[test]
 fn test_build_ffmpeg_args_hevc_10bit_stream_copy() {
-    let mut probe = ffprobe::FfProbe::default();
-    probe.streams = vec![
-        ffprobe::Stream {
-            index: 0,
-            codec_type: Some("video".into()),
-            codec_name: Some("hevc".into()),
-            pix_fmt: Some("yuv420p10le".into()),
-            width: Some(1920),
-            height: Some(1080),
-            ..Default::default()
-        },
-        ffprobe::Stream {
-            index: 1,
-            codec_type: Some("audio".into()),
-            codec_name: Some("aac".into()),
-            ..Default::default()
-        },
-    ];
+    let probe = ffprobe::ProbeResult {
+        format: None,
+        streams: vec![
+            ffprobe::StreamInfo {
+                index: 0,
+                codec_type: Some("video".into()),
+                codec_name: Some("hevc".into()),
+                pix_fmt: Some("yuv420p10le".into()),
+                width: Some(1920),
+                height: Some(1080),
+                ..Default::default()
+            },
+            ffprobe::StreamInfo {
+                index: 1,
+                codec_type: Some("audio".into()),
+                codec_name: Some("aac".into()),
+                ..Default::default()
+            },
+        ],
+        packets: vec![],
+        frames: vec![],
+        programs: vec![],
+        chapters: vec![],
+        error: None,
+    };
 
-    let empty_titles = std::collections::HashMap::new();
     let (args, _, _) = VideoProcessor::build_ffmpeg_args(
         "input.mkv",
         "output.mp4",
         std::path::Path::new(""),
         &probe,
-        &empty_titles,
     );
 
     // Both video and audio should be copied
@@ -172,32 +218,37 @@ fn test_build_ffmpeg_args_hevc_10bit_stream_copy() {
 
 #[test]
 fn test_build_ffmpeg_args_h264_10bit_recodes_video_copies_audio() {
-    let mut probe = ffprobe::FfProbe::default();
-    probe.streams = vec![
-        ffprobe::Stream {
-            index: 0,
-            codec_type: Some("video".into()),
-            codec_name: Some("h264".into()),
-            pix_fmt: Some("yuv420p10le".into()), // Hi10P requires recode
-            width: Some(1920),
-            height: Some(1080),
-            ..Default::default()
-        },
-        ffprobe::Stream {
-            index: 1,
-            codec_type: Some("audio".into()),
-            codec_name: Some("opus".into()),
-            ..Default::default()
-        },
-    ];
+    let probe = ffprobe::ProbeResult {
+        format: None,
+        streams: vec![
+            ffprobe::StreamInfo {
+                index: 0,
+                codec_type: Some("video".into()),
+                codec_name: Some("h264".into()),
+                pix_fmt: Some("yuv420p10le".into()), // Hi10P requires recode
+                width: Some(1920),
+                height: Some(1080),
+                ..Default::default()
+            },
+            ffprobe::StreamInfo {
+                index: 1,
+                codec_type: Some("audio".into()),
+                codec_name: Some("opus".into()),
+                ..Default::default()
+            },
+        ],
+        packets: vec![],
+        frames: vec![],
+        programs: vec![],
+        chapters: vec![],
+        error: None,
+    };
 
-    let empty_titles = std::collections::HashMap::new();
     let (args, _, _) = VideoProcessor::build_ffmpeg_args(
         "input.mkv",
         "output.mp4",
         std::path::Path::new(""),
         &probe,
-        &empty_titles,
     );
 
     // Video must be re-encoded with libx264 to 8-bit yuv420p
@@ -209,32 +260,37 @@ fn test_build_ffmpeg_args_h264_10bit_recodes_video_copies_audio() {
 
 #[test]
 fn test_build_ffmpeg_args_copies_video_recodes_dts_audio() {
-    let mut probe = ffprobe::FfProbe::default();
-    probe.streams = vec![
-        ffprobe::Stream {
-            index: 0,
-            codec_type: Some("video".into()),
-            codec_name: Some("hevc".into()),
-            pix_fmt: Some("yuv420p10le".into()),
-            width: Some(1920),
-            height: Some(1080),
-            ..Default::default()
-        },
-        ffprobe::Stream {
-            index: 1,
-            codec_type: Some("audio".into()),
-            codec_name: Some("dts".into()),
-            ..Default::default()
-        },
-    ];
+    let probe = ffprobe::ProbeResult {
+        format: None,
+        streams: vec![
+            ffprobe::StreamInfo {
+                index: 0,
+                codec_type: Some("video".into()),
+                codec_name: Some("hevc".into()),
+                pix_fmt: Some("yuv420p10le".into()),
+                width: Some(1920),
+                height: Some(1080),
+                ..Default::default()
+            },
+            ffprobe::StreamInfo {
+                index: 1,
+                codec_type: Some("audio".into()),
+                codec_name: Some("dts".into()),
+                ..Default::default()
+            },
+        ],
+        packets: vec![],
+        frames: vec![],
+        programs: vec![],
+        chapters: vec![],
+        error: None,
+    };
 
-    let empty_titles = std::collections::HashMap::new();
     let (args, _, _) = VideoProcessor::build_ffmpeg_args(
         "input.mkv",
         "output.mp4",
         std::path::Path::new(""),
         &probe,
-        &empty_titles,
     );
 
     // Video should be copied
@@ -246,24 +302,29 @@ fn test_build_ffmpeg_args_copies_video_recodes_dts_audio() {
 
 #[test]
 fn test_build_ffmpeg_args_no_audio_stream() {
-    let mut probe = ffprobe::FfProbe::default();
-    probe.streams = vec![ffprobe::Stream {
-        index: 0,
-        codec_type: Some("video".into()),
-        codec_name: Some("h264".into()),
-        pix_fmt: Some("yuv420p".into()),
-        width: Some(1280),
-        height: Some(720),
-        ..Default::default()
-    }];
+    let probe = ffprobe::ProbeResult {
+        format: None,
+        streams: vec![ffprobe::StreamInfo {
+            index: 0,
+            codec_type: Some("video".into()),
+            codec_name: Some("h264".into()),
+            pix_fmt: Some("yuv420p".into()),
+            width: Some(1280),
+            height: Some(720),
+            ..Default::default()
+        }],
+        packets: vec![],
+        frames: vec![],
+        programs: vec![],
+        chapters: vec![],
+        error: None,
+    };
 
-    let empty_titles = std::collections::HashMap::new();
     let (args, _, _) = VideoProcessor::build_ffmpeg_args(
         "input.mp4",
         "output.mp4",
         std::path::Path::new(""),
         &probe,
-        &empty_titles,
     );
 
     assert!(args.windows(2).any(|w| w == ["-c:v", "copy"]));
@@ -272,42 +333,48 @@ fn test_build_ffmpeg_args_no_audio_stream() {
 
 #[test]
 fn test_build_ffmpeg_args_ignores_attached_pic_video_stream() {
-    let mut probe = ffprobe::FfProbe::default();
-    probe.streams = vec![
-        ffprobe::Stream {
-            index: 0,
-            codec_type: Some("video".into()),
-            codec_name: Some("mjpeg".into()),
-            disposition: ffprobe::Disposition {
-                attached_pic: 1,
+    let probe = ffprobe::ProbeResult {
+        format: None,
+        streams: vec![
+            ffprobe::StreamInfo {
+                index: 0,
+                codec_type: Some("video".into()),
+                codec_name: Some("mjpeg".into()),
+                disposition: Some({
+                    let mut m = std::collections::HashMap::new();
+                    m.insert("attached_pic".to_string(), 1u8);
+                    m
+                }),
                 ..Default::default()
             },
-            ..Default::default()
-        },
-        ffprobe::Stream {
-            index: 1,
-            codec_type: Some("video".into()),
-            codec_name: Some("av1".into()),
-            pix_fmt: Some("yuv420p10le".into()),
-            width: Some(1920),
-            height: Some(1080),
-            ..Default::default()
-        },
-        ffprobe::Stream {
-            index: 2,
-            codec_type: Some("audio".into()),
-            codec_name: Some("flac".into()),
-            ..Default::default()
-        },
-    ];
+            ffprobe::StreamInfo {
+                index: 1,
+                codec_type: Some("video".into()),
+                codec_name: Some("av1".into()),
+                pix_fmt: Some("yuv420p10le".into()),
+                width: Some(1920),
+                height: Some(1080),
+                ..Default::default()
+            },
+            ffprobe::StreamInfo {
+                index: 2,
+                codec_type: Some("audio".into()),
+                codec_name: Some("flac".into()),
+                ..Default::default()
+            },
+        ],
+        packets: vec![],
+        frames: vec![],
+        programs: vec![],
+        chapters: vec![],
+        error: None,
+    };
 
-    let empty_titles = std::collections::HashMap::new();
     let (args, _, _) = VideoProcessor::build_ffmpeg_args(
         "input.mkv",
         "output.mp4",
         std::path::Path::new(""),
         &probe,
-        &empty_titles,
     );
 
     // Should choose the main AV1 video stream and FLAC audio for copy
@@ -318,7 +385,8 @@ fn test_build_ffmpeg_args_ignores_attached_pic_video_stream() {
 
 #[tokio::test]
 async fn test_extract_chapters_subtitles_fonts_metadata() {
-    let test_dir = std::env::temp_dir().join(format!("komorebi_test_meta_{}", uuid::Uuid::new_v4()));
+    let test_dir =
+        std::env::temp_dir().join(format!("komorebi_test_meta_{}", uuid::Uuid::new_v4()));
     fs::create_dir_all(&test_dir).unwrap();
 
     let srt_path = test_dir.join("sub.srt");
@@ -326,13 +394,17 @@ async fn test_extract_chapters_subtitles_fonts_metadata() {
     let meta_path = test_dir.join("meta.txt");
     let mkv_path = test_dir.join("sample.mkv");
     let encoded_dir = test_dir.join("encoded");
-    let subs_dir = encoded_dir.join("subs");
-    let fonts_dir = encoded_dir.join("fonts");
+    let subs_dir = encoded_dir.join(SUBTITLES_LOC);
+    let fonts_dir = encoded_dir.join(FONTS_LOC);
     fs::create_dir_all(&encoded_dir).unwrap();
     fs::create_dir_all(&subs_dir).unwrap();
     fs::create_dir_all(&fonts_dir).unwrap();
 
-    fs::write(&srt_path, b"1\n00:00:00,000 --> 00:00:02,000\nHello world\n").unwrap();
+    fs::write(
+        &srt_path,
+        b"1\n00:00:00,000 --> 00:00:02,000\nHello world\n",
+    )
+    .unwrap();
     fs::write(&font_path, b"fake ttf font data").unwrap();
     fs::write(
         &meta_path,
@@ -359,7 +431,7 @@ async fn test_extract_chapters_subtitles_fonts_metadata() {
             "-metadata:s:t",
             "mimetype=application/x-truetype-font",
             "-c:v",
-            "libx264",
+            "mpeg4",
             "-c:s",
             "ass",
             mkv_path.to_str().unwrap(),
@@ -369,16 +441,17 @@ async fn test_extract_chapters_subtitles_fonts_metadata() {
     if let Ok(out) = status
         && out.status.success()
     {
-        // 1. Probe with standard ffprobe crate
-        let probe = ffprobe::ffprobe_config(
-            ffprobe::Config::builder().build(),
-            mkv_path.as_path(),
-        )
-        .unwrap();
-
-        // 2. Build args with explicit track title directly from file metadata
-        let mut stream_titles = std::collections::HashMap::new();
-        stream_titles.insert(1, "English".to_string());
+        // 1. Probe with rust_ffprobe
+        use ffprobe::builder::FFprobeBuilder;
+        let probe = FFprobeBuilder::new()
+            .expect("ffprobe builder")
+            .input(mkv_path.clone())
+            .show_format()
+            .show_streams()
+            .show_chapters()
+            .run()
+            .await
+            .expect("ffprobe run");
 
         let output_mp4 = encoded_dir.join("video.mp4");
         let (args, subtitles, fonts) = VideoProcessor::build_ffmpeg_args(
@@ -386,12 +459,11 @@ async fn test_extract_chapters_subtitles_fonts_metadata() {
             output_mp4.to_str().unwrap(),
             &encoded_dir,
             &probe,
-            &stream_titles,
         );
 
         assert_eq!(subtitles.len(), 1);
         assert_eq!(subtitles[0].format, "ass");
-        assert_eq!(subtitles[0].title, "English");
+        // The subtitle track title tag is set to the language/title from the container
         assert_eq!(fonts.len(), 1);
         assert_eq!(fonts[0], "font_0.ttf");
 
@@ -402,38 +474,16 @@ async fn test_extract_chapters_subtitles_fonts_metadata() {
             .unwrap();
         assert!(ffmpeg_out.status.success());
 
-        // 4. Parse chapters dumped by ffmpeg during that exact same process
-        let chapters_file = encoded_dir.join("chapters.txt");
-        let chapters_content = fs::read_to_string(&chapters_file).unwrap();
-        let chapters = VideoProcessor::parse_ffmetadata_chapters(&chapters_content);
+        // 4. Parse chapters directly from ProbeResult
+        let chapters = VideoProcessor::parse_probe_chapters(&probe);
         assert_eq!(chapters.len(), 2);
         assert_eq!(chapters[0].title, "Intro");
         assert_eq!(chapters[1].title, "Episode");
 
         // 5. Verify files produced by that single process
         assert!(encoded_dir.join("video.mp4").is_file());
-        assert!(encoded_dir.join("subs").join("sub_0.ass").is_file());
-        assert!(encoded_dir.join("fonts").join("font_0.ttf").is_file());
-
-        let meta = komorebi_server::dtos::vault_metadata::VaultMetadata {
-            chapters,
-            subtitles,
-            fonts,
-        };
-
-        // 6. Write and verify metadata.json
-        let meta_json_path = encoded_dir.join("metadata.json");
-        fs::write(
-            &meta_json_path,
-            serde_json::to_string_pretty(&meta).unwrap(),
-        )
-        .unwrap();
-        assert!(meta_json_path.is_file());
-
-        let json_content = fs::read_to_string(&meta_json_path).unwrap();
-        let deserialized: komorebi_server::dtos::vault_metadata::VaultMetadata =
-            serde_json::from_str(&json_content).unwrap();
-        assert_eq!(deserialized, meta);
+        assert!(encoded_dir.join(SUBTITLES_LOC).join("sub_0.ass").is_file());
+        assert!(encoded_dir.join(FONTS_LOC).join("font_0.ttf").is_file());
     }
 
     let _ = fs::remove_dir_all(&test_dir);
@@ -441,65 +491,72 @@ async fn test_extract_chapters_subtitles_fonts_metadata() {
 
 #[tokio::test]
 async fn test_slime_mkv_chapters() {
-    let mkv = std::path::Path::new("vault/[Ironclad] Tensei Shitara Slime Datta Ken 4 - S04E20 [WEB.1080p.AV1].mkv");
-    if !mkv.exists() { return; }
-    let probe = ffprobe::ffprobe_config(ffprobe::Config::builder().build(), mkv).unwrap();
-    let temp = std::env::temp_dir().join(format!("slime_test_{}", uuid::Uuid::new_v4()));
-    fs::create_dir_all(&temp).unwrap();
-    fs::create_dir_all(temp.join("subs")).unwrap();
-    fs::create_dir_all(temp.join("fonts")).unwrap();
-
-    let titles = std::collections::HashMap::new();
-    let output_mp4 = temp.join("out.mp4");
-    let (args, _, _) = VideoProcessor::build_ffmpeg_args(
-        mkv.to_str().unwrap(),
-        output_mp4.to_str().unwrap(),
-        &temp,
-        &probe,
-        &titles,
+    let mkv = std::path::Path::new(
+        "vault/[Ironclad] Tensei Shitara Slime Datta Ken 4 - S04E20 [WEB.1080p.AV1].mkv",
     );
+    if !mkv.exists() {
+        return;
+    }
+    use ffprobe::builder::FFprobeBuilder;
+    let probe = FFprobeBuilder::new()
+        .expect("ffprobe builder")
+        .input(mkv.to_path_buf())
+        .show_format()
+        .show_streams()
+        .show_chapters()
+        .run()
+        .await
+        .expect("ffprobe run");
 
-    let status = std::process::Command::new("ffmpeg").args(&args).output().unwrap();
-    assert!(status.status.success());
-
-    let chapters_file = temp.join("chapters.txt");
-    assert!(chapters_file.exists(), "chapters.txt does not exist!");
-    let content = fs::read_to_string(&chapters_file).unwrap();
-    let chapters = VideoProcessor::parse_ffmetadata_chapters(&content);
+    let chapters = VideoProcessor::parse_probe_chapters(&probe);
     assert_eq!(chapters.len(), 3);
     assert_eq!(chapters[0].title, "Scene 1");
     assert_eq!(chapters[1].title, "Intro");
     assert_eq!(chapters[2].title, "Scene 3");
-    let _ = fs::remove_dir_all(&temp);
 }
 
 #[test]
 fn test_parse_probe_chapters() {
-    let raw: serde_json::Value = serde_json::json!({
-        "chapters": [
-            {
-                "id": 0,
-                "start_time": "0.000000",
-                "end_time": "120.500000",
-                "tags": { "title": "Prologue" }
+    use std::collections::HashMap;
+    let probe = ffprobe::ProbeResult {
+        format: None,
+        streams: vec![],
+        packets: vec![],
+        frames: vec![],
+        programs: vec![],
+        chapters: vec![
+            ffprobe::ChapterInfo {
+                id: 0,
+                time_base: None,
+                start: 0,
+                start_time: Some("0.000000".into()),
+                end: 0,
+                end_time: Some("120.500000".into()),
+                tags: HashMap::from([("title".into(), "Prologue".into())]),
             },
-            {
-                "id": 1,
-                "start_time": "120.500000",
-                "end_time": "300.000000",
-                "tags": { "title": "Opening" }
+            ffprobe::ChapterInfo {
+                id: 1,
+                time_base: None,
+                start: 0,
+                start_time: Some("120.500000".into()),
+                end: 0,
+                end_time: Some("300.000000".into()),
+                tags: HashMap::from([("title".into(), "Opening".into())]),
             },
-            {
-                "id": 2,
-                "start": 300000,
-                "end": 600000,
-                "time_base": "1/1000",
-                "tags": {}
-            }
-        ]
-    });
+            ffprobe::ChapterInfo {
+                id: 2,
+                time_base: Some("1/1000".into()),
+                start: 300000,
+                start_time: None,
+                end: 600000,
+                end_time: None,
+                tags: HashMap::new(),
+            },
+        ],
+        error: None,
+    };
 
-    let chapters = VideoProcessor::parse_probe_chapters(&raw);
+    let chapters = VideoProcessor::parse_probe_chapters(&probe);
     assert_eq!(chapters.len(), 3);
     assert_eq!(chapters[0].id, 0);
     assert_eq!(chapters[0].title, "Prologue");
@@ -516,5 +573,3 @@ fn test_parse_probe_chapters() {
     assert_eq!(chapters[2].start_time, 300.0);
     assert_eq!(chapters[2].end_time, 600.0);
 }
-
-

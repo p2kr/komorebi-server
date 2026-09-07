@@ -18,8 +18,9 @@ use tokio::sync::broadcast::Sender;
 use tokio::sync::broadcast::{self};
 
 use crate::models::events::AppEvent;
+use crate::streaming::processor::MediaProcessor;
 #[allow(unused_imports)]
-use crate::{controllers, models::_entities::users, workers::downloader::DownloadWorker};
+use crate::{controllers, models::users, workers::downloader::DownloadWorker};
 use crate::{
     core::client,
     downloaders::{daemon::start_daemon, manager::DownloadManager},
@@ -90,7 +91,11 @@ impl Hooks for App {
         let (tx, _) = broadcast::channel::<AppEvent>(100);
         ctx.shared_store.insert::<Sender<AppEvent>>(tx.clone());
 
-        let download_manager = DownloadManager::new(&ctx.db, client).await?;
+        let media_processor = MediaProcessor::new(&ctx.db).await;
+        ctx.shared_store
+            .insert::<Arc<MediaProcessor>>(media_processor);
+
+        let download_manager = DownloadManager::new(&ctx).await?;
         ctx.shared_store
             .insert::<Arc<DownloadManager>>(download_manager.clone());
 

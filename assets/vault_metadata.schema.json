@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BatchMetadata",
+  "description": "Root of the metadata.json file saved in the media folder.",
+  "type": "object",
+  "properties": {
+    "batchId": {
+      "type": "string",
+      "description": "Unique identifier for the processing batch."
+    },
+    "folderName": {
+      "type": "string"
+    },
+    "processedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 string representing when the folder was processed."
+    },
+    "videos": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Video"
+      }
+    }
+  },
+  "required": ["batchId", "folderName", "processedAt", "videos"],
+  "definitions": {
+    "Video": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "filename": { "type": "string" },
+        "duration": {
+          "type": "number",
+          "description": "Duration in seconds"
+        },
+        "resolution": { "type": "string" },
+        "localVideoPath": { "type": "string" },
+        "localThumbnailPath": {
+          "type": ["string", "null"],
+          "description": "Nullable in case thumbnail extraction fails."
+        },
+        "audioTracks": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/AudioTrack" }
+        },
+        "subtitles": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/SubtitleTrack" }
+        },
+        "chapters": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Chapter" }
+        }
+      },
+      "required": [
+        "id",
+        "filename",
+        "duration",
+        "resolution",
+        "localVideoPath",
+        "audioTracks",
+        "subtitles",
+        "chapters"
+      ]
+    },
+    "AudioTrack": {
+      "type": "object",
+      "properties": {
+        "language": { "type": "string" },
+        "channels": { "type": "string" },
+        "isDefault": { "type": "boolean" }
+      },
+      "required": ["language", "channels", "isDefault"]
+    },
+    "SubtitleTrack": {
+      "type": "object",
+      "properties": {
+        "srcLang": { "type": "string" },
+        "label": { "type": "string" },
+        "isForced": {
+          "type": "boolean",
+          "description": "True for signs/songs or alien languages."
+        },
+        "localVttPath": { "type": "string" }
+      },
+      "required": ["srcLang", "label", "isForced", "localVttPath"]
+    },
+    "Chapter": {
+      "type": "object",
+      "properties": {
+        "startTime": {
+          "type": "number",
+          "description": "Start time in seconds."
+        },
+        "title": { "type": "string" }
+      },
+      "required": ["startTime", "title"]
+    }
+  }
+}

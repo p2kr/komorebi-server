@@ -54,7 +54,7 @@ impl CrawlerEngine {
     }
 
     // TODO: Make it robust/dynamic by iterating over list of parsers
-    fn get_title_parser_result(title: &str) -> ParsedTitle {
+    pub fn get_title_parser_result(title: &str) -> ParsedTitle {
         if AnitomyTitleParser::can_parse(title) {
             AnitomyTitleParser::parse(title)
         } else {

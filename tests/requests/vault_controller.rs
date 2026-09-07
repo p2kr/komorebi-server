@@ -1,14 +1,14 @@
 use komorebi_server::{
     app::App,
     models::{
-        _entities::users,
         crawler::CrawlerResult,
         media::{MediaProvider, MediaType},
+        users,
         vault::{self, VaultDownloadType, VaultItem, VaultItemStatus},
     },
 };
 use loco_rs::testing::prelude::*;
-use sea_orm::{ActiveModelTrait, ActiveValue};
+use sea_orm::{ActiveModelTrait, ActiveValue, IntoActiveModel};
 use serial_test::serial;
 use uuid::Uuid;
 
@@ -31,7 +31,6 @@ async fn seed_vault_item(ctx: &loco_rs::app::AppContext, user_id: Uuid, title: &
         media_type: Some(MediaType::Anime),
         media_id: "123".into(),
         title: title.to_string(),
-        raw_title: format!("[SubGroup] {} - 01 [1080p]", title),
         source_url: format!("http://example.com/{}.mp4", title),
         download_type: VaultDownloadType::DIRECT,
         status: VaultItemStatus::DOWNLOADING,
@@ -148,6 +147,9 @@ async fn can_get_resume() {
     request::<App, _, _>(|request, ctx| async move {
         let user_id = seed_user(&ctx).await;
         let seeded = seed_vault_item(&ctx, user_id, "Test Anime Resume").await;
+        let mut seeded_active = seeded.into_active_model();
+        seeded_active.status = ActiveValue::Set(VaultItemStatus::PAUSED);
+        let seeded = seeded_active.update(&ctx.db).await.unwrap();
 
         let payload = serde_json::json!({ "vault_id": seeded.id });
         let res = request.post("/api/v1/vault/resume").json(&payload).await;

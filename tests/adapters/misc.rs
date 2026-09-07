@@ -1,6 +1,6 @@
 use komorebi_server::adapters::{MediaClient, MediaClientParams, anilist_client::AniListClient};
 use komorebi_server::core::ResultExt;
-use komorebi_server::models::_entities::users::Model as User;
+use komorebi_server::models::users::Model as User;
 use uuid::Uuid;
 
 // ─── MediaClientParams::default ──────────────────────────────────────────────

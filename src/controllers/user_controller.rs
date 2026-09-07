@@ -51,7 +51,7 @@ pub struct ExchangeOauthTokenParams {
 
 #[debug_handler]
 async fn login(State(ctx): State<AppContext>, Json(params): Json<LoginParams>) -> Result<Response> {
-    let user_res = User::find_by_username_and_provider_and_sandbox(
+    let user_res = users::Entity::find_by_username_and_provider_and_sandbox(
         &ctx.db,
         &params.username,
         params.provider,
@@ -79,7 +79,7 @@ async fn save_user(State(ctx): State<AppContext>, Json(user): Json<User>) -> Res
 
     debug!("User validated: {:?}", user.username);
 
-    let user = User::save_user(&ctx.db, user).await?;
+    let user = user.into_active_model().save_user(&ctx.db).await?;
     debug!(user_id = %user.id, "User successfully saved");
     success(user)
 }
