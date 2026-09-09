@@ -3428,6 +3428,7 @@ dependencies = [
  "futures",
  "indexmap 2.14.1",
  "insta",
+ "itertools 0.15.0",
  "librqbit",
  "loco-rs",
  "migration",

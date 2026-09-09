@@ -9,10 +9,21 @@ logger:
   # Log level, options: trace, debug, info, warn or error.
   level: <%= get_env(name="LOG_LEVEL", default="debug") %>
   # Define the logging format. options: compact, pretty or json
-  format: compact
+  format: pretty
   # By default the logger has filtering only logs that came from your code or logs that came from `loco` framework. to see all third party libraries
   # Uncomment the line below to override to see all third party libraries you can enable this config and override the logger filters.
-  override_filter: warn,komorebi_server=debug,loco_rs=debug,tower_http=debug
+  override_filter: warn,komorebi_server=debug,loco_rs=debug,tower_http=debug,ffprobe=debug
+
+  file_appender:
+    enable: true
+    non_blocking: true # true offloads writes to a background thread
+    level: debug
+    format: json
+    rotation: daily # minutely | hourly | daily | never — default is hourly
+    dir: ./logs # default "./logs" if omitted
+    filename_prefix: komorebi-logs
+    filename_suffix: log
+    max_log_files: 7 # required — old files beyond this count are pruned
 
 # Web server configuration
 server:

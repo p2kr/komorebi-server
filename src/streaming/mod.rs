@@ -10,15 +10,17 @@ use phf::{Map, phf_map};
 
 use crate::{
     downloaders::manager::DownloadManager,
+    dtos::VideoMetadata,
     models::{media::MediaType, vault_sub_item::VaultSubItem},
+    streaming::processor::MediaProcessor,
 };
 
 pub trait PostProcessor {
     fn post_process(
-        file_path: PathBuf,
+        processor: Arc<MediaProcessor>,
         manager: Arc<DownloadManager>,
         item: VaultSubItem,
-    ) -> impl Future<Output = Result<()>>;
+    ) -> impl Future<Output = Result<(PathBuf, VideoMetadata)>>;
 }
 
 const EXT_VS_TYPE: Map<&str, MediaType> = phf_map! {

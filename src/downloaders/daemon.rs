@@ -50,7 +50,7 @@ pub fn start_daemon(ctx: AppContext, manager: Arc<DownloadManager>, _ws: Sender<
                             let manager = manager.clone();
                             let it_clone = it.clone();
                             tokio::spawn(async move {
-                                let _ = processor.post_process(manager, &it_clone).await;
+                                processor.start(&it_clone, manager).await;
                             });
                         }
                     }

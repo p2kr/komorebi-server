@@ -122,7 +122,7 @@ pub async fn add(
         .ok_or(loco_err_msg!("Download engine not found for this item"))?;
 
     // Create a new VaultItem in the database with PENDING status
-    let inserted_item = vault::ActiveModel::from(vault_item).insert(&ctx.db).await?;
+    let inserted_item = vault_item.into_active_model().insert(&ctx.db).await?;
 
     let bg_inserted_item = inserted_item.clone();
     tokio::spawn(async move {
@@ -130,7 +130,8 @@ pub async fn add(
             tracing::error!("Failed to add new torrent {}: {}", bg_inserted_item.id, e);
 
             // Fail in db
-            vault::ActiveModel::from(bg_inserted_item)
+            bg_inserted_item
+                .into_active_model()
                 .update_status(VaultItemStatus::FAILED, Some(e.to_string()))
                 .update(&ctx.db)
                 .await

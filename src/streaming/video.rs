@@ -3,33 +3,24 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
+use ffmpeg::{Codec, CodecOptions, FFmpegBuilder, Input, Output, PixelFormat};
 use ffprobe::{ProbeResult, builder::FFprobeBuilder};
 use loco_rs::prelude::*;
-use tokio::{
-    fs,
-    io::{AsyncBufReadExt, BufReader},
-};
+use regex::Regex;
+use tokio::{fs, process::Command};
 use which::which;
 
 use crate::{
     core::{
         ResultExt,
-        constants::{ENCODED_LOC, FONTS_LOC, SUBTITLES_LOC},
+        constants::{ENCODED_LOC, FONTS_LOC, METADATA_LOC, SUBTITLES_LOC},
     },
     downloaders::manager::DownloadManager,
-    dtos::{Chapter, Subtitle},
+    dtos::{AudioTrack, Chapter, Font, Subtitle, VideoMetadata},
     loco_err, loco_err_msg,
     models::{vault::VaultItemStatus, vault_sub_item::VaultSubItem},
-    streaming::PostProcessor,
+    streaming::{PostProcessor, processor::MediaProcessor},
 };
-
-/// Local metadata written to `encoded/metadata.json` after a successful encode.
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-struct VaultMetadata {
-    chapters: Vec<Chapter>,
-    subtitles: Vec<Subtitle>,
-    fonts: Vec<String>,
-}
 
 pub struct VideoProcessor {}
 
@@ -47,8 +38,91 @@ fn get_ffmpeg_path(bin_name: &str) -> PathBuf {
         })
 }
 
-static FFMPEG: LazyLock<PathBuf> = LazyLock::new(|| get_ffmpeg_path("ffmpeg"));
-static FFPROBE: LazyLock<PathBuf> = LazyLock::new(|| get_ffmpeg_path("ffprobe"));
+pub static FFMPEG: LazyLock<PathBuf> = LazyLock::new(|| get_ffmpeg_path("ffmpeg"));
+pub static FFPROBE: LazyLock<PathBuf> = LazyLock::new(|| get_ffmpeg_path("ffprobe"));
+
+/// Integer-typed fields across all `rust_ffprobe` structs that ffprobe sometimes
+/// emits as quoted strings instead of bare numbers.
+/// To add a new field, append it here — the regex is built from this list.
+const FFPROBE_INT_FIELDS: &[&str] = &[
+    // StreamInfo
+    "bits_per_raw_sample",
+    "bits_per_sample",
+    "index",
+    "width",
+    "height",
+    "coded_width",
+    "coded_height",
+    "has_b_frames",
+    "level",
+    "refs",
+    "extradata_size",
+    "channels",
+    "start_pts",
+    "duration_ts",
+    // FrameInfo
+    "stream_index",
+    "key_frame",
+    "pts",
+    "pkt_pts",
+    "pkt_dts",
+    "best_effort_timestamp",
+    "pkt_duration",
+    "coded_picture_number",
+    "display_picture_number",
+    "interlaced_frame",
+    "top_field_first",
+    "repeat_pict",
+    "nb_samples",
+    // PacketInfo / FormatInfo / ProgramInfo
+    "nb_streams",
+    "nb_programs",
+    "probe_score",
+    "program_id",
+    "program_num",
+    "pmt_pid",
+    "pcr_pid",
+    "end_pts",
+];
+
+/// Regex built from [`FFPROBE_INT_FIELDS`] at startup.
+/// Matches `"fieldname": "digits"` and captures both groups for replacement.
+///
+/// > **Tag-collision note**: ffprobe tag keys are conventionally SCREAMING_SNAKE_CASE
+/// > (`BPS`, `DURATION`, …) while all fields above are lowercase, so false
+/// > positives inside `tags` objects are not a practical concern.
+static FFPROBE_NUMERIC_STRINGS: LazyLock<Regex> = LazyLock::new(|| {
+    let pattern = format!(r#""({})":\s*"(-?\d+)""#, FFPROBE_INT_FIELDS.join("|"));
+    Regex::new(&pattern).unwrap()
+});
+
+/// Normalizes ffprobe JSON by unquoting numeric-typed fields that ffprobe
+/// sometimes emits as strings, then deserializes into [`ProbeResult`].
+fn normalize_ffprobe_json(raw: &str) -> Result<ProbeResult> {
+    let patched = FFPROBE_NUMERIC_STRINGS.replace_all(raw, r#""$1": $2"#);
+    serde_json::from_str(&patched).to_loco_err()
+}
+
+/// Runs `ffprobe` with the given builder config, captures its stdout, normalizes
+/// any string-typed numeric fields, and returns a parsed [`ProbeResult`].
+pub async fn run_ffprobe(builder: FFprobeBuilder) -> Result<ProbeResult> {
+    let args = builder.build_args().to_loco_err()?;
+
+    let out = Command::new(FFPROBE.as_path())
+        .args(&args)
+        .output()
+        .await
+        .to_loco_inspect("failed to spawn ffprobe")?;
+
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return loco_err!("ffprobe failed: {stderr}");
+    }
+
+    let json = String::from_utf8(out.stdout).to_loco_inspect("ffprobe stdout not utf-8")?;
+
+    normalize_ffprobe_json(&json)
+}
 
 impl VideoProcessor {
     /// Checks whether the video codec and pixel format can be copied directly
@@ -80,16 +154,8 @@ impl VideoProcessor {
     /// Determines the video codec arguments for FFmpeg.
     /// Prefers stream copy (`-c:v copy`), adding `-tag:v hvc1` for HEVC streams on Apple/Safari.
     /// Incompatible video streams are re-encoded to universal 8-bit H.264 (`yuv420p`).
-    pub fn build_video_codec_args(probe: &ProbeResult) -> Vec<String> {
-        let primary_video = probe
-            .streams
-            .iter()
-            .filter(|s| {
-                s.is_video()
-                    && s.disposition.as_ref().and_then(|v| v.get("attached_pic")) != Some(&1u8)
-            })
-            .max_by_key(|s| s.width.unwrap_or(0) * s.height.unwrap_or(0))
-            .or_else(|| probe.streams.iter().find(|s| s.is_video()));
+    pub fn build_video_codec_args(mut out: Output, probe: &ProbeResult) -> Output {
+        let primary_video = probe.primary_video_stream();
 
         let is_video_copyable = primary_video
             .and_then(|s| s.codec_name.as_deref().map(|c| (c, s.pix_fmt.as_deref())))
@@ -100,19 +166,19 @@ impl VideoProcessor {
             .is_some_and(|c| matches!(c.to_ascii_lowercase().as_str(), "hevc" | "h265"));
 
         if is_video_copyable {
-            let mut args = vec!["-c:v".into(), "copy".into()];
+            out = out.video_codec(Codec::copy());
             if is_hevc {
-                args.extend(["-tag:v".into(), "hvc1".into()]);
+                out = out.option("tag:v", "hvc1");
             }
-            args
+            out
         } else {
-            // CRF 18 = visually lossless; veryfast ensures speedy encode when recoding is mandatory
-            [
-                "-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-pix_fmt", "yuv420p",
-            ]
-            .into_iter()
-            .map(String::from)
-            .collect()
+            out.video_codec_opts(
+                CodecOptions::new(Codec::new("libx264"))
+                    // CRF 18 = visually lossless; veryfast ensures speedy encode when recoding is mandatory
+                    .quality(18)
+                    .pixel_format(PixelFormat::yuv420p()),
+            )
+            .preset("veryfast")
         }
     }
 
@@ -120,23 +186,9 @@ impl VideoProcessor {
     /// Stream copies compatible audio (AAC, Opus, MP3, FLAC).
     /// If audio is incompatible (e.g. AC3, DTS, TrueHD), re-encodes to 192k AAC.
     /// If no audio stream is present, passes `-an`.
-    pub fn build_audio_codec_args(probe: &ProbeResult) -> Vec<String> {
-        let Some(primary_audio) = probe
-            .streams
-            .iter()
-            .filter(|s| s.is_audio())
-            .max_by_key(|s| {
-                (
-                    s.disposition
-                        .as_ref()
-                        .and_then(|v| v.get("default"))
-                        .copied()
-                        .unwrap_or(0u8),
-                    s.channels.unwrap_or(0),
-                )
-            })
-        else {
-            return vec!["-an".into()];
+    pub fn build_audio_codec_args(out: Output, probe: &ProbeResult) -> Output {
+        let Some(primary_audio) = probe.primary_audio_stream() else {
+            return out.no_audio();
         };
 
         let is_audio_copyable = primary_audio
@@ -145,12 +197,9 @@ impl VideoProcessor {
             .is_some_and(Self::is_compatible_audio);
 
         if is_audio_copyable {
-            vec!["-c:a".into(), "copy".into()]
+            out.audio_codec(Codec::copy())
         } else {
-            ["-c:a", "aac", "-b:a", "192k"]
-                .into_iter()
-                .map(String::from)
-                .collect()
+            out.audio_codec_opts(CodecOptions::new(Codec::aac()).bitrate("192k"))
         }
     }
 
@@ -165,97 +214,83 @@ impl VideoProcessor {
         output_mp4: &str,
         encoded_dir: &Path,
         probe: &ProbeResult,
-    ) -> (Vec<String>, Vec<Subtitle>, Vec<String>) {
-        let mut args: Vec<String> = vec!["-y".into()];
+    ) -> (FFmpegBuilder, Vec<Subtitle>, Vec<Font>) {
+        let mut ff = FFmpegBuilder::with_executable(FFMPEG.as_path());
+        let inp = Input::new(input);
+        let mut out = Output::new(output_mp4);
 
-        // 1. Font attachments dump (input options before -i)
+        out = Self::build_audio_codec_args(out, probe);
+        out = Self::build_video_codec_args(out, probe);
+
         let fonts_dir = encoded_dir.join(FONTS_LOC);
-        let mut fonts = Vec::new();
-        for (att_idx, stream) in probe
-            .streams
-            .iter()
-            .filter(|s| s.codec_type.as_deref() == Some("attachment"))
-            .enumerate()
-        {
-            let ext = stream
-                .codec_name
-                .as_deref()
-                .unwrap_or("ttf")
-                .to_ascii_lowercase();
-
-            let font_name = format!("font_{att_idx}.{ext}");
-            args.push(format!("-dump_attachment:t:{att_idx}"));
-            args.push(fonts_dir.join(&font_name).to_string_lossy().into_owned());
-            fonts.push(font_name);
-        }
-
-        // 2. Input file
-        args.push("-i".into());
-        args.push(input.to_string());
-
-        // 3. Primary output: faststart MP4 (video + audio)
-        args.extend(Self::build_video_codec_args(probe));
-        args.extend(Self::build_audio_codec_args(probe));
-        args.push("-sn".into()); // disable subtitles in the MP4 container
-        args.extend(
-            [
-                "-movflags",
-                "+faststart",
-                "-progress",
-                "pipe:1",
-                "-nostats",
-                "-stats_period",
-                "2",
-            ]
-            .into_iter()
-            .map(String::from),
-        );
-        args.push(output_mp4.to_string());
-
-        // 4. Secondary outputs: Subtitle tracks extracted in the same process
         let subs_dir = encoded_dir.join(SUBTITLES_LOC);
-        let mut subtitles = Vec::new();
-        for (track_idx, stream) in probe.streams.iter().filter(|s| s.is_subtitle()).enumerate() {
-            let codec = stream
-                .codec_name
-                .as_deref()
-                .unwrap_or("ass")
-                .to_ascii_lowercase();
 
-            let format = match codec.as_str() {
-                "ass" | "ssa" => "ass",
-                "subrip" | "srt" => "srt",
-                "webvtt" => "vtt",
-                other => other,
-            };
+        let mut fonts = Vec::new();
+        let mut subs = Vec::new();
 
-            let file_name = format!("sub_{track_idx}.{format}");
-            let lang = stream.language().unwrap_or("und").to_string();
-            let label = stream
-                .title()
-                .filter(|t| !t.trim().is_empty())
-                .map(String::from)
-                .unwrap_or_else(|| format!("Subtitle {}", track_idx + 1));
+        for stream in probe.streams.iter() {
+            // Is attachment
+            if stream.codec_type.as_deref() == Some("attachment") {
+                let ext = stream.codec_name.as_deref().unwrap_or("ttf");
+                let font_name = format!("font_{}.{}", fonts.len(), ext);
+                let font_loc = fonts_dir
+                    .join(font_name.as_str())
+                    .to_string_lossy()
+                    .into_owned();
+                fonts.push(Font {
+                    name: font_name,
+                    path: font_loc.clone(),
+                });
+                ff = ff.output(
+                    Output::new(font_loc)
+                        .format("data")
+                        .option("map", format!("0:{}", stream.index))
+                        .option("c", "copy"),
+                );
+            }
+            // Is subtitle
+            else if stream.codec_type.as_deref() == Some("subtitle") {
+                let ext = match stream.codec_name.as_deref().unwrap_or("ass") {
+                    "ass" | "ssa" => "ass",
+                    "subrip" | "srt" => "srt",
+                    "webvtt" => "vtt",
+                    other => other,
+                };
+                let sub_name = format!("sub_{}.{}", subs.len(), ext);
+                let sub_loc = subs_dir.join(sub_name).to_string_lossy().into_owned();
 
-            args.extend([
-                "-map".into(),
-                format!("0:s:{track_idx}"),
-                "-c:s".into(),
-                "copy".into(),
-                subs_dir.join(&file_name).to_string_lossy().into_owned(),
-            ]);
+                let is_forced = stream
+                    .disposition
+                    .as_ref()
+                    .and_then(|v| v.get("forced"))
+                    .map(|v| v == &1u8);
 
-            subtitles.push(Subtitle {
-                track: track_idx,
-                lang,
-                label,
-                format: format.to_string(),
-                path: file_name,
-                is_forced: None,
-            });
+                subs.push(Subtitle {
+                    format: ext.to_string(),
+                    label: stream
+                        .title()
+                        .filter(|t| !t.trim().is_empty())
+                        .map(String::from)
+                        .unwrap_or(format!("Subtitle {}", subs.len())),
+                    lang: stream.language().unwrap_or("unk").to_string(),
+                    path: sub_loc.clone(),
+                    track: subs.len(),
+                    is_forced,
+                });
+
+                ff = ff.output(
+                    Output::new(sub_loc)
+                        .option("map", format!("0:{}", stream.index))
+                        .subtitle_codec(Codec::copy()),
+                );
+            }
         }
 
-        (args, subtitles, fonts)
+        out = out.no_subtitles().faststart();
+
+        ff = ff.input(inp).output(out);
+
+        (ff, subs, fonts)
     }
 
     /// Extracts chapters directly from a [`ProbeResult`].
@@ -309,57 +344,53 @@ impl VideoProcessor {
         ticks as f64 * num / den
     }
 
-    /// Searches the vault item directory for a processed video file inside
-    /// the `encoded/` sub-directory.
-    pub async fn find_processed_file(source_path: &str) -> Result<Option<PathBuf>> {
-        let encoded_dir = PathBuf::from(source_path).join(ENCODED_LOC.as_str());
-        if !encoded_dir.is_dir() {
-            return Ok(None);
-        }
-
-        let mut rd = fs::read_dir(&encoded_dir).await?;
-        while let Some(entry) = rd.next_entry().await? {
-            let path = entry.path();
-            if path.is_file()
-                && let Some(ext) = path.extension().and_then(|e| e.to_str())
-                && matches!(ext.to_ascii_lowercase().as_str(), "mp4" | "webm" | "mkv")
-            {
-                return Ok(Some(path));
-            }
-        }
-        Ok(None)
+    fn parse_probe_audio_tracks(probe_res: &ProbeResult) -> Vec<AudioTrack> {
+        probe_res
+            .audio_streams()
+            .iter()
+            .map(|stream| AudioTrack {
+                lang: stream.language().unwrap_or_default().to_string(),
+                label: stream.title().unwrap_or_default().to_string(),
+                channels: stream.channels.unwrap_or_default().to_string(),
+                is_default: stream
+                    .disposition
+                    .as_ref()
+                    .map(|v| v.get("default") == Some(&1u8)),
+            })
+            .collect()
     }
 }
 
 impl PostProcessor for VideoProcessor {
     async fn post_process(
-        source_path: PathBuf,
+        processor: Arc<MediaProcessor>,
         manager: Arc<DownloadManager>,
         mut item: VaultSubItem,
-    ) -> Result<()> {
+    ) -> Result<(PathBuf, VideoMetadata)> {
         // Mark as PROCESSING before handing off to ffmpeg.
         item.status = VaultItemStatus::PROCESSING;
         item.error_msg = None;
         manager.wake_daemon();
 
-        let vault_id = item.id;
-        let dest_path = item.source_path.clone();
+        let sub_item_id = item.id;
+        let source_path = item.source_path.clone();
         let title = item.title.clone();
 
-        tracing::info!(vault_id = %vault_id, title, dest_path, "post_process started");
+        tracing::info!(vault_id = %sub_item_id, title, source_path, "post_process started");
 
-        tracing::debug!(vault_id = %vault_id, path = %source_path.display(), "resolved video file");
-
-        let input = source_path
-            .to_str()
-            .ok_or(loco_err_msg!("cannot convert input file path to string"))?
-            .to_owned();
-
-        let stem = source_path
+        let input = PathBuf::from(source_path.clone());
+        let parent_dir = input
+            .parent()
+            .ok_or(loco_err_msg!("unable to extract parent dir"))?;
+        let stem = input
             .file_stem()
             .ok_or(loco_err_msg!("unable to extract file stem"))?;
 
-        let encoded_dir = PathBuf::from(&item.source_path).join(ENCODED_LOC.as_str());
+        //from vault/<vault id>/ in vault/<vault id>/encoded/<sub id>/
+        let encoded_dir = parent_dir
+            .to_path_buf()
+            .join(ENCODED_LOC.as_str())
+            .join(sub_item_id.to_string());
 
         // Truncate encoded dir and prepare subs/fonts folders before spawning ffmpeg.
         if encoded_dir.is_dir() {
@@ -369,154 +400,87 @@ impl PostProcessor for VideoProcessor {
         fs::create_dir_all(encoded_dir.join(FONTS_LOC)).await?;
 
         let output_file = encoded_dir.join(stem).with_extension("mp4");
-        let output = output_file
-            .to_str()
-            .ok_or(loco_err_msg!("cannot convert output file path to string"))?
-            .to_owned();
+        let output = output_file.to_string_lossy().into_owned();
 
-        let probe_res = FFprobeBuilder::with_executable(FFPROBE.as_path())
-            .input(source_path.clone())
-            .show_format()
-            .show_streams()
-            .show_chapters()
+        let probe_res = run_ffprobe(
+            FFprobeBuilder::with_executable(FFPROBE.as_path())
+                .input(source_path.clone())
+                .show_format()
+                .show_streams()
+                .show_chapters(),
+        )
+        .await
+        .to_loco_inspect("failed to execute ffprobe")?;
+
+        // Extract chapters directly from the ProbeResult.
+        let chapters = Self::parse_probe_chapters(&probe_res);
+        tracing::debug!(vault_id = %sub_item_id, chapter_count = chapters.len(), "probed container chapters");
+
+        let audio_tracks = Self::parse_probe_audio_tracks(&probe_res);
+        tracing::debug!(vault_id = %sub_item_id, audio_tracks_count = audio_tracks.len(), "probed container audio_tracks");
+
+        // Total duration in microseconds for progress % calculation.
+        // ProbeResult::duration() returns Option<f64> in seconds.
+        let total_duration: f64 = probe_res
+            .duration()
+            .unwrap_or_else(|| {
+                tracing::warn!(vault_id = %sub_item_id, "ffprobe returned no duration; progress % will be -1");
+                -1f64 // Negative means no duration and avoids div/0 error. ui must understand this to omit progress
+            });
+
+        let (ff, subtitles, fonts) =
+            Self::build_ffmpeg_args(&source_path, &output, &encoded_dir, &probe_res);
+
+        tracing::info!(vault_id = %sub_item_id, output, args=?&ff.command(), "spawning single ffmpeg process for video, subtitles, and fonts");
+
+        // let item = item.clone();
+        processor.active_sub_items.insert(item.id, item);
+        // let processor = processor.clone();
+
+        let ffmpeg_out = ff
+            .on_progress(move |progress| {
+                if let Some(mut item) = processor.active_sub_items.get_mut(&sub_item_id) {
+                    item.status = VaultItemStatus::PROCESSING;
+                    item.total_bytes = progress.size.unwrap_or_default() as i64;
+
+                    let current_secs = progress.time.unwrap_or_default().as_secs_f64();
+
+                    let percent = (current_secs / total_duration) * 100.0;
+                    item.progress = percent.min(100.0);
+
+                    // bitrate is in bits/s
+                    item.speed_bps = (progress.bitrate.unwrap_or_default() / 8.0) as i64;
+
+                    let remaining_media_secs = 0f64.max(total_duration - current_secs);
+
+                    item.eta_seconds = progress
+                        .speed
+                        .filter(|&speed| speed > 0.0)
+                        .map(|speed| (remaining_media_secs / speed) as i64);
+                }
+            })
             .run()
             .await
             .to_loco_err()?;
 
-        // Extract chapters directly from the ProbeResult.
-        let chapters = Self::parse_probe_chapters(&probe_res);
-        tracing::debug!(vault_id = %vault_id, chapter_count = chapters.len(), "probed container chapters");
+        if ffmpeg_out.success() {
+            tracing::info!(vault_id = %sub_item_id, input=?source_path, output=?output_file, "ffmpeg finished successfully");
 
-        // Total duration in microseconds for progress % calculation.
-        // ProbeResult::duration() returns Option<f64> in seconds.
-        let total_duration_us: u64 = probe_res
-            .duration()
-            .map(|d| (d * 1_000_000.0) as u64)
-            .unwrap_or_else(|| {
-                tracing::warn!(vault_id = %vault_id, "ffprobe returned no duration; progress % will be 0");
-                0
-            });
-
-        let (args, subtitles, fonts) =
-            Self::build_ffmpeg_args(&input, &output, &encoded_dir, &probe_res);
-
-        tracing::info!(vault_id = %vault_id, output, ?args, "spawning single ffmpeg process for video, subtitles, and fonts");
-
-        let mut child = tokio::process::Command::new(FFMPEG.as_path())
-            .args(&args)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| loco_err_msg!("failed to spawn ffmpeg: {}", e))?;
-
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or(loco_err_msg!("ffmpeg stdout not available"))?;
-
-        // Drain stderr in a background task so it never blocks stdout reads.
-        // Lines are collected and logged only on failure.
-        let stderr_drain = {
-            let stderr = child
-                .stderr
-                .take()
-                .ok_or(loco_err_msg!("ffmpeg stderr not available"))?;
-            tokio::spawn(async move {
-                let mut lines = BufReader::new(stderr).lines();
-                let mut collected: Vec<String> = Vec::new();
-                while let Ok(Some(line)) = lines.next_line().await {
-                    collected.push(line);
-                }
-                collected
-            })
-        };
-
-        let mut lines = BufReader::new(stdout).lines();
-
-        // Running state parsed from ffmpeg's progress key=value pairs.
-        let mut out_time_us: u64 = 0;
-        let mut processed_bytes: i64 = 0;
-        let mut bitrate_kbps: f64 = 0.0;
-        let mut speed: f64 = 1.0;
-
-        while let Some(line) = lines
-            .next_line()
-            .await
-            .map_err(|e| loco_err_msg!("ffmpeg stdout read error: {}", e))?
-        {
-            let Some((key, val)) = line.split_once('=') else {
-                continue;
-            };
-            let val = val.trim();
-
-            match key.trim() {
-                "out_time_us" => out_time_us = val.parse().unwrap_or(out_time_us),
-                "total_size" => processed_bytes = val.parse().unwrap_or(processed_bytes),
-                // "1234.5kbits/s" or "N/A"
-                "bitrate" => {
-                    bitrate_kbps = val
-                        .trim_end_matches("kbits/s")
-                        .parse::<f64>()
-                        .unwrap_or(bitrate_kbps);
-                }
-                // "1.23x" or "N/A"
-                "speed" => {
-                    speed = val
-                        .trim_end_matches('x')
-                        .parse::<f64>()
-                        .unwrap_or(speed)
-                        .max(0.001);
-                }
-                // Fires after each stats block ("continue" mid-encode, "end" when done).
-                "progress" => {
-                    let progress = if total_duration_us > 0 {
-                        (out_time_us as f64 / total_duration_us as f64 * 100.0).min(100.0)
-                    } else {
-                        0.0
-                    };
-
-                    let remaining_us = total_duration_us.saturating_sub(out_time_us);
-
-                    tracing::debug!(
-                        vault_id = %vault_id,
-                        progress = format_args!("{:.1}%", progress),
-                        speed_x = format_args!("{:.2}x", speed),
-                        bitrate_kbps,
-                        "ffmpeg progress"
-                    );
-
-                    if let Some(mut item) = manager.active_items.get_mut(&vault_id) {
-                        item.status = VaultItemStatus::PROCESSING;
-                        item.downloaded_bytes = processed_bytes;
-                        item.progress = progress;
-                        item.speed_bps = (bitrate_kbps * 1_000.0 / 8.0) as i64;
-                        item.eta_seconds = (speed > 0.0)
-                            .then(|| (remaining_us as f64 / 1_000_000.0 / speed) as i64);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        let exit_status = child
-            .wait()
-            .await
-            .map_err(|e| loco_err_msg!("ffmpeg wait error: {}", e))?;
-
-        // Collect stderr now that the process has exited.
-        let stderr_lines = stderr_drain.await.unwrap_or_default();
-
-        if exit_status.success() {
-            tracing::info!(vault_id = %vault_id, input=?source_path, output=?output_file, "ffmpeg finished successfully");
-
-            let metadata = VaultMetadata {
+            let metadata = VideoMetadata {
+                id: sub_item_id,
+                file_name: output_file
+                    .file_name()
+                    .map(|v| v.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+                thumbnail_path: None,
+                path: output,
+                audio_tracks,
                 chapters,
                 subtitles,
                 fonts,
             };
 
-            let metadata_path = encoded_dir.join("metadata.json");
+            let metadata_path = encoded_dir.join(METADATA_LOC);
             if let Ok(json_str) = serde_json::to_string_pretty(&metadata) {
                 let _ = fs::write(&metadata_path, json_str).await;
             }
@@ -530,17 +494,14 @@ impl PostProcessor for VideoProcessor {
             if metadata.fonts.is_empty() && fonts_dir.is_dir() {
                 let _ = fs::remove_dir_all(&fonts_dir).await;
             }
-            Ok(())
+            Ok((metadata_path, metadata))
         } else {
             let msg = format!(
                 "ffmpeg exited with code {}",
-                exit_status.code().unwrap_or(-1)
+                ffmpeg_out.status.code().unwrap_or(-1)
             );
-            tracing::error!(vault_id = %vault_id, title, "{}", msg);
-            for line in &stderr_lines {
-                tracing::error!(vault_id = %vault_id, "[ffmpeg stderr] {}", line);
-            }
-            loco_err!("{}", msg)
+            tracing::error!(vault_id = %sub_item_id, title, stderr=?ffmpeg_out.stderr_str(), "{}", msg);
+            loco_err!("{msg}")
         }
     }
 }

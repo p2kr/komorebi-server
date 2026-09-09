@@ -1,8 +1,9 @@
+use derive_more::Constructor;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Default)]
 pub struct Chapter {
     pub id: i64,
     pub title: String,
@@ -10,7 +11,7 @@ pub struct Chapter {
     pub end_time: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Default)]
 pub struct Subtitle {
     pub track: usize,
     pub lang: String,
@@ -20,7 +21,7 @@ pub struct Subtitle {
     pub is_forced: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Default)]
 pub struct AudioTrack {
     pub lang: String,
     pub label: String,
@@ -28,8 +29,14 @@ pub struct AudioTrack {
     pub is_default: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
-pub struct VideoItem {
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Default, Constructor)]
+pub struct Font {
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Default)]
+pub struct VideoMetadata {
     pub id: Uuid,
     pub file_name: String,
     pub path: String,
@@ -37,11 +44,12 @@ pub struct VideoItem {
     pub audio_tracks: Vec<AudioTrack>,
     pub subtitles: Vec<Subtitle>,
     pub chapters: Vec<Chapter>,
+    pub fonts: Vec<Font>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
 #[ts(export)]
 pub struct VaultMetadata {
     pub id: Uuid,
-    pub videos: Vec<VideoItem>,
+    pub videos: Vec<VideoMetadata>,
 }

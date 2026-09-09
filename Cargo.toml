@@ -70,7 +70,8 @@ walkdir = "2.5.0"
 cached = { version = "3.1.1", features = ["async"] }
 ffprobe = { package = "rust_ffprobe", version = "1.0.0" }
 ffmpeg = { package = "rust_ffmpeg", version = "1.0.0" }
-derive_more = { version = "2.1.1", features = ["debug"] }
+derive_more = { version = "2.1.1", features = ["debug", "constructor"] }
+itertools = "0.15.0"
 
 [[bin]]
 name = "komorebi_server-cli"

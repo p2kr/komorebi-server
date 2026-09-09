@@ -22,7 +22,9 @@ pub struct Model {
     pub id: Uuid,
     pub vault_id: Uuid,
     #[sea_orm(unique)]
+    /// `vault/<vault id>/<file.mkv>`
     pub source_path: String,
+    /// `vault/<vault id>/encoded/<sub id>/metadata.json`
     pub dest_path: Option<String>,
     pub media_type: Option<MediaType>,
     pub media_id: Option<String>,
@@ -35,15 +37,16 @@ pub struct Model {
     pub status: VaultItemStatus,
     pub total_bytes: i64,
     pub progress: f64,
+    /// bytes/second
     pub speed_bps: i64,
     pub eta_seconds: Option<i64>,
     pub error_msg: Option<String>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 
-    #[sea_orm(has_one)]
+    #[sea_orm(belongs_to, from = "vault_id", to = "id")]
     #[ts(as = "super::vault::Model")]
-    pub vault_item: HasOne<super::vault::Entity>,
+    pub vault_item: BelongsTo<super::vault::Entity>,
 }
 
 impl Default for Model {

@@ -1,5 +1,6 @@
 use komorebi_server::{
     core::constants::{ENCODED_LOC, FONTS_LOC, SUBTITLES_LOC},
+    dtos::Font,
     models::media::MediaType,
     streaming::{processor::cached_resolve_file_paths, video::VideoProcessor},
 };
@@ -41,38 +42,6 @@ async fn test_resolve_file_path_skips_encoded_and_zero_bytes() {
     // Cleanup
     let _ = fs::remove_dir_all(&test_dir);
     let _ = fs::remove_dir_all(&test_dir_2);
-}
-
-#[tokio::test]
-async fn test_find_processed_file() {
-    let test_dir =
-        std::env::temp_dir().join(format!("komorebi_test_find_{}", uuid::Uuid::new_v4()));
-    let encoded_sub = test_dir.join(ENCODED_LOC.as_str());
-    fs::create_dir_all(&encoded_sub).unwrap();
-
-    // When encoded dir is empty
-    let found = VideoProcessor::find_processed_file(test_dir.to_str().unwrap())
-        .await
-        .unwrap();
-    assert!(found.is_none());
-
-    // When encoded dir has non-video file
-    fs::write(encoded_sub.join("notes.txt"), b"some text").unwrap();
-    let found = VideoProcessor::find_processed_file(test_dir.to_str().unwrap())
-        .await
-        .unwrap();
-    assert!(found.is_none());
-
-    // When encoded dir has valid mp4
-    let mp4_file = encoded_sub.join("output.mp4");
-    fs::write(&mp4_file, b"processed video bytes").unwrap();
-    let found = VideoProcessor::find_processed_file(test_dir.to_str().unwrap())
-        .await
-        .unwrap();
-    assert_eq!(found, Some(mp4_file));
-
-    // Cleanup
-    let _ = fs::remove_dir_all(&test_dir);
 }
 
 #[test]
@@ -206,6 +175,8 @@ fn test_build_ffmpeg_args_hevc_10bit_stream_copy() {
         &probe,
     );
 
+    let args = args.build_args().expect("expected build args");
+
     // Both video and audio should be copied
     assert!(args.windows(2).any(|w| w == ["-c:v", "copy"]));
     assert!(args.windows(2).any(|w| w == ["-tag:v", "hvc1"]));
@@ -250,6 +221,7 @@ fn test_build_ffmpeg_args_h264_10bit_recodes_video_copies_audio() {
         std::path::Path::new(""),
         &probe,
     );
+    let args = args.build_args().expect("expected build args");
 
     // Video must be re-encoded with libx264 to 8-bit yuv420p
     assert!(args.windows(2).any(|w| w == ["-c:v", "libx264"]));
@@ -292,6 +264,7 @@ fn test_build_ffmpeg_args_copies_video_recodes_dts_audio() {
         std::path::Path::new(""),
         &probe,
     );
+    let args = args.build_args().expect("expected build args");
 
     // Video should be copied
     assert!(args.windows(2).any(|w| w == ["-c:v", "copy"]));
@@ -326,6 +299,7 @@ fn test_build_ffmpeg_args_no_audio_stream() {
         std::path::Path::new(""),
         &probe,
     );
+    let args = args.build_args().expect("expected build args");
 
     assert!(args.windows(2).any(|w| w == ["-c:v", "copy"]));
     assert!(args.contains(&"-an".to_string()));
@@ -376,6 +350,7 @@ fn test_build_ffmpeg_args_ignores_attached_pic_video_stream() {
         std::path::Path::new(""),
         &probe,
     );
+    let args = args.build_args().expect("expected build args");
 
     // Should choose the main AV1 video stream and FLAC audio for copy
     assert!(args.windows(2).any(|w| w == ["-c:v", "copy"]));
@@ -465,7 +440,11 @@ async fn test_extract_chapters_subtitles_fonts_metadata() {
         assert_eq!(subtitles[0].format, "ass");
         // The subtitle track title tag is set to the language/title from the container
         assert_eq!(fonts.len(), 1);
-        assert_eq!(fonts[0], "font_0.ttf");
+        assert_eq!(
+            fonts[0],
+            Font::new("font_0.ttf".into(), "font_0.ttf".into())
+        );
+        let args = args.build_args().expect("expected build args");
 
         // 3. Run that exact single ffmpeg process (no extra processes created)
         let ffmpeg_out = std::process::Command::new("ffmpeg")

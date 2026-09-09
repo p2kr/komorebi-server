@@ -19,6 +19,7 @@ pub struct Model {
     pub id: Uuid,
     pub user_id: Uuid,
     #[sea_orm(unique)]
+    /// `vault/<id>`
     pub destination_path: String,
     pub media_type: Option<MediaType>,
     pub media_id: String,
@@ -40,9 +41,9 @@ pub struct Model {
     #[ts(as = "Vec<super::vault_sub_item::Model>")]
     pub sub_items: HasMany<super::vault_sub_item::Entity>,
 
-    #[sea_orm(has_one)]
+    #[sea_orm(belongs_to, from = "user_id", to = "id")]
     #[ts(as = "super::users::Model")]
-    pub user: HasOne<super::users::Entity>,
+    pub user: BelongsTo<super::users::Entity>,
 }
 
 impl Default for Model {
@@ -116,6 +117,8 @@ pub enum VaultItemStatus {
     PROCESSING,
     /// stream-ready
     READY,
+    /// Partial ready
+    PARTIAL,
     /// download or post-process error
     FAILED,
     /// user deleted

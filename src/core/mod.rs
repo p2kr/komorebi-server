@@ -8,6 +8,11 @@ use std::fmt::Display;
 use crate::models::vault::VaultItemStatus;
 
 pub trait ResultExt<T, E> {
+    /// Wraps the error into `loco_rs::Error::wrap` with custom tracing msg
+    fn to_loco_inspect(self, msg: impl AsRef<str>) -> loco_rs::Result<T>
+    where
+        E: std::error::Error + Send + Sync + 'static;
+
     /// Wraps the error into `loco_rs::Error::wrap`
     fn to_loco_err(self) -> loco_rs::Result<T>
     where
@@ -20,10 +25,24 @@ pub trait ResultExt<T, E> {
 }
 
 impl<T, E> ResultExt<T, E> for Result<T, E> {
+    fn to_loco_inspect(self, msg: impl AsRef<str>) -> loco_rs::Result<T>
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        if let Err(e) = &self {
+            tracing::error!(error=%e, "{}", msg.as_ref());
+        }
+        // map_err can directly take the function pointer
+        self.map_err(Error::wrap)
+    }
+
     fn to_loco_err(self) -> loco_rs::Result<T>
     where
         E: std::error::Error + Send + Sync + 'static,
     {
+        if let Err(e) = &self {
+            tracing::error!(error=%e);
+        }
         // map_err can directly take the function pointer
         self.map_err(Error::wrap)
     }
@@ -32,6 +51,9 @@ impl<T, E> ResultExt<T, E> for Result<T, E> {
     where
         E: Display,
     {
+        if let Err(e) = &self {
+            tracing::error!(error=%e);
+        }
         self.map_err(|e| Error::Message(e.to_string()))
     }
 }

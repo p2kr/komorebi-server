@@ -21,7 +21,8 @@ use crate::{
 #[derive(Deserialize, TS)]
 #[ts(export)]
 pub struct VaultStreamPayload {
-    pub id: Uuid,
+    pub vault_id: Uuid,
+    #[serde(default)]
     pub kind: StreamKind,
     pub track: Option<usize>,
     pub name: Option<String>,
@@ -41,7 +42,7 @@ pub async fn stream(
     Query(params): Query<VaultStreamPayload>,
     req: Request<Body>,
 ) -> Result<impl IntoResponse> {
-    let item = vault::Entity::find_by_id(params.id)
+    let item = vault::Entity::find_by_id(params.vault_id)
         .one(&ctx.db)
         .await?
         .ok_or(Error::NotFound)?;
