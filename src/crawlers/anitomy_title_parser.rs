@@ -1,6 +1,6 @@
 use anitomy::{Element, ElementKind};
 
-use crate::{crawlers::TitleParser, models::crawler::ParsedTitle};
+use crate::{crawlers::TitleParser, dtos::crawler::ParsedTitle};
 
 pub struct AnitomyTitleParser;
 

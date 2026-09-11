@@ -12,8 +12,8 @@ use crate::{
         Crawler, TitleParser, anitomy_title_parser::AnitomyTitleParser,
         config_parser::CRAWLER_CONFIGS, html_crawler::HtmlCrawler, json_crawler::JsonCrawler,
     },
+    dtos::crawler::{CrawlerConfig, CrawlerResult, ParsedTitle},
     loco_err, loco_err_msg,
-    models::crawler::{CrawlerConfig, CrawlerResult, ParsedTitle},
 };
 
 pub struct CrawlerEngine {

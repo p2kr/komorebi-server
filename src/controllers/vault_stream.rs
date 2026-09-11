@@ -1,145 +1,151 @@
 use std::path::PathBuf;
 
 use axum::{body::Body, http::Request};
-use cached::concurrent_cached;
+use cached::cached;
+use itertools::Itertools;
 use loco_rs::prelude::*;
+use sea_orm::{DbConn, LoaderTrait};
 use serde::Deserialize;
 use tokio::fs;
 use tower_http::services::ServeFile;
 use ts_rs::TS;
+use walkdir::WalkDir;
 
-use crate::{
-    core::constants::{ENCODED_LOC, FONTS_LOC, METADATA_LOC, SUBTITLES_LOC},
-    loco_err,
-    models::{
-        media::MediaType,
-        vault::{self},
-    },
-    streaming::processor::cached_resolve_file_paths,
+use crate::controllers::success;
+use crate::core::constants::VAULT_LOC;
+use crate::dtos::vault::{VaultMetadataDto, VaultSubItemDto};
+use crate::models::{
+    audio_tracks, subtitle_fonts, vault_metadata, vault_sub_item, video_chapters, video_subtitles,
 };
 
 #[derive(Deserialize, TS)]
 #[ts(export)]
 pub struct VaultStreamPayload {
-    pub vault_id: Uuid,
-    #[serde(default)]
-    pub kind: StreamKind,
-    pub track: Option<usize>,
-    pub name: Option<String>,
+    /// Path to streaming file
+    pub path: String,
 }
-#[derive(Deserialize, TS, PartialEq, Eq, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum StreamKind {
-    #[default]
-    Video,
-    Subtitle,
-    Font,
-    Metadata,
+
+#[derive(Clone, Debug, serde::Deserialize, TS)]
+#[ts(export)]
+pub struct VaultSubItemPayload {
+    pub vault_id: Uuid,
 }
 
 pub async fn stream(
-    State(ctx): State<AppContext>,
+    State(_ctx): State<AppContext>,
     Query(params): Query<VaultStreamPayload>,
     req: Request<Body>,
 ) -> Result<impl IntoResponse> {
-    let item = vault::Entity::find_by_id(params.vault_id)
-        .one(&ctx.db)
-        .await?
-        .ok_or(Error::NotFound)?;
-
-    let file_path = match params.kind {
-        StreamKind::Video => get_video_path(item.destination_path).await?,
-        StreamKind::Font => get_fonts_path(item.destination_path, params.name).await?,
-        StreamKind::Subtitle => get_subtitle_path(item.destination_path, params.name).await?,
-        StreamKind::Metadata => get_metadata_path(item.destination_path).await?,
-    };
-
-    let mut sf = ServeFile::new(file_path);
-
-    let resp = sf.try_call(req).await?;
-
-    Ok(resp)
+    let path = PathBuf::from(params.path);
+    if fs::try_exists(&path).await? {
+        if is_file_in_vault(&path) {
+            let mut sf = ServeFile::new(&path);
+            let resp = sf.try_call(req).await?;
+            Ok(resp)
+        } else {
+            unauthorized("file is not in vault")
+        }
+    } else {
+        not_found()
+    }
 }
 
-#[concurrent_cached]
-async fn get_video_path(dest_path: String) -> Result<PathBuf> {
-    let files = cached_resolve_file_paths(&dest_path).await;
-    let (path, _) = files
+#[cached(max_size = 100)]
+fn is_file_in_vault(file_path: &PathBuf) -> bool {
+    let vault_root = PathBuf::from(VAULT_LOC.to_owned());
+    for entry in WalkDir::new(vault_root)
+        .max_depth(10)
+        .follow_links(false)
         .into_iter()
-        .find(|(_, media_type)| *media_type == MediaType::Anime)
-        .ok_or(Error::NotFound)?;
-    Ok(path)
-}
-
-#[concurrent_cached]
-async fn get_fonts_path(dest_path: String, font_name: Option<String>) -> Result<PathBuf> {
-    let fonts_path = PathBuf::from(dest_path)
-        .join(ENCODED_LOC.as_str())
-        .join(FONTS_LOC);
-
-    let mut entries = fs::read_dir(&fonts_path).await?;
-
-    while let Some(entry) = entries.next_entry().await? {
-        let path = entry.path();
-        match font_name.as_ref() {
-            Some(f) => {
-                if path.is_file() && path.file_name().is_some_and(|v| v == f.as_str()) {
-                    return Ok(path);
-                }
-            }
-            None => {
-                if path.is_file() && path.ends_with(".ttf")
-                    || path.ends_with(".woff")
-                    || path.ends_with(".otf")
-                {
-                    return Ok(path);
-                }
-            }
+    {
+        if let Ok(path) = entry
+            && path.file_type().is_file()
+            && path.into_path().eq(file_path)
+        {
+            return true;
         }
     }
-
-    loco_err!("no fonts found")
+    false
 }
 
-#[concurrent_cached]
-async fn get_subtitle_path(dest_path: String, subtitle_name: Option<String>) -> Result<PathBuf> {
-    let subtitles_path = PathBuf::from(dest_path)
-        .join(ENCODED_LOC.as_str())
-        .join(SUBTITLES_LOC);
+pub async fn get_metadata(
+    State(ctx): State<AppContext>,
+    axum::Json(param): axum::Json<VaultSubItemPayload>,
+) -> Result<impl IntoResponse> {
+    let resp = cached_metadata(param.vault_id, &ctx.db).await?;
 
-    let mut entries = fs::read_dir(&subtitles_path).await?;
-
-    while let Some(entry) = entries.next_entry().await? {
-        let path = entry.path();
-        match subtitle_name.as_ref() {
-            Some(f) => {
-                if path.is_file() && path.file_name().is_some_and(|v| v == f.as_str()) {
-                    return Ok(path);
-                }
-            }
-            None => {
-                if path.is_file() && path.ends_with(".ass")
-                    || path.ends_with(".srt")
-                    || path.ends_with(".vtt")
-                {
-                    return Ok(path);
-                }
-            }
-        }
-    }
-
-    loco_err!("no subtitle found")
+    success(resp)
 }
 
-#[concurrent_cached]
-async fn get_metadata_path(dest_path: String) -> Result<PathBuf> {
-    let metadata_path = PathBuf::from(dest_path)
-        .join(ENCODED_LOC.as_str())
-        .join(METADATA_LOC);
+#[cached(
+    ttl_secs = 60, // Expiry in seconds (1 minute)
+    key = "String", // The type of the cache key
+    sync_writes = "by_key",
+    convert = { vault_id.to_string() } // Construct the key (ignoring `db`)
+)]
+async fn cached_metadata(vault_id: Uuid, db: &DbConn) -> Result<Vec<VaultSubItemDto>> {
+    let sub_items = vault_sub_item::Entity::find()
+        .filter(vault_sub_item::Column::VaultId.eq(vault_id))
+        .find_also_related(vault_metadata::Entity)
+        .all(db)
+        .await?;
 
-    if fs::try_exists(&metadata_path).await? {
-        return Ok(metadata_path);
+    // Extract all metadata models into a single Vec for the Loader
+    let metadatas = sub_items
+        .iter()
+        .filter_map(|(_, meta_opt)| meta_opt.clone()) // Safely extract only existing metadata
+        .collect_vec();
+
+    // Fetch all related tracks, subtitles, fonts, and chapters in BULK (4 queries)
+    let all_audio_tracks = metadatas
+        .load_many(audio_tracks::Entity, db)
+        .await
+        .unwrap_or_default();
+    let all_video_subtitles = metadatas
+        .load_many(video_subtitles::Entity, db)
+        .await
+        .unwrap_or_default();
+    let all_subtitle_fonts = metadatas
+        .load_many(subtitle_fonts::Entity, db)
+        .await
+        .unwrap_or_default();
+    let all_video_chapters = metadatas
+        .load_many(video_chapters::Entity, db)
+        .await
+        .unwrap_or_default();
+
+    let mut resp: Vec<VaultSubItemDto> = Vec::with_capacity(sub_items.len());
+    let mut meta_idx = 0;
+    for (sub_item, meta_opt) in sub_items {
+        let dto = if let Some(meta) = meta_opt {
+            let curr_idx = meta_idx;
+            meta_idx += 1;
+            VaultSubItemDto {
+                sub_item,
+                metadata: Some(VaultMetadataDto {
+                    vault_metadata: meta,
+                    audio_tracks: all_audio_tracks.get(curr_idx).cloned().unwrap_or_default(),
+                    video_subtitles: all_video_subtitles
+                        .get(curr_idx)
+                        .cloned()
+                        .unwrap_or_default(),
+                    subtitle_fonts: all_subtitle_fonts
+                        .get(curr_idx)
+                        .cloned()
+                        .unwrap_or_default(),
+                    video_chapters: all_video_chapters
+                        .get(curr_idx)
+                        .cloned()
+                        .unwrap_or_default(),
+                }),
+            }
+        } else {
+            VaultSubItemDto {
+                sub_item,
+                metadata: None,
+            }
+        };
+        resp.push(dto);
     }
-
-    loco_err!("no metadata found")
+    Ok(resp)
 }

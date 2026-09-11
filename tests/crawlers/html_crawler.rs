@@ -1,6 +1,6 @@
 use komorebi_server::{
     crawlers::{Crawler, html_crawler::HtmlCrawler},
-    models::crawler::CrawlerConfig,
+    dtos::crawler::CrawlerConfig,
 };
 
 fn config(base_url: &str) -> CrawlerConfig {

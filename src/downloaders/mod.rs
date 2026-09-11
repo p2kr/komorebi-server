@@ -31,10 +31,10 @@ pub trait DownloadEngine: Display {
 
 pub fn remove_vault_contents(item: VaultItem) {
     tokio::spawn(async move {
-        if let Err(e) = fs::remove_dir_all(&item.destination_path).await {
+        if let Err(e) = fs::remove_dir_all(&item.dest_path).await {
             tracing::error!(
                 "Failed to delete download path {} for vault item {}: {}",
-                item.destination_path,
+                item.dest_path,
                 item.id,
                 e
             );

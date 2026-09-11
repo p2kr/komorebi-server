@@ -1,3 +1,4 @@
+use crate::dtos::{VaultDownloadType, VaultStatus};
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use dashmap::DashMap;
@@ -14,9 +15,7 @@ use uuid::Uuid;
 use crate::{
     core::{ResultExt, constants::VAULT_LOC, is_active_status},
     downloaders::{DownloadEngine, direct::DirectDownloader, torrent::TorrentDownloader},
-    models::vault::{
-        Column as VaultColumn, Entity as VaultEntity, VaultDownloadType, VaultItem, VaultItemStatus,
-    },
+    models::vault::{Column as VaultColumn, Entity as VaultEntity, VaultItem},
     streaming::processor::MediaProcessor,
 };
 
@@ -36,9 +35,9 @@ impl DownloadManager {
 
         if let Ok(v) = VaultEntity::find()
             .filter(VaultColumn::Status.is_not_in([
-                VaultItemStatus::READY,
-                VaultItemStatus::CANCELLED,
-                VaultItemStatus::FAILED,
+                VaultStatus::READY,
+                VaultStatus::CANCELLED,
+                VaultStatus::FAILED,
             ]))
             .all(db)
             .await
@@ -116,7 +115,7 @@ impl DownloadManager {
             let items: Vec<VaultItem> = active_items
                 .iter()
                 .filter_map(|v| {
-                    if v.value().status != VaultItemStatus::PAUSED {
+                    if v.value().status != VaultStatus::PAUSED {
                         Some(v.value().clone())
                     } else {
                         None
@@ -132,7 +131,7 @@ impl DownloadManager {
             // 2. Iterate and spawn isolated tasks
             for item in items {
                 match item.status {
-                    VaultItemStatus::COMPLETED | VaultItemStatus::PROCESSING => {
+                    VaultStatus::COMPLETED | VaultStatus::PROCESSING => {
                         tracing::info!("Resuming post-processing for vault item: {}", item.title);
                         let proc = media_processor.clone();
                         let bg_m = bg_m.clone();
@@ -146,7 +145,7 @@ impl DownloadManager {
                             }
                         });
                     }
-                    VaultItemStatus::PENDING | VaultItemStatus::DOWNLOADING => {
+                    VaultStatus::PENDING | VaultStatus::DOWNLOADING => {
                         if let Some(engine) = engines.get(&item.download_type).cloned() {
                             set.spawn(async move {
                                 if let Err(e) = engine.add(&item).await {

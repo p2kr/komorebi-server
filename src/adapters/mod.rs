@@ -9,12 +9,11 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::dtos::media::PaginatedResponse;
 use crate::{
     adapters::{anilist_client::AniListClient, mal_client::MalClient},
-    models::{
-        media::{MediaProvider, PaginatedResponse},
-        users::User,
-    },
+    dtos::MediaProvider,
+    models::users::User,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

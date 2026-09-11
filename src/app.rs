@@ -17,7 +17,7 @@ use std::{path::Path, sync::Arc, time::Duration};
 use tokio::sync::broadcast::Sender;
 use tokio::sync::broadcast::{self};
 
-use crate::models::events::AppEvent;
+use crate::dtos::events::AppEvent;
 use crate::streaming::processor::MediaProcessor;
 #[allow(unused_imports)]
 use crate::{controllers, models::users, workers::downloader::DownloadWorker};
@@ -100,7 +100,7 @@ impl Hooks for App {
             .insert::<Arc<DownloadManager>>(download_manager.clone());
 
         // start the download daemon
-        start_daemon(ctx.clone(), download_manager, tx);
+        start_daemon(ctx.clone());
 
         Ok(ctx)
     }

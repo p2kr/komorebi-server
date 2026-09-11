@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use crate::{
     crawlers::Crawler,
-    models::crawler::{CrawlerConfig, CrawlerResult},
+    dtos::crawler::{CrawlerConfig, CrawlerResult},
 };
 
 #[derive(Default)]

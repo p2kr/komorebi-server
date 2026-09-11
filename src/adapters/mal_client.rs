@@ -3,16 +3,14 @@ use loco_rs::{Error, Result};
 use serde_json::{Value, json};
 use tracing::debug;
 
+use crate::dtos::media::{MediaProvider, PaginatedResponse};
 use crate::{
     adapters::{
         MediaClient, MediaClientParams,
         mal_models::{MalResponse, MalStatus},
     },
     core::{ResultExt, constants::DEFAULT_HOSTED_AUTH_PAGE},
-    models::{
-        media::{MediaProvider, PaginatedResponse},
-        users::User,
-    },
+    models::users::User,
 };
 
 const DEFAULT_MAL_BASE_URL: &str = "https://api.myanimelist.net/v2";

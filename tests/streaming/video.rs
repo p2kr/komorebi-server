@@ -1,7 +1,7 @@
 use komorebi_server::{
     core::constants::{ENCODED_LOC, FONTS_LOC, SUBTITLES_LOC},
-    dtos::Font,
-    models::media::MediaType,
+    dtos::media::MediaType,
+    models::subtitle_fonts::Model as Font,
     streaming::{processor::cached_resolve_file_paths, video::VideoProcessor},
 };
 use std::fs;
@@ -442,7 +442,11 @@ async fn test_extract_chapters_subtitles_fonts_metadata() {
         assert_eq!(fonts.len(), 1);
         assert_eq!(
             fonts[0],
-            Font::new("font_0.ttf".into(), "font_0.ttf".into())
+            Font {
+                file_name: "font_0.ttf".into(),
+                file_path: "font_0.ttf".into(),
+                ..Default::default()
+            }
         );
         let args = args.build_args().expect("expected build args");
 
@@ -537,17 +541,17 @@ fn test_parse_probe_chapters() {
 
     let chapters = VideoProcessor::parse_probe_chapters(&probe);
     assert_eq!(chapters.len(), 3);
-    assert_eq!(chapters[0].id, 0);
+    assert_eq!(chapters[0].chapter_id, 0);
     assert_eq!(chapters[0].title, "Prologue");
     assert_eq!(chapters[0].start_time, 0.0);
     assert_eq!(chapters[0].end_time, 120.5);
 
-    assert_eq!(chapters[1].id, 1);
+    assert_eq!(chapters[1].chapter_id, 1);
     assert_eq!(chapters[1].title, "Opening");
     assert_eq!(chapters[1].start_time, 120.5);
     assert_eq!(chapters[1].end_time, 300.0);
 
-    assert_eq!(chapters[2].id, 2);
+    assert_eq!(chapters[2].chapter_id, 2);
     assert_eq!(chapters[2].title, "Chapter 3");
     assert_eq!(chapters[2].start_time, 300.0);
     assert_eq!(chapters[2].end_time, 600.0);

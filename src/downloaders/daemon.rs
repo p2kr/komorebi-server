@@ -6,19 +6,21 @@ use sea_orm::{
     DbErr::{self},
     EntityTrait,
 };
-use tokio::{sync::broadcast::Sender, time::interval};
+use tokio::time::interval;
 
 use crate::{
     downloaders::{manager::DownloadManager, remove_vault_contents},
-    models::{
-        events::AppEvent,
-        vault::{self, VaultItem, VaultItemStatus},
-    },
+    dtos::VaultStatus,
+    models::vault::{self, VaultItem},
     streaming::processor::MediaProcessor,
 };
 
-pub fn start_daemon(ctx: AppContext, manager: Arc<DownloadManager>, _ws: Sender<AppEvent>) {
+pub fn start_daemon(ctx: AppContext) {
     tokio::spawn(async move {
+        // let _ws: Sender<AppEvent> = ctx.shared_store.get().unwrap();
+        let processor: Arc<MediaProcessor> = ctx.shared_store.get().unwrap();
+        let manager: Arc<DownloadManager> = ctx.shared_store.get().unwrap();
+
         tracing::info!("starting download manger polling daemon");
         let mut timer = interval(Duration::from_secs(2));
         loop {
@@ -40,23 +42,21 @@ pub fn start_daemon(ctx: AppContext, manager: Arc<DownloadManager>, _ws: Sender<
             }
 
             for item in active_items.iter() {
-                if item.status == VaultItemStatus::COMPLETED {
+                if item.status == VaultStatus::COMPLETED {
                     tracing::info!("Download completed for: {}", item.title);
                     // Send it to post-process
                     if let Some(mut it) = manager.active_items.get_mut(&item.id) {
-                        it.status = VaultItemStatus::PROCESSING;
-                        if let Some(processor) = ctx.shared_store.get::<Arc<MediaProcessor>>() {
-                            let processor = processor.clone();
-                            let manager = manager.clone();
-                            let it_clone = it.clone();
-                            tokio::spawn(async move {
-                                processor.start(&it_clone, manager).await;
-                            });
-                        }
+                        it.status = VaultStatus::PROCESSING;
+                        let processor = processor.clone();
+                        let manager = manager.clone();
+                        let it_clone = it.clone();
+                        tokio::spawn(async move {
+                            processor.start(&it_clone, manager).await;
+                        });
                     }
                 } else if matches!(
                     item.status,
-                    VaultItemStatus::READY | VaultItemStatus::FAILED | VaultItemStatus::CANCELLED
+                    VaultStatus::READY | VaultStatus::FAILED | VaultStatus::CANCELLED
                 ) {
                     tracing::info!("Processing {:?} for: {}", item.status, item.title);
                     manager.active_items.remove(&item.id);
@@ -68,7 +68,7 @@ pub fn start_daemon(ctx: AppContext, manager: Arc<DownloadManager>, _ws: Sender<
                 let id = item.id;
                 let download_type = item.download_type.clone();
 
-                if item.status == VaultItemStatus::CANCELLED {
+                if item.status == VaultStatus::CANCELLED {
                     // Delete
                     match vault::Entity::delete_by_id(item.id).exec(&ctx.db).await {
                         Ok(_) => {

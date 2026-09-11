@@ -1,10 +1,10 @@
 use std::{
-    collections::HashMap,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
-use cached::concurrent_cached;
+use crate::{core::ResultExt, dtos::MediaType};
+use cached::cached;
 use dashmap::DashMap;
 use loco_rs::Result;
 use sea_orm::{
@@ -19,16 +19,11 @@ use uuid::Uuid;
 use walkdir::WalkDir;
 
 use crate::{
-    core::{
-        constants::{ENCODED_LOC, METADATA_LOC},
-        is_active_status,
-    },
+    core::{constants::ENCODED_LOC, is_active_status},
     crawlers::crawler_engine::CrawlerEngine,
     downloaders::{manager::DownloadManager, torrent::TorrentDownloader},
-    dtos::VaultMetadata,
     models::{
-        media::MediaType,
-        vault::{VaultDownloadType, VaultItem, VaultItemStatus},
+        vault::{VaultDownloadType, VaultItem, VaultStatus},
         vault_sub_item::{
             Column as VaultSubItemColumn, Entity as VaultSubItemEntity, VaultSubItem,
         },
@@ -43,7 +38,7 @@ pub struct MediaProcessor {
     db: DbConn,
 }
 
-#[concurrent_cached(max_size = 100)]
+#[cached(max_size = 100)]
 pub async fn cached_resolve_file_paths(folder: &str) -> Vec<(PathBuf, MediaType)> {
     let f = folder.to_string();
     task::spawn_blocking(move || {
@@ -90,9 +85,9 @@ impl MediaProcessor {
         let map = DashMap::new();
         if let Ok(v) = VaultSubItemEntity::find()
             .filter(VaultSubItemColumn::Status.is_not_in([
-                VaultItemStatus::READY,
-                VaultItemStatus::CANCELLED,
-                VaultItemStatus::FAILED,
+                VaultStatus::READY,
+                VaultStatus::CANCELLED,
+                VaultStatus::FAILED,
             ]))
             .all(db)
             .await
@@ -111,12 +106,13 @@ impl MediaProcessor {
     pub async fn new(db: &DbConn) -> Arc<Self> {
         Arc::new(Self {
             db: db.clone(),
+            // TODO: Utilize this
             active_sub_items: Arc::new(Self::get_active_items(db).await),
         })
     }
 
     pub async fn create_vault_sub_items(&self, item: &VaultItem) -> Result<()> {
-        let files = cached_resolve_file_paths(&item.destination_path).await;
+        let files = cached_resolve_file_paths(&item.dest_path).await;
 
         // Remove existing sub items
         VaultSubItemEntity::purge_vault_sub_items(&self.db, item.id).await?;
@@ -141,13 +137,11 @@ impl MediaProcessor {
                     id,
                     vault_id: item.id,
                     source_path: source_path.to_owned(),
-                    media_type: Some(media_type.clone()),
+                    media_type: media_type.clone(),
                     title,
                     raw_title: file_name.to_string(),
                     season: parsed_results.season.first().cloned(),
                     episode: parsed_results.episode.first().cloned(),
-                    source_url: item.source_url.clone(),
-                    download_type: item.download_type.clone(),
                     ..Default::default()
                 };
 
@@ -184,69 +178,61 @@ impl MediaProcessor {
         }
 
         let mut tasks = JoinSet::new();
-        let mut sub_items_map = HashMap::new();
 
-        for item in sub_items.iter() {
-            sub_items_map.insert(item.id, item.clone());
+        for sub_item in sub_items.iter() {
+            self.active_sub_items.insert(sub_item.id, sub_item.clone());
 
             let bg_m = manager.clone();
-            let id = item.id;
-            let item = item.clone();
+            let sub_item_id = sub_item.id;
+            let bg_sub_item = sub_item.clone();
             let bg_self = self.clone();
             // post process sub items
             tasks.spawn(async move {
-                let media_type = item.media_type.clone();
-                let result = match media_type.unwrap_or_default() {
-                    MediaType::Anime => VideoProcessor::post_process(bg_self, bg_m, item).await,
+                let media_type = bg_sub_item.media_type.clone();
+                let result = match media_type {
+                    MediaType::Anime => {
+                        VideoProcessor::post_process(bg_self, bg_m, bg_sub_item).await
+                    }
                     // TODO:
                     _ => unimplemented!(),
                 };
 
-                match result {
-                    Ok(v) => (VaultItemStatus::READY, None, id, Some(v)),
-                    Err(e) => (VaultItemStatus::FAILED, Some(e.to_string()), id, None),
-                }
+                (result, sub_item_id)
             });
         }
-        let mut progress_count = 0;
+        let progress_count = 0;
         let total_count = sub_items.len();
-        let vault_metadata_path = PathBuf::from(&vault_item.destination_path).join(METADATA_LOC);
-        let mut meta_data = VaultMetadata {
-            id: vault_item.id,
-            videos: Vec::new(),
-        };
+
         while let Some(task) = tasks.join_next().await {
             match task {
-                Ok((status, err_msg, id, meta)) => {
-                    // update sub item in db.
-                    if let Some(mut sub_item) = sub_items_map.remove(&id) {
-                        if status == VaultItemStatus::READY {
-                            sub_item.progress = 100.0;
+                Ok((meta_result, sub_item_id)) => {
+                    if let Some((_, mut sub_item)) = self.active_sub_items.remove(&sub_item_id) {
+                        match meta_result {
+                            Ok(metadata) => {
+                                sub_item.status = VaultStatus::READY;
+                                sub_item.progress = 100.0;
+                                sub_item.error_msg = None;
+
+                                // Update metadata.
+                                metadata
+                                    .save_vault_metadata_dto(&self.db)
+                                    .await
+                                    .to_loco_err()
+                                    .ok();
+                            }
+                            Err(e) => {
+                                sub_item.status = VaultStatus::FAILED;
+                                sub_item.error_msg = Some(e.to_string());
+                            }
                         }
-                        sub_item.status = status.clone();
-                        sub_item.error_msg = err_msg.clone();
-                        if let Some((path, _)) = &meta {
-                            sub_item.dest_path = Some(path.to_string_lossy().into_owned());
-                        }
+
                         sub_item
                             .into_active_model()
-                            .update_status_mut(status.clone(), err_msg)
+                            .update_progress_mut()
                             .update(&self.db)
                             .await
+                            .to_loco_err()
                             .ok();
-
-                        if status == VaultItemStatus::READY {
-                            self.active_sub_items.remove(&id);
-                            progress_count += 1;
-
-                            if let Some(mut item) = manager.active_items.get_mut(&vault_item.id) {
-                                item.progress =
-                                    (progress_count as f64 / total_count as f64) * 100.0;
-                            }
-                            if let Some((_, data)) = meta {
-                                meta_data.videos.push(data);
-                            }
-                        }
                     }
                 }
                 Err(e) => {
@@ -260,13 +246,13 @@ impl MediaProcessor {
         if let Some(mut item) = manager.active_items.get_mut(&vault_item.id) {
             if progress_count == total_count {
                 item.progress = 100.0;
-                item.status = VaultItemStatus::READY;
+                item.status = VaultStatus::READY;
                 item.error_msg = None;
 
                 // Remove all downloaded files.
                 let bg_m = manager.clone();
                 let vault_id = vault_item.id;
-                let dest_path = item.destination_path.clone();
+                let dest_path = item.dest_path.clone();
                 let download_type = item.download_type.clone();
                 spawn(async move {
                     for (file_path, _) in cached_resolve_file_paths(&dest_path).await.iter() {
@@ -275,11 +261,11 @@ impl MediaProcessor {
                 });
             } else if progress_count == 0 {
                 item.progress = 0.0;
-                item.status = VaultItemStatus::FAILED;
+                item.status = VaultStatus::FAILED;
                 item.error_msg = Some("All sub items failed".into());
             } else {
                 item.progress = (progress_count as f64 / total_count as f64) * 100.0;
-                item.status = VaultItemStatus::PARTIAL;
+                item.status = VaultStatus::PARTIAL;
                 item.error_msg = Some(format!(
                     "[{}/{}] Sub items failed",
                     total_count - progress_count,
@@ -289,9 +275,6 @@ impl MediaProcessor {
         }
 
         manager.wake_daemon();
-
-        // Save meta data to vault root.
-        fs::write(vault_metadata_path, serde_json::to_vec_pretty(&meta_data)?).await?;
 
         Ok(())
     }

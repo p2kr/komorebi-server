@@ -1,3 +1,4 @@
+use crate::dtos::{VaultDownloadType, VaultStatus};
 use std::any::Any;
 use std::{fmt::Display, sync::Arc};
 
@@ -6,15 +7,10 @@ use librqbit::{AddTorrent, AddTorrentOptions, AddTorrentResponse, ManagedTorrent
 use loco_rs::prelude::async_trait;
 use loco_rs::{Error, Result};
 use reqwest::{Client, Url};
-use tokio::sync::OnceCell;
 use uuid::Uuid;
 
 use crate::core::client::get_common_trackers;
-use crate::{
-    core::ResultExt,
-    downloaders::DownloadEngine,
-    models::vault::{VaultDownloadType, VaultItem, VaultItemStatus},
-};
+use crate::{core::ResultExt, downloaders::DownloadEngine, models::vault::VaultItem};
 
 pub struct TorrentDownloader {
     client: Client,
@@ -22,8 +18,6 @@ pub struct TorrentDownloader {
     active_items: Arc<DashMap<Uuid, VaultItem>>,
     handles: DashMap<Uuid, Arc<ManagedTorrent>>,
 }
-
-const TRACKERS: OnceCell<Vec<String>> = OnceCell::const_new();
 
 impl Display for TorrentDownloader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -71,16 +65,12 @@ impl DownloadEngine for TorrentDownloader {
     async fn add(&self, vault_item: &VaultItem) -> Result<()> {
         let url = Url::parse(&vault_item.source_url).to_loco_string()?;
 
-        // TODO: Truncate to max thousand/hundred to avoid cloning performance issues?
-        let trackers = TRACKERS
-            .get_or_init(|| get_common_trackers(&self.client))
-            .await
-            .clone();
+        let trackers = get_common_trackers(&self.client).await;
 
         // 1. Configure the torrent
         let opts = AddTorrentOptions {
             paused: false,
-            output_folder: Some(vault_item.destination_path.clone()),
+            output_folder: Some(vault_item.dest_path.clone()),
             overwrite: true,
             trackers: Some(trackers),
             ..Default::default()
@@ -113,7 +103,7 @@ impl DownloadEngine for TorrentDownloader {
         if let Some(handle) = self.handles.get(vault_id) {
             self.session.pause(handle.value()).await.to_loco_string()?;
             if let Some(mut v) = self.active_items.get_mut(vault_id) {
-                v.status = VaultItemStatus::PAUSED;
+                v.status = VaultStatus::PAUSED;
             }
         }
         Ok(())
@@ -126,7 +116,7 @@ impl DownloadEngine for TorrentDownloader {
                 .await
                 .to_loco_string()?;
             if let Some(mut v) = self.active_items.get_mut(vault_id) {
-                v.status = VaultItemStatus::PENDING;
+                v.status = VaultStatus::PENDING;
             }
         }
         Ok(())
@@ -136,7 +126,7 @@ impl DownloadEngine for TorrentDownloader {
         // 1. Remove it from our tracking maps
         if let Some((_, handle)) = self.handles.remove(vault_id) {
             if let Some(mut item) = self.active_items.get_mut(vault_id) {
-                item.status = VaultItemStatus::CANCELLED;
+                item.status = VaultStatus::CANCELLED;
             }
 
             // 2. Tell librqbit to delete it entirely (including files!)
@@ -156,10 +146,7 @@ impl DownloadEngine for TorrentDownloader {
             // Fetch the VaultItem and update it with the live librqbit stats!
             if let Some(mut item) = self.active_items.get_mut(vault_id)
                 && !handle.is_paused()
-                && matches!(
-                    item.status,
-                    VaultItemStatus::DOWNLOADING | VaultItemStatus::PENDING
-                )
+                && matches!(item.status, VaultStatus::DOWNLOADING | VaultStatus::PENDING)
                 && matches!(
                     item.download_type,
                     VaultDownloadType::MAGNET | VaultDownloadType::TFILE
@@ -190,9 +177,9 @@ impl DownloadEngine for TorrentDownloader {
                 // );
 
                 if t_stats.finished || item.progress == 100f64 {
-                    item.status = VaultItemStatus::COMPLETED;
+                    item.status = VaultStatus::COMPLETED;
                 } else {
-                    item.status = VaultItemStatus::DOWNLOADING;
+                    item.status = VaultStatus::DOWNLOADING;
                 }
             }
         }

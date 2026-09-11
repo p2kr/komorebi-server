@@ -2,7 +2,7 @@ use komorebi_server::adapters::mal_models::{
     MalAltTitles, MalGenre, MalItem, MalListStatus, MalNode, MalPaging, MalPicture, MalResponse,
     MalStatus,
 };
-use komorebi_server::models::media::{
+use komorebi_server::dtos::media::{
     ListEntry, ListStatus, MediaEntry, MediaFormat, MediaProvider, MediaType, NsfwLevel,
     PaginatedResponse,
 };
@@ -434,7 +434,7 @@ fn parse_mal_nsfw_all_arms() {
 
 // ─── Release status parsing ──────────────────────────────────────────────────
 
-fn release_status_for(status_str: &str) -> komorebi_server::models::media::ReleaseStatus {
+fn release_status_for(status_str: &str) -> komorebi_server::dtos::media::ReleaseStatus {
     let mut item = make_item(1, "Title", "tv", None);
     item.node.status = Some(status_str.into());
     let me: MediaEntry = item.try_into().unwrap();
@@ -443,7 +443,7 @@ fn release_status_for(status_str: &str) -> komorebi_server::models::media::Relea
 
 #[test]
 fn parse_mal_release_status_all_arms() {
-    use komorebi_server::models::media::ReleaseStatus;
+    use komorebi_server::dtos::media::ReleaseStatus;
     assert_eq!(
         release_status_for("currently_airing"),
         ReleaseStatus::Releasing

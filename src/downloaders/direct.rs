@@ -1,3 +1,4 @@
+use crate::dtos::VaultStatus;
 use std::{any::Any, fmt::Display, io::SeekFrom, sync::Arc, time::Duration};
 
 use dashmap::DashMap;
@@ -15,7 +16,7 @@ use uuid::Uuid;
 use crate::{
     core::{ResultExt, vault_path_resolver::get_file_path},
     downloaders::DownloadEngine,
-    models::vault::{VaultItem, VaultItemStatus},
+    models::vault::VaultItem,
 };
 
 pub struct DirectDownloader {
@@ -55,7 +56,7 @@ impl DownloadEngine for DirectDownloader {
         let url = Url::parse(&vault_item.source_url).to_loco_err()?;
 
         // 1. Ensure the destination directory exists
-        fs::create_dir_all(&vault_item.destination_path)
+        fs::create_dir_all(&vault_item.dest_path)
             .await
             .to_loco_err()?;
 
@@ -76,7 +77,7 @@ impl DownloadEngine for DirectDownloader {
                 let msg = format!("{}: {}", prefix, e);
                 tracing::error!("{}", msg);
                 if let Some(mut item) = active_items.get_mut(&vault_id) {
-                    item.status = VaultItemStatus::FAILED;
+                    item.status = VaultStatus::FAILED;
                     item.error_msg = Some(msg);
                 }
             };
@@ -132,7 +133,7 @@ impl DownloadEngine for DirectDownloader {
                     let msg = format!("Failed to open file: {}", e);
                     tracing::error!(msg);
                     if let Some(mut item) = active_items.get_mut(&vault_id) {
-                        item.status = VaultItemStatus::FAILED;
+                        item.status = VaultStatus::FAILED;
                         item.error_msg = Some(msg);
                     }
                     return;
@@ -166,7 +167,7 @@ impl DownloadEngine for DirectDownloader {
                         let msg = format!("Download paused for vault_id: {}", vault_id);
                         tracing::error!(msg);
                         if let Some(mut item) = active_items.get_mut(&vault_id) {
-                            item.status = VaultItemStatus::PAUSED;
+                            item.status = VaultStatus::PAUSED;
                             item.error_msg = Some(msg);
                         }
                         break;
@@ -217,7 +218,7 @@ impl DownloadEngine for DirectDownloader {
                                 if let Some(mut item) = active_items.get_mut(&vault_id) {
                                     item.downloaded_bytes = total_bytes as i64;
                                     item.progress = 100.0;
-                                    item.status = VaultItemStatus::COMPLETED;
+                                    item.status = VaultStatus::COMPLETED;
                                 }
                                 break;
                             }
@@ -266,7 +267,7 @@ impl DownloadEngine for DirectDownloader {
         // 2. Remove from stats
         if let Some(mut item) = self.active_items.get_mut(vault_id) {
             // 3. Delete files from disk
-            item.status = VaultItemStatus::CANCELLED;
+            item.status = VaultStatus::CANCELLED;
         }
         Ok(())
     }

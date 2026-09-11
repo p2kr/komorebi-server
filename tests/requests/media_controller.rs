@@ -1,7 +1,5 @@
-use komorebi_server::{
-    app::App,
-    models::{media::MediaProvider, users::ActiveModel},
-};
+use komorebi_server::dtos::media::MediaProvider;
+use komorebi_server::{app::App, models::users::ActiveModel};
 use loco_rs::testing::prelude::*;
 use sea_orm::{ActiveModelTrait, ActiveValue};
 use serial_test::serial;

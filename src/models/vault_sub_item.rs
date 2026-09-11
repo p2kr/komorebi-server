@@ -1,79 +1,62 @@
 use chrono::Utc;
+use educe::Educe;
 use loco_rs::prelude::async_trait;
 use loco_rs::prelude::*;
 use sea_orm::{ActiveValue, DbConn};
 
-use crate::models::vault::{VaultDownloadType, VaultItemStatus};
+use crate::models::vault::VaultStatus;
 
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::models::media::MediaType;
+use crate::dtos::media::MediaType;
 
 pub type VaultSubItem = Model;
 
 #[sea_orm::model]
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, Educe, PartialEq, DeriveEntityModel, Serialize, Deserialize, TS)]
+#[educe(Default)]
 #[sea_orm(table_name = "vault_sub_item")]
 #[ts(export, rename = "VaultSubItem")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub vault_id: Uuid,
-    #[sea_orm(unique)]
     /// `vault/<vault id>/<file.mkv>`
     pub source_path: String,
     /// `vault/<vault id>/encoded/<sub id>/metadata.json`
     pub dest_path: Option<String>,
-    pub media_type: Option<MediaType>,
+    pub media_type: MediaType,
     pub media_id: Option<String>,
     pub title: String,
     pub raw_title: String,
     pub season: Option<String>,
     pub episode: Option<String>,
-    pub source_url: String,
-    pub download_type: VaultDownloadType,
-    pub status: VaultItemStatus,
+
+    #[educe(Default = VaultStatus::PROCESSING)]
+    pub status: VaultStatus,
+
     pub total_bytes: i64,
     pub progress: f64,
     /// bytes/second
     pub speed_bps: i64,
     pub eta_seconds: Option<i64>,
     pub error_msg: Option<String>,
-    pub created_at: DateTimeWithTimeZone,
-    pub updated_at: DateTimeWithTimeZone,
+
+    #[educe(Default = Utc::now())]
+    pub created_at: DateTimeUtc,
+
+    #[educe(Default = Utc::now())]
+    pub updated_at: DateTimeUtc,
 
     #[sea_orm(belongs_to, from = "vault_id", to = "id")]
     #[ts(as = "super::vault::Model")]
     pub vault_item: BelongsTo<super::vault::Entity>,
-}
 
-impl Default for Model {
-    fn default() -> Self {
-        Self {
-            id: Default::default(),
-            vault_id: Default::default(),
-            source_path: Default::default(),
-            media_type: Default::default(),
-            media_id: None,
-            title: Default::default(),
-            raw_title: Default::default(),
-            season: Some("?".into()),
-            episode: Some("?".into()),
-            source_url: Default::default(),
-            download_type: VaultDownloadType::MAGNET,
-            status: VaultItemStatus::PENDING,
-            total_bytes: 0,
-            progress: 0.0,
-            speed_bps: 0,
-            eta_seconds: None,
-            dest_path: Default::default(),
-            error_msg: None,
-            created_at: Utc::now().into(),
-            updated_at: Utc::now().into(),
-        }
-    }
+    #[sea_orm(has_one)]
+    #[ts(as = "Option<super::vault_metadata::Model>")]
+    pub metadata: HasOne<super::vault_metadata::Entity>,
 }
 
 #[async_trait]
@@ -91,25 +74,19 @@ impl ActiveModelBehavior for ActiveModel {
         }
 
         if insert {
-            self.created_at = ActiveValue::Set(Utc::now().fixed_offset());
+            self.created_at = ActiveValue::Set(Utc::now());
         }
 
-        self.updated_at = ActiveValue::Set(Utc::now().into());
+        self.updated_at = ActiveValue::Set(Utc::now());
 
         Ok(self)
     }
 }
 
-// implement your read-oriented logic here
 impl Model {}
 
-// implement your write-oriented logic here
 impl ActiveModel {
-    pub fn update_status_mut(
-        mut self,
-        new_status: VaultItemStatus,
-        error_msg: Option<String>,
-    ) -> Self {
+    pub fn update_status_mut(mut self, new_status: VaultStatus, error_msg: Option<String>) -> Self {
         self.status = ActiveValue::Set(new_status);
         if let Some(msg) = error_msg {
             self.error_msg = ActiveValue::Set(Some(msg));
@@ -131,7 +108,6 @@ impl ActiveModel {
     }
 }
 
-// implement your custom finders, selectors oriented logic here
 impl Entity {
     pub async fn find_by_vault_id(db: &DbConn, vault_id: Uuid) -> Vec<Model> {
         Self::find()
@@ -144,7 +120,7 @@ impl Entity {
     pub async fn find_incomplete_by_vault_id(db: &DbConn, vault_id: Uuid) -> Vec<Model> {
         Self::find()
             .filter(Column::VaultId.eq(vault_id))
-            .filter(Column::Status.ne(VaultItemStatus::READY))
+            .filter(Column::Status.ne(VaultStatus::READY))
             .all(db)
             .await
             .unwrap_or_default()

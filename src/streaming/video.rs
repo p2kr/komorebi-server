@@ -16,9 +16,13 @@ use crate::{
         constants::{ENCODED_LOC, FONTS_LOC, METADATA_LOC, SUBTITLES_LOC},
     },
     downloaders::manager::DownloadManager,
-    dtos::{AudioTrack, Chapter, Font, Subtitle, VideoMetadata},
+    dtos::vault::VaultMetadataDto,
     loco_err, loco_err_msg,
-    models::{vault::VaultItemStatus, vault_sub_item::VaultSubItem},
+    models::{
+        audio_tracks::AudioTrack, subtitle_fonts::SubtitleFont, vault::VaultStatus,
+        vault_metadata::VaultMetadata, vault_sub_item::VaultSubItem, video_chapters::VideoChapter,
+        video_subtitles::VideoSubtitle,
+    },
     streaming::{PostProcessor, processor::MediaProcessor},
 };
 
@@ -204,17 +208,19 @@ impl VideoProcessor {
     }
 
     /// Assembles the complete FFmpeg command arguments for post-processing in a SINGLE process.
+    ///
     /// In one invocation:
     /// - Dumps font attachments to `fonts/` via input option `-dump_attachment:t:{idx}`.
     /// - Transcodes/stream-copies video and audio to faststart MP4.
     /// - Extracts all raw subtitle streams into `subs/` via `-map 0:s:{idx} -c:s copy`.
+    ///
     /// Returns the command arguments, the subtitle tracks list, and font filenames.
     pub fn build_ffmpeg_args(
         input: &str,
         output_mp4: &str,
         encoded_dir: &Path,
         probe: &ProbeResult,
-    ) -> (FFmpegBuilder, Vec<Subtitle>, Vec<Font>) {
+    ) -> (FFmpegBuilder, Vec<VideoSubtitle>, Vec<SubtitleFont>) {
         let mut ff = FFmpegBuilder::with_executable(FFMPEG.as_path());
         let inp = Input::new(input);
         let mut out = Output::new(output_mp4);
@@ -237,9 +243,10 @@ impl VideoProcessor {
                     .join(font_name.as_str())
                     .to_string_lossy()
                     .into_owned();
-                fonts.push(Font {
-                    name: font_name,
-                    path: font_loc.clone(),
+                fonts.push(SubtitleFont {
+                    file_name: font_name,
+                    file_path: font_loc.clone(),
+                    ..Default::default()
                 });
                 ff = ff.output(
                     Output::new(font_loc)
@@ -263,19 +270,21 @@ impl VideoProcessor {
                     .disposition
                     .as_ref()
                     .and_then(|v| v.get("forced"))
-                    .map(|v| v == &1u8);
+                    .map(|v| v == &1u8)
+                    .unwrap_or_default();
 
-                subs.push(Subtitle {
+                subs.push(VideoSubtitle {
                     format: ext.to_string(),
-                    label: stream
+                    title: stream
                         .title()
                         .filter(|t| !t.trim().is_empty())
                         .map(String::from)
                         .unwrap_or(format!("Subtitle {}", subs.len())),
-                    lang: stream.language().unwrap_or("unk").to_string(),
-                    path: sub_loc.clone(),
-                    track: subs.len(),
+                    language: stream.language().unwrap_or("unk").to_string(),
+                    file_path: sub_loc.clone(),
+                    track: subs.len() as i64,
                     is_forced,
+                    ..Default::default()
                 });
 
                 ff = ff.output(
@@ -297,7 +306,7 @@ impl VideoProcessor {
     /// Parses `start_time` / `end_time` strings as seconds, falling back to
     /// `start` / `end` ticks converted via `time_base` if the string fields
     /// are absent.
-    pub fn parse_probe_chapters(probe: &ProbeResult) -> Vec<Chapter> {
+    pub fn parse_probe_chapters(probe: &ProbeResult) -> Vec<VideoChapter> {
         probe
             .chapters
             .iter()
@@ -321,11 +330,12 @@ impl VideoProcessor {
                     .map(String::from)
                     .unwrap_or_else(|| format!("Chapter {}", idx + 1));
 
-                Chapter {
-                    id: ch.id,
+                VideoChapter {
+                    chapter_id: ch.id,
                     title,
                     start_time,
                     end_time,
+                    ..Default::default()
                 }
             })
             .collect()
@@ -349,13 +359,15 @@ impl VideoProcessor {
             .audio_streams()
             .iter()
             .map(|stream| AudioTrack {
-                lang: stream.language().unwrap_or_default().to_string(),
-                label: stream.title().unwrap_or_default().to_string(),
+                language: stream.language().unwrap_or_default().to_string(),
+                title: stream.title().unwrap_or_default().to_string(),
                 channels: stream.channels.unwrap_or_default().to_string(),
                 is_default: stream
                     .disposition
                     .as_ref()
-                    .map(|v| v.get("default") == Some(&1u8)),
+                    .map(|v| v.get("default") == Some(&1u8))
+                    .unwrap_or_default(),
+                ..Default::default()
             })
             .collect()
     }
@@ -366,9 +378,9 @@ impl PostProcessor for VideoProcessor {
         processor: Arc<MediaProcessor>,
         manager: Arc<DownloadManager>,
         mut item: VaultSubItem,
-    ) -> Result<(PathBuf, VideoMetadata)> {
+    ) -> Result<VaultMetadataDto> {
         // Mark as PROCESSING before handing off to ffmpeg.
-        item.status = VaultItemStatus::PROCESSING;
+        item.status = VaultStatus::PROCESSING;
         item.error_msg = None;
         manager.wake_daemon();
 
@@ -433,14 +445,12 @@ impl PostProcessor for VideoProcessor {
 
         tracing::info!(vault_id = %sub_item_id, output, args=?&ff.command(), "spawning single ffmpeg process for video, subtitles, and fonts");
 
-        // let item = item.clone();
         processor.active_sub_items.insert(item.id, item);
-        // let processor = processor.clone();
 
         let ffmpeg_out = ff
             .on_progress(move |progress| {
                 if let Some(mut item) = processor.active_sub_items.get_mut(&sub_item_id) {
-                    item.status = VaultItemStatus::PROCESSING;
+                    item.status = VaultStatus::PROCESSING;
                     item.total_bytes = progress.size.unwrap_or_default() as i64;
 
                     let current_secs = progress.time.unwrap_or_default().as_secs_f64();
@@ -466,18 +476,22 @@ impl PostProcessor for VideoProcessor {
         if ffmpeg_out.success() {
             tracing::info!(vault_id = %sub_item_id, input=?source_path, output=?output_file, "ffmpeg finished successfully");
 
-            let metadata = VideoMetadata {
-                id: sub_item_id,
-                file_name: output_file
-                    .file_name()
-                    .map(|v| v.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
-                thumbnail_path: None,
-                path: output,
+            // Id will be assigned before saving in db.
+            let metadata = VaultMetadataDto {
+                vault_metadata: VaultMetadata {
+                    sub_item_id,
+                    file_name: output_file
+                        .file_name()
+                        .map(|v| v.to_string_lossy().into_owned())
+                        .unwrap_or_default(),
+                    thumbnail_path: None,
+                    file_path: output,
+                    ..Default::default()
+                },
                 audio_tracks,
-                chapters,
-                subtitles,
-                fonts,
+                video_chapters: chapters,
+                video_subtitles: subtitles,
+                subtitle_fonts: fonts,
             };
 
             let metadata_path = encoded_dir.join(METADATA_LOC);
@@ -487,14 +501,14 @@ impl PostProcessor for VideoProcessor {
 
             // Remove empty sub/font folders if none were extracted
             let subs_dir = encoded_dir.join(SUBTITLES_LOC);
-            if metadata.subtitles.is_empty() && subs_dir.is_dir() {
+            if metadata.video_subtitles.is_empty() && subs_dir.is_dir() {
                 let _ = fs::remove_dir_all(&subs_dir).await;
             }
             let fonts_dir = encoded_dir.join(FONTS_LOC);
-            if metadata.fonts.is_empty() && fonts_dir.is_dir() {
+            if metadata.subtitle_fonts.is_empty() && fonts_dir.is_dir() {
                 let _ = fs::remove_dir_all(&fonts_dir).await;
             }
-            Ok((metadata_path, metadata))
+            Ok(metadata)
         } else {
             let msg = format!(
                 "ffmpeg exited with code {}",

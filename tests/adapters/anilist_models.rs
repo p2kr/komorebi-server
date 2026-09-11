@@ -2,7 +2,7 @@ use komorebi_server::adapters::anilist_models::{
     AniListCoverImage, AniListData, AniListGraphqlError, AniListMedia, AniListMediaListEntry,
     AniListPage, AniListPageInfo, AniListResponse, AniListTitle,
 };
-use komorebi_server::models::media::{
+use komorebi_server::dtos::media::{
     ListEntry, ListStatus, MediaEntry, MediaFormat, MediaProvider, MediaType, NsfwLevel,
     PaginatedResponse, ReleaseStatus,
 };

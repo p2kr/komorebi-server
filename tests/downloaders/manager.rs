@@ -1,16 +1,16 @@
-use komorebi_server::{core::is_active_status, models::vault::VaultItemStatus};
+use komorebi_server::{core::is_active_status, models::vault::VaultStatus};
 
 #[test]
 fn test_is_active_status_includes_processing_and_completed() {
     // Active or pending work on startup
-    assert!(is_active_status(&VaultItemStatus::PENDING));
-    assert!(is_active_status(&VaultItemStatus::DOWNLOADING));
-    assert!(is_active_status(&VaultItemStatus::PAUSED));
-    assert!(is_active_status(&VaultItemStatus::COMPLETED));
-    assert!(is_active_status(&VaultItemStatus::PROCESSING));
+    assert!(is_active_status(&VaultStatus::PENDING));
+    assert!(is_active_status(&VaultStatus::DOWNLOADING));
+    assert!(is_active_status(&VaultStatus::PAUSED));
+    assert!(is_active_status(&VaultStatus::COMPLETED));
+    assert!(is_active_status(&VaultStatus::PROCESSING));
 
     // Inactive / terminal states excluded from active downloads
-    assert!(!is_active_status(&VaultItemStatus::READY));
-    assert!(!is_active_status(&VaultItemStatus::FAILED));
-    assert!(!is_active_status(&VaultItemStatus::CANCELLED));
+    assert!(!is_active_status(&VaultStatus::READY));
+    assert!(!is_active_status(&VaultStatus::FAILED));
+    assert!(!is_active_status(&VaultStatus::CANCELLED));
 }

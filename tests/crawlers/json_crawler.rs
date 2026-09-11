@@ -1,6 +1,6 @@
 use komorebi_server::{
     crawlers::{Crawler, json_crawler::JsonCrawler},
-    models::crawler::CrawlerConfig,
+    dtos::crawler::CrawlerConfig,
 };
 
 #[tokio::test]

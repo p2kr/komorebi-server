@@ -6,7 +6,7 @@ use reqwest::Url;
 
 use crate::{
     crawlers::Crawler,
-    models::crawler::{CrawlerConfig, CrawlerResult},
+    dtos::crawler::{CrawlerConfig, CrawlerResult},
 };
 
 #[derive(Default)]

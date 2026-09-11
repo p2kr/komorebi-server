@@ -4,7 +4,7 @@ pub mod crawler_engine;
 pub mod html_crawler;
 pub mod json_crawler;
 
-use crate::models::crawler::{CrawlerConfig, CrawlerResult, ParsedTitle};
+use crate::dtos::crawler::{CrawlerConfig, CrawlerResult, ParsedTitle};
 
 pub trait Crawler {
     #[must_use]

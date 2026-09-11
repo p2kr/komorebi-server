@@ -1,63 +1,7 @@
-use sea_orm::prelude::*;
+pub use crate::dtos::{MediaProvider, MediaType};
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
-use strum::EnumString;
 use ts_rs::TS;
 use uuid::Uuid;
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  Enums
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-#[derive(
-    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, DeriveActiveEnum, EnumIter, TS,
-)]
-#[sea_orm(
-    rs_type = "String",
-    db_type = "String(StringLen::None)",
-    rename_all = "UPPERCASE"
-)]
-pub enum MediaProvider {
-    #[default]
-    MAL,
-    ANILIST,
-}
-
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Default,
-    EnumString,
-    DeriveActiveEnum,
-    EnumIter,
-    TS,
-)]
-#[strum(ascii_case_insensitive)]
-#[sea_orm(
-    rs_type = "String",
-    db_type = "String(StringLen::None)",
-    rename_all = "UPPERCASE"
-)]
-pub enum MediaType {
-    #[default]
-    Anime,
-    Manga,
-    Novel,
-}
-
-impl<'de> Deserialize<'de> for MediaType {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        Ok(Self::from_str(&s).unwrap_or_default())
-    }
-}
 
 /// What format the media was released as.
 ///

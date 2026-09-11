@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::models::media::{
+use crate::dtos::media::{
     CoverImage, ListEntry, ListStatus, Media, MediaEntry, MediaFormat, MediaProvider, MediaTitle,
     MediaType, NsfwLevel, PaginatedResponse, Paging, ReleaseStatus,
 };

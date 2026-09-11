@@ -3,15 +3,15 @@
 pub mod processor;
 pub mod video;
 
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use loco_rs::Result;
 use phf::{Map, phf_map};
 
+use crate::dtos::media::MediaType;
+use crate::dtos::vault::VaultMetadataDto;
 use crate::{
-    downloaders::manager::DownloadManager,
-    dtos::VideoMetadata,
-    models::{media::MediaType, vault_sub_item::VaultSubItem},
+    downloaders::manager::DownloadManager, models::vault_sub_item::VaultSubItem,
     streaming::processor::MediaProcessor,
 };
 
@@ -20,7 +20,7 @@ pub trait PostProcessor {
         processor: Arc<MediaProcessor>,
         manager: Arc<DownloadManager>,
         item: VaultSubItem,
-    ) -> impl Future<Output = Result<(PathBuf, VideoMetadata)>>;
+    ) -> impl Future<Output = Result<VaultMetadataDto>>;
 }
 
 const EXT_VS_TYPE: Map<&str, MediaType> = phf_map! {

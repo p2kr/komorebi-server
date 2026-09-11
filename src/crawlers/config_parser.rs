@@ -5,7 +5,7 @@ use std::{
 
 use indexmap::IndexMap;
 
-use crate::models::crawler::CrawlerConfig;
+use crate::dtos::crawler::CrawlerConfig;
 
 pub static CRAWLER_CONFIGS: LazyLock<Vec<Arc<CrawlerConfig>>> =
     LazyLock::new(|| get_crawler_configs().into_iter().map(Arc::new).collect());

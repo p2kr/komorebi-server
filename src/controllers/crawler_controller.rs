@@ -6,7 +6,7 @@ use serde::Deserialize;
 use crate::{
     controllers::success,
     crawlers::{config_parser::CRAWLER_CONFIGS, crawler_engine::CrawlerEngine},
-    models::{crawler::CrawlerConfig, media::MediaType},
+    dtos::{crawler::CrawlerConfig, media::MediaType},
 };
 
 #[derive(Deserialize, Default)]

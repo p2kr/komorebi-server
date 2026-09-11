@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use cached::once;
 use loco_rs::prelude::*;
 use reqwest::Client;
 
@@ -17,6 +18,7 @@ pub fn get_reqwest_client() -> Result<Client> {
 const TRACKERS_URL: &str =
     "https://raw.githubusercontent.com/ngosang/trackerslist/refs/heads/master/trackers_all.txt";
 
+#[once]
 pub async fn get_common_trackers(client: &Client) -> Vec<String> {
     if let Ok(resp) = client.get(TRACKERS_URL).send().await
         && resp.status().is_success()

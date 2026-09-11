@@ -1,7 +1,5 @@
-use komorebi_server::{
-    app::App,
-    models::{media::MediaProvider, users},
-};
+use komorebi_server::dtos::media::MediaProvider;
+use komorebi_server::{app::App, models::users};
 use loco_rs::{hash, testing::prelude::*};
 use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait, IntoActiveModel};
 use serial_test::serial;
@@ -46,14 +44,11 @@ async fn test_user_model_crud_and_passcode() {
     assert_eq!(found_by_id.id, user.id);
 
     // Test find_by_username_and_provider_and_sandbox
-    let found_by_prov = users::Entity::find_by_username_and_provider_and_sandbox(
-        &boot.app_context.db,
-        username,
-        MediaProvider::MAL,
-        true,
-    )
-    .await
-    .expect("User should be found by username and provider");
+    let found_by_prov =
+        users::Entity::find_by_unique_user((username.to_string(), MediaProvider::MAL, true))
+            .require_one(&boot.app_context.db)
+            .await
+            .expect("User should be found by username and provider");
     assert_eq!(found_by_prov.id, user.id);
 
     // Test get_all_users

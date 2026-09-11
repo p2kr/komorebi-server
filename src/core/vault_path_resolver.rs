@@ -6,7 +6,7 @@ use crate::{
 };
 
 pub fn get_file_path(vault_item: &VaultItem) -> String {
-    format!("{}/{}", vault_item.destination_path, vault_item.title)
+    format!("{}/{}", vault_item.dest_path, vault_item.title)
 }
 
 pub fn get_sub_item_file_path(sub_item: &VaultSubItem) -> String {

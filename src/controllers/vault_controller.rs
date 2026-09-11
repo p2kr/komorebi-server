@@ -9,19 +9,19 @@ use tokio::{sync::broadcast::Sender, time::interval};
 use ts_rs::TS;
 use uuid::Uuid;
 
-use crate::controllers::vault_stream::stream;
+use crate::controllers::vault_stream::{get_metadata, stream};
 use crate::downloaders::remove_vault_contents;
+use crate::models::vault::{self, VaultDownloadType, VaultItem, VaultStatus};
 use crate::{
     controllers::success,
     core::vault_path_resolver::get_dest_path,
     downloaders::manager::DownloadManager,
-    loco_err, loco_err_msg,
-    models::{
+    dtos::{
         crawler::{CrawlerResult, ParsedTitle},
         events::AppEvent,
         media::MediaType,
-        vault::{self, VaultDownloadType, VaultItem, VaultItemStatus},
     },
+    loco_err, loco_err_msg,
 };
 
 // --- JSON Payloads ---
@@ -56,10 +56,10 @@ fn get_download_type_from_url(url: &str) -> Result<VaultDownloadType> {
     }
 }
 
-fn get_media_id(_parsed_title: &ParsedTitle) -> Result<String> {
+fn get_media_id(_parsed_title: &ParsedTitle) -> Option<String> {
     // TODO: Connect with anilist/mal and find the best match
     // todo!()
-    Ok("123".into())
+    None
 }
 
 fn get_media_type(parsed_title: &ParsedTitle) -> Result<MediaType> {
@@ -105,10 +105,11 @@ pub async fn add(
     let vault_item = VaultItem {
         id: vault_id,
         user_id: params.user_id,
-        destination_path: get_dest_path(&vault_id),
-        media_type: Some(get_media_type(&params.crawler_result.parsed_title)?),
-        media_id: get_media_id(&params.crawler_result.parsed_title)?,
+        dest_path: get_dest_path(&vault_id),
+        media_type: get_media_type(&params.crawler_result.parsed_title)?,
+        media_id: get_media_id(&params.crawler_result.parsed_title),
         title: title.clone(),
+        raw_title: params.crawler_result.title,
         source_url: params.crawler_result.link.clone(),
         download_type: download_type.clone(),
         ..Default::default()
@@ -132,7 +133,7 @@ pub async fn add(
             // Fail in db
             bg_inserted_item
                 .into_active_model()
-                .update_status(VaultItemStatus::FAILED, Some(e.to_string()))
+                .update_status(VaultStatus::FAILED, Some(e.to_string()))
                 .update(&ctx.db)
                 .await
                 .inspect_err(|e| tracing::error!("Error adding torrent {}", e))
@@ -159,11 +160,11 @@ pub async fn pause(
 
     if matches!(
         item.status,
-        VaultItemStatus::COMPLETED
-            | VaultItemStatus::PROCESSING
-            | VaultItemStatus::READY
-            | VaultItemStatus::PENDING
-            | VaultItemStatus::PAUSED
+        VaultStatus::COMPLETED
+            | VaultStatus::PROCESSING
+            | VaultStatus::READY
+            | VaultStatus::PENDING
+            | VaultStatus::PAUSED
     ) {
         return loco_err!("Cannot pause a completed/pending/paused download");
     }
@@ -195,10 +196,9 @@ pub async fn resume(
         .await?
         .ok_or(Error::NotFound)?;
 
-    if matches!(
-        item.status,
-        |VaultItemStatus::READY| VaultItemStatus::PENDING | VaultItemStatus::DOWNLOADING
-    ) {
+    if matches!(item.status, |VaultStatus::READY| VaultStatus::PENDING
+        | VaultStatus::DOWNLOADING)
+    {
         return loco_err!("Cannot resume a completed/ongoing download");
     }
 
@@ -323,32 +323,16 @@ pub async fn all(State(ctx): State<AppContext>) -> impl IntoResponse {
     )
 }
 
-#[axum::debug_handler]
-pub async fn one(
-    State(ctx): State<AppContext>,
-    Json(params): Json<VaultActionPayload>,
-) -> Result<Response> {
-    success(
-        vault::Entity::find_by_id(params.vault_id)
-            .require_one(&ctx.db)
-            .await?,
-    )
-}
-
-#[axum::debug_handler]
-pub async fn all_items(State(ctx): State<AppContext>) -> Result<Response> {
-    success(vault::Entity::find().all(&ctx.db).await?)
-}
-
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("vault")
         .add("add", post(add))
-        .add("one", post(one))
-        .add("all", get(all).post(all_items))
         .add("pause", post(pause))
         .add("resume", post(resume))
         .add("delete", post(delete))
+        .add("metadata", post(get_metadata))
+        // sse
+        .add("all", get(all))
         .add("active", get(active))
         .add("stream", get(stream))
 }

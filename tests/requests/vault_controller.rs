@@ -1,10 +1,10 @@
+use komorebi_server::dtos::crawler::CrawlerResult;
+use komorebi_server::dtos::media::{MediaProvider, MediaType};
 use komorebi_server::{
     app::App,
     models::{
-        crawler::CrawlerResult,
-        media::{MediaProvider, MediaType},
         users,
-        vault::{self, VaultDownloadType, VaultItem, VaultItemStatus},
+        vault::{self, VaultDownloadType, VaultItem, VaultStatus},
     },
 };
 use loco_rs::testing::prelude::*;
@@ -27,13 +27,13 @@ async fn seed_vault_item(ctx: &loco_rs::app::AppContext, user_id: Uuid, title: &
     let item = VaultItem {
         id: vault_id,
         user_id,
-        destination_path: format!("/tmp/vault_{}", vault_id),
-        media_type: Some(MediaType::Anime),
-        media_id: "123".into(),
+        dest_path: format!("/tmp/vault_{}", vault_id),
+        media_type: MediaType::Anime,
+        media_id: Some("123".into()),
         title: title.to_string(),
         source_url: format!("http://example.com/{}.mp4", title),
         download_type: VaultDownloadType::DIRECT,
-        status: VaultItemStatus::DOWNLOADING,
+        status: VaultStatus::DOWNLOADING,
         ..Default::default()
     };
     vault::ActiveModel::from(item)
@@ -148,7 +148,7 @@ async fn can_get_resume() {
         let user_id = seed_user(&ctx).await;
         let seeded = seed_vault_item(&ctx, user_id, "Test Anime Resume").await;
         let mut seeded_active = seeded.into_active_model();
-        seeded_active.status = ActiveValue::Set(VaultItemStatus::PAUSED);
+        seeded_active.status = ActiveValue::Set(VaultStatus::PAUSED);
         let seeded = seeded_active.update(&ctx.db).await.unwrap();
 
         let payload = serde_json::json!({ "vault_id": seeded.id });

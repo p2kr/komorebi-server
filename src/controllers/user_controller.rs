@@ -4,13 +4,11 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 use uuid::Uuid;
 
+use crate::dtos::media::MediaProvider;
 use crate::{
     adapters::MediaClientParams,
     controllers::success,
-    models::{
-        media::MediaProvider,
-        users::{self, User},
-    },
+    models::users::{self, User},
 };
 
 #[derive(Default, Deserialize, Serialize)]
@@ -51,18 +49,13 @@ pub struct ExchangeOauthTokenParams {
 
 #[debug_handler]
 async fn login(State(ctx): State<AppContext>, Json(params): Json<LoginParams>) -> Result<Response> {
-    let user_res = users::Entity::find_by_username_and_provider_and_sandbox(
-        &ctx.db,
-        &params.username,
+    let user = users::Entity::find_by_unique_user((
+        params.username,
         params.provider,
         params.is_sandbox.unwrap_or(false),
-    )
-    .await;
-
-    let user = match user_res {
-        Ok(user) => user,
-        Err(_) => return unauthorized("User not found"),
-    };
+    ))
+    .require_one(&ctx.db)
+    .await?;
 
     if !user.verify_passcode(params.passcode.as_deref()) {
         return unauthorized("Invalid passcode");

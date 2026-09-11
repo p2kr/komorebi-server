@@ -3,13 +3,11 @@ use loco_rs::{Error, Result};
 use serde_json::{Value, json};
 use tracing::debug;
 
+use crate::dtos::media::{MediaProvider, PaginatedResponse};
 use crate::{
     adapters::{MediaClient, MediaClientParams, anilist_models::AniListResponse},
     core::ResultExt,
-    models::{
-        media::{MediaProvider, PaginatedResponse},
-        users::User,
-    },
+    models::users::User,
 };
 
 const ANILIST_GRAPHQL_URL: &str = "https://graphql.anilist.co";

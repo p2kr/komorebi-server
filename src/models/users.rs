@@ -1,11 +1,11 @@
 use chrono::Utc;
-use derive_more::Debug;
+use educe::Educe;
 use loco_rs::prelude::async_trait;
 use loco_rs::{hash, prelude::*};
 use migration::OnConflict;
 use uuid::Uuid;
 
-use crate::models::media::MediaProvider;
+use crate::dtos::MediaProvider;
 
 pub type User = Model;
 
@@ -14,7 +14,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 #[sea_orm::model]
-#[derive(Clone, PartialEq, Debug, DeriveEntityModel, Eq, Serialize, Deserialize, Default, TS)]
+#[derive(Clone, PartialEq, Educe, DeriveEntityModel, Eq, Serialize, Deserialize, TS)]
+#[educe(Debug, Default)]
 #[sea_orm(table_name = "users")]
 #[serde(default)]
 #[ts(export, rename = "User")]
@@ -22,22 +23,28 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
 
+    #[sea_orm(unique_key = "unique_user")]
     pub username: String,
     pub provider_id: Option<String>,
     pub avatar_url: Option<String>,
+    #[sea_orm(unique_key = "unique_user")]
     pub provider: MediaProvider,
+    #[sea_orm(unique_key = "unique_user")]
     pub is_sandbox: bool,
 
     #[serde(skip_serializing)]
-    #[debug("[REDACTED]")]
+    #[educe(Debug(ignore))]
     pub access_token: Option<String>,
 
     #[serde(skip_serializing)]
-    #[debug("[REDACTED]")]
+    #[educe(Debug(ignore))]
     pub passcode: Option<String>,
 
-    pub created_at: DateTimeWithTimeZone,
-    pub updated_at: DateTimeWithTimeZone,
+    #[educe(Default = Utc::now())]
+    pub created_at: DateTimeUtc,
+
+    #[educe(Default = Utc::now())]
+    pub updated_at: DateTimeUtc,
 
     #[sea_orm(has_many)]
     #[ts(as = "Vec<super::vault::Model>")]
@@ -65,10 +72,10 @@ impl ActiveModelBehavior for ActiveModel {
         self.is_sandbox = ActiveValue::Set(is_sandbox);
 
         if insert {
-            self.created_at = ActiveValue::Set(Utc::now().fixed_offset());
+            self.created_at = ActiveValue::Set(Utc::now());
         }
 
-        self.updated_at = ActiveValue::Set(Utc::now().fixed_offset());
+        self.updated_at = ActiveValue::Set(Utc::now());
 
         Ok(self)
     }
@@ -120,20 +127,4 @@ impl ActiveModel {
     }
 }
 
-impl Entity {
-    /// Finds a user by username and provider
-    pub async fn find_by_username_and_provider_and_sandbox(
-        db: &DatabaseConnection,
-        username: &str,
-        provider: MediaProvider,
-        is_sandbox: bool,
-    ) -> ModelResult<Model> {
-        let user = Entity::find()
-            .filter(Column::Username.eq(username))
-            .filter(Column::Provider.eq(provider))
-            .filter(Column::IsSandbox.eq(is_sandbox))
-            .one(db)
-            .await?;
-        user.ok_or_else(|| ModelError::EntityNotFound)
-    }
-}
+impl Entity {}
