@@ -24,6 +24,14 @@ pub fn start_daemon(ctx: AppContext) {
         tracing::info!("starting download manger polling daemon");
         let mut timer = interval(Duration::from_secs(2));
         loop {
+            if manager.active_items.is_empty() {
+                tracing::info!("no active downloads, waiting for wakeup signal");
+                manager.notification().await;
+                tracing::info!("wakeup signal received, resuming polling");
+                timer.reset();
+                continue;
+            }
+
             for engine in manager.get_all_engines() {
                 engine.update_stats();
             }
@@ -33,13 +41,6 @@ pub fn start_daemon(ctx: AppContext) {
                 .iter()
                 .map(|v| v.value().clone())
                 .collect();
-
-            if active_items.is_empty() {
-                tracing::info!("no active downloads, waiting for wakeup signal");
-                manager.notification().await;
-                tracing::info!("wakeup signal received, resuming polling");
-                continue;
-            }
 
             for item in active_items.iter() {
                 if item.status == VaultStatus::COMPLETED {

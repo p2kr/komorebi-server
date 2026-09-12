@@ -91,7 +91,7 @@ impl Hooks for App {
         let (tx, _) = broadcast::channel::<AppEvent>(100);
         ctx.shared_store.insert::<Sender<AppEvent>>(tx.clone());
 
-        let media_processor = MediaProcessor::new(&ctx.db).await;
+        let media_processor = MediaProcessor::new(&ctx).await;
         ctx.shared_store
             .insert::<Arc<MediaProcessor>>(media_processor);
 

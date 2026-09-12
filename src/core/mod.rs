@@ -3,8 +3,9 @@ pub mod constants;
 pub mod macros;
 pub mod vault_path_resolver;
 
+use cached::cached;
 use loco_rs::Error;
-use std::fmt::Display;
+use std::{fmt::Display, path::Path};
 
 use crate::dtos::VaultStatus;
 
@@ -65,4 +66,74 @@ pub fn is_active_status(status: &VaultStatus) -> bool {
         status,
         VaultStatus::READY | VaultStatus::CANCELLED | VaultStatus::FAILED
     )
+}
+
+/// Sanitize the filename to prevent weird characters or path traversal
+#[cached(max_size = 100)]
+pub fn sanitize_filename(name: &str) -> String {
+    // 1. Extract just the filename (drops malicious paths like "../../font.ttf")
+    let base_name = Path::new(name)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(name);
+
+    // 2. Replace invalid characters with underscores, drop unprintable control characters
+    let mut safe_name = String::with_capacity(base_name.len());
+    for c in base_name.chars() {
+        match c {
+            '/' | '\\' | '<' | '>' | ':' | '"' | '|' | '?' | '*' | '\0' => safe_name.push('_'),
+            c if !c.is_control() => safe_name.push(c),
+            _ => (), // Completely drop unprintable control characters
+        }
+    }
+
+    // 3. Strip leading/trailing whitespaces and trailing dots (Windows OS protection)
+    safe_name = safe_name.trim().trim_end_matches('.').to_string();
+
+    // 4. Fallback for completely invalid inputs (e.g., "", "...", or "   ")
+    if safe_name.is_empty() || safe_name.replace('.', "").is_empty() {
+        safe_name = "unnamed_file".to_string();
+    }
+
+    // 5. Prevent Windows reserved names (CON, PRN, AUX, NUL, COM1-9, LPT1-9)
+    let stem_upper = safe_name
+        .split('.')
+        .next()
+        .unwrap_or("")
+        .to_ascii_uppercase();
+    let reserved = ["CON", "PRN", "AUX", "NUL"];
+    if reserved.contains(&stem_upper.as_str())
+        || (stem_upper.len() == 4
+            && (stem_upper.starts_with("COM") || stem_upper.starts_with("LPT"))
+            && stem_upper.chars().last().unwrap().is_ascii_digit())
+    {
+        safe_name.insert(0, '_'); // "CON.ttf" -> "_CON.ttf"
+    }
+
+    // 6. Smart Truncation (255 bytes limit) - Preserves the file extension
+    if safe_name.len() > 255 {
+        let (stem, ext) = match safe_name.rsplit_once('.') {
+            // Only preserve the extension if it's reasonably short (e.g., <= 15 bytes)
+            Some((s, e)) if !e.is_empty() && e.len() <= 15 => (s, Some(e)),
+            _ => (safe_name.as_str(), None),
+        };
+
+        let ext_bytes = ext.map(|e| e.len() + 1).unwrap_or(0); // +1 accounts for the '.'
+        let max_stem_bytes = 255usize.saturating_sub(ext_bytes);
+
+        // Find nearest safe Unicode boundary to slice at
+        let mut end = max_stem_bytes;
+        while end > 0 && !stem.is_char_boundary(end) {
+            end -= 1;
+        }
+
+        // Reassemble the truncated stem with the original extension
+        safe_name = if let Some(e) = ext {
+            format!("{}.{}", &stem[..end], e)
+        } else {
+            stem[..end].to_string()
+        };
+    }
+
+    safe_name
 }

@@ -3,16 +3,17 @@ use std::{
     sync::Arc,
 };
 
-use crate::{core::ResultExt, dtos::MediaType};
+use crate::{core::ResultExt, dtos::MediaType, streaming::daemon::start_monitoring};
 use cached::cached;
 use dashmap::DashMap;
-use loco_rs::Result;
+use loco_rs::{Result, app::AppContext};
 use sea_orm::{
     ActiveModelBehavior, ActiveModelTrait, ColumnTrait, DbConn, EntityTrait, IntoActiveModel,
     QueryFilter, TransactionTrait,
 };
 use tokio::{
     fs, spawn,
+    sync::{Notify, futures::Notified},
     task::{self, JoinSet},
 };
 use uuid::Uuid;
@@ -35,10 +36,11 @@ type ActiveItemsMap = DashMap<Uuid, VaultSubItem>;
 
 pub struct MediaProcessor {
     pub active_sub_items: Arc<ActiveItemsMap>,
-    db: DbConn,
+    pub db: DbConn,
+    wakeup: Arc<Notify>,
 }
 
-#[cached(max_size = 100)]
+#[cached(max_size = 100, ttl_secs = 15)]
 pub async fn cached_resolve_file_paths(folder: &str) -> Vec<(PathBuf, MediaType)> {
     let f = folder.to_string();
     task::spawn_blocking(move || {
@@ -66,7 +68,46 @@ pub async fn cached_resolve_file_paths(folder: &str) -> Vec<(PathBuf, MediaType)
     .unwrap_or_default()
 }
 
+pub async fn remove_original(
+    file_path: &Path,
+    manager: &DownloadManager,
+    item_type: &VaultDownloadType,
+    id: Uuid,
+) {
+    //  Remove file lock from torrent downloader
+    if let Some(engine) = manager.get_engine(item_type)
+        && let Some(td) = engine.as_any().downcast_ref::<TorrentDownloader>()
+        && let Err(e) = td.remove_handle(id).await
+    {
+        tracing::error!(error=%e,"failed to delete torrent handle");
+        return;
+    }
+
+    if let Err(e) = fs::remove_file(file_path).await {
+        tracing::warn!(error=%e, "failed to delete original file");
+
+        // Open with write access and automatically truncate to 0 bytes
+        let truncate_result = fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(&file_path)
+            .await;
+
+        if let Err(e) = truncate_result {
+            tracing::error!(error=%e, "failed to truncate original file");
+        }
+    }
+}
+
 impl MediaProcessor {
+    pub fn notification(&self) -> Notified<'_> {
+        self.wakeup.notified()
+    }
+
+    pub fn wake_daemon(&self) {
+        self.wakeup.notify_waiters();
+    }
+
     pub async fn start(self: Arc<Self>, vault_item: &VaultItem, manager: Arc<DownloadManager>) {
         match self.create_vault_sub_items(vault_item).await {
             Ok(_) => match self.post_process(manager, vault_item).await {
@@ -103,12 +144,17 @@ impl MediaProcessor {
         map
     }
 
-    pub async fn new(db: &DbConn) -> Arc<Self> {
-        Arc::new(Self {
+    pub async fn new(ctx: &AppContext) -> Arc<Self> {
+        let db = &ctx.db;
+        let manager = ctx.shared_store.get().unwrap();
+        let s = Arc::new(Self {
             db: db.clone(),
-            // TODO: Utilize this
             active_sub_items: Arc::new(Self::get_active_items(db).await),
-        })
+            wakeup: Arc::new(Notify::new()),
+        });
+
+        start_monitoring(s.clone(), manager);
+        s
     }
 
     pub async fn create_vault_sub_items(&self, item: &VaultItem) -> Result<()> {
@@ -182,7 +228,6 @@ impl MediaProcessor {
         for sub_item in sub_items.iter() {
             self.active_sub_items.insert(sub_item.id, sub_item.clone());
 
-            let bg_m = manager.clone();
             let sub_item_id = sub_item.id;
             let bg_sub_item = sub_item.clone();
             let bg_self = self.clone();
@@ -190,9 +235,7 @@ impl MediaProcessor {
             tasks.spawn(async move {
                 let media_type = bg_sub_item.media_type.clone();
                 let result = match media_type {
-                    MediaType::Anime => {
-                        VideoProcessor::post_process(bg_self, bg_m, bg_sub_item).await
-                    }
+                    MediaType::Anime => VideoProcessor::post_process(bg_self, bg_sub_item).await,
                     // TODO:
                     _ => unimplemented!(),
                 };
@@ -200,40 +243,58 @@ impl MediaProcessor {
                 (result, sub_item_id)
             });
         }
-        let progress_count = 0;
+        let mut progress_count = 0;
         let total_count = sub_items.len();
+
+        self.wake_daemon();
 
         while let Some(task) = tasks.join_next().await {
             match task {
                 Ok((meta_result, sub_item_id)) => {
-                    if let Some((_, mut sub_item)) = self.active_sub_items.remove(&sub_item_id) {
-                        match meta_result {
-                            Ok(metadata) => {
-                                sub_item.status = VaultStatus::READY;
-                                sub_item.progress = 100.0;
-                                sub_item.error_msg = None;
+                    // extract early to release lock.
+                    let mut sub_item =
+                        if let Some(sub_item_ref) = self.active_sub_items.get(&sub_item_id) {
+                            sub_item_ref.clone()
+                        } else {
+                            continue;
+                        };
+                    match meta_result {
+                        Ok(metadata) => {
+                            sub_item.status = VaultStatus::READY;
+                            sub_item.progress = 100.0;
+                            sub_item.eta_seconds = Some(0);
+                            sub_item.error_msg = None;
+                            sub_item.dest_path = Some(metadata.vault_metadata.file_path.clone());
+                            // Update final size
+                            if let Ok(m) = fs::metadata(&metadata.vault_metadata.file_path).await {
+                                sub_item.total_bytes = m.len() as i64;
+                            }
 
-                                // Update metadata.
-                                metadata
-                                    .save_vault_metadata_dto(&self.db)
-                                    .await
-                                    .to_loco_err()
-                                    .ok();
-                            }
-                            Err(e) => {
-                                sub_item.status = VaultStatus::FAILED;
-                                sub_item.error_msg = Some(e.to_string());
-                            }
+                            // Update metadata.
+                            metadata
+                                .save_vault_metadata_dto(&self.db)
+                                .await
+                                .to_loco_err()
+                                .ok();
+
+                            progress_count += 1;
                         }
-
-                        sub_item
-                            .into_active_model()
-                            .update_progress_mut()
-                            .update(&self.db)
-                            .await
-                            .to_loco_err()
-                            .ok();
+                        Err(e) => {
+                            sub_item.status = VaultStatus::FAILED;
+                            sub_item.error_msg = Some(e.to_string());
+                        }
                     }
+
+                    sub_item
+                        .clone()
+                        .into_active_model()
+                        .update_progress_mut()
+                        .update(&self.db)
+                        .await
+                        .to_loco_err()
+                        .ok();
+
+                    self.active_sub_items.insert(sub_item_id, sub_item);
                 }
                 Err(e) => {
                     tracing::error!(error=%e, "error joining task");
@@ -256,7 +317,7 @@ impl MediaProcessor {
                 let download_type = item.download_type.clone();
                 spawn(async move {
                     for (file_path, _) in cached_resolve_file_paths(&dest_path).await.iter() {
-                        Self::remove_original(file_path, &bg_m, &download_type, vault_id).await;
+                        remove_original(file_path, &bg_m, &download_type, vault_id).await;
                     }
                 });
             } else if progress_count == 0 {
@@ -273,40 +334,13 @@ impl MediaProcessor {
                 ))
             }
         }
-
         manager.wake_daemon();
 
+        self.active_sub_items
+            .retain(|_, v| v.vault_id != vault_item.id);
+
+        self.wake_daemon();
+
         Ok(())
-    }
-
-    pub async fn remove_original(
-        file_path: &Path,
-        manager: &DownloadManager,
-        item_type: &VaultDownloadType,
-        id: Uuid,
-    ) {
-        //  Remove file lock from torrent downloader
-        if let Some(engine) = manager.get_engine(item_type)
-            && let Some(td) = engine.as_any().downcast_ref::<TorrentDownloader>()
-            && let Err(e) = td.remove_handle(id).await
-        {
-            tracing::error!(error=%e,"failed to delete torrent handle");
-            return;
-        }
-
-        if let Err(e) = fs::remove_file(file_path).await {
-            tracing::warn!(error=%e, "failed to delete original file");
-
-            // Open with write access and automatically truncate to 0 bytes
-            let truncate_result = fs::OpenOptions::new()
-                .write(true)
-                .truncate(true)
-                .open(&file_path)
-                .await;
-
-            if let Err(e) = truncate_result {
-                tracing::error!(error=%e, "failed to truncate original file");
-            }
-        }
     }
 }

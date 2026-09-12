@@ -2,11 +2,13 @@ use std::path::PathBuf;
 
 use axum::{body::Body, http::Request};
 use cached::cached;
+use dashmap::DashMap;
 use itertools::Itertools;
 use loco_rs::prelude::*;
 use sea_orm::{DbConn, LoaderTrait};
 use serde::Deserialize;
 use tokio::fs;
+use tokio::task::JoinSet;
 use tower_http::services::ServeFile;
 use ts_rs::TS;
 use walkdir::WalkDir;
@@ -28,7 +30,7 @@ pub struct VaultStreamPayload {
 #[derive(Clone, Debug, serde::Deserialize, TS)]
 #[ts(export)]
 pub struct VaultSubItemPayload {
-    pub vault_id: Uuid,
+    pub vault_ids: Vec<Uuid>,
 }
 
 pub async fn stream(
@@ -72,9 +74,20 @@ pub async fn get_metadata(
     State(ctx): State<AppContext>,
     axum::Json(param): axum::Json<VaultSubItemPayload>,
 ) -> Result<impl IntoResponse> {
-    let resp = cached_metadata(param.vault_id, &ctx.db).await?;
+    let mut set = JoinSet::new();
+    let map = DashMap::new();
+    for vault_id in param.vault_ids {
+        let db = ctx.db.clone();
+        set.spawn(async move { (vault_id, cached_metadata(vault_id, &db).await) });
+    }
 
-    success(resp)
+    while let Some(task) = set.join_next().await {
+        if let Ok((id, Ok(value))) = task {
+            map.insert(id, value);
+        }
+    }
+
+    success(map)
 }
 
 #[cached(

@@ -1,5 +1,6 @@
 // pub mod image;
 // pub mod novel;
+pub mod daemon;
 pub mod processor;
 pub mod video;
 
@@ -10,15 +11,11 @@ use phf::{Map, phf_map};
 
 use crate::dtos::media::MediaType;
 use crate::dtos::vault::VaultMetadataDto;
-use crate::{
-    downloaders::manager::DownloadManager, models::vault_sub_item::VaultSubItem,
-    streaming::processor::MediaProcessor,
-};
+use crate::{models::vault_sub_item::VaultSubItem, streaming::processor::MediaProcessor};
 
 pub trait PostProcessor {
     fn post_process(
         processor: Arc<MediaProcessor>,
-        manager: Arc<DownloadManager>,
         item: VaultSubItem,
     ) -> impl Future<Output = Result<VaultMetadataDto>>;
 }

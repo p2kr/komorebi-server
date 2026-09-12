@@ -63,6 +63,7 @@ pub struct CrawlerResult {
 macro_rules! make_parsed_title {
     ($($field:ident),* $(,)?) => {
         #[derive(Debug, Clone, Serialize, Deserialize, Default, TS, PartialEq)]
+        #[serde(default)]
         #[ts(export)]
         pub struct ParsedTitle {
             $(
