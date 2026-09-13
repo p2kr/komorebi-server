@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{cmp::Reverse, sync::Arc};
 
 use loco_rs::prelude::*;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
@@ -37,9 +37,11 @@ impl CrawlerEngine {
     }
 
     pub async fn start(&self) -> Vec<CrawlerResult> {
-        let crawled_res = self.crawl().await;
+        let mut crawled_res = self.crawl().await;
 
-        Self::parse_title(crawled_res).await
+        crawled_res = Self::parse_title(crawled_res).await;
+
+        Self::ranked_results(crawled_res).await
     }
 
     // TODO: Make it robust/dynamic by iterating over list of crawlers
@@ -134,5 +136,20 @@ impl CrawlerEngine {
         })
         .await
         .unwrap_or_default()
+    }
+
+    async fn ranked_results(mut crawl_res: Vec<CrawlerResult>) -> Vec<CrawlerResult> {
+        // TODO: Use more heuristics.
+        crawl_res.sort_by_cached_key(|res| {
+            let popularity = res
+                .popularity
+                .as_deref()
+                .and_then(|s| s.parse::<i64>().ok())
+                .unwrap_or(0);
+
+            Reverse(popularity)
+        });
+
+        crawl_res
     }
 }

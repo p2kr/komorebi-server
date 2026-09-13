@@ -202,7 +202,7 @@ END;
 CREATE TABLE IF NOT EXISTS subtitle_fonts (
     id          BLOB PRIMARY KEY NOT NULL,
     metadata_id BLOB NOT NULL,
-    file_name   TEXT NOT NULL,
+    font_name   TEXT NOT NULL,
     file_path   TEXT NOT NULL,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

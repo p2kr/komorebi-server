@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{core::ResultExt, dtos::MediaType, streaming::daemon::start_monitoring};
+use crate::{core::ResultExt, dtos::MediaType};
 use cached::cached;
 use dashmap::DashMap;
 use loco_rs::{Result, app::AppContext};
@@ -145,16 +145,11 @@ impl MediaProcessor {
     }
 
     pub async fn new(ctx: &AppContext) -> Arc<Self> {
-        let db = &ctx.db;
-        let manager = ctx.shared_store.get().unwrap();
-        let s = Arc::new(Self {
-            db: db.clone(),
-            active_sub_items: Arc::new(Self::get_active_items(db).await),
+        Arc::new(Self {
+            db: ctx.db.clone(),
+            active_sub_items: Arc::new(Self::get_active_items(&ctx.db).await),
             wakeup: Arc::new(Notify::new()),
-        });
-
-        start_monitoring(s.clone(), manager);
-        s
+        })
     }
 
     pub async fn create_vault_sub_items(&self, item: &VaultItem) -> Result<()> {

@@ -443,7 +443,7 @@ async fn test_extract_chapters_subtitles_fonts_metadata() {
         assert_eq!(
             fonts[0],
             Font {
-                file_name: "font_0.ttf".into(),
+                font_name: "font_0.ttf".into(),
                 file_path: "font_0.ttf".into(),
                 ..Default::default()
             }

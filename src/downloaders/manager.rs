@@ -8,7 +8,7 @@ use reqwest::Client;
 use sea_orm::{ColumnTrait, DbConn, EntityTrait, QueryFilter};
 use tokio::{
     sync::{Notify, futures::Notified},
-    task::JoinSet,
+    task::{JoinHandle, JoinSet},
 };
 use uuid::Uuid;
 
@@ -56,7 +56,6 @@ impl DownloadManager {
     pub async fn new(ctx: &AppContext) -> Result<Arc<Self>> {
         let db = &ctx.db;
         let client: Client = ctx.shared_store.get().unwrap();
-        let media_processor: Arc<MediaProcessor> = ctx.shared_store.get().unwrap();
 
         let active_items = Arc::new(Self::get_active_items(db).await);
 
@@ -108,11 +107,17 @@ impl DownloadManager {
             wakeup: Arc::new(Notify::new()),
         });
 
-        let bg_m = m.clone();
+        Ok(m)
+    }
+
+    pub fn auto_resume(self: &Arc<Self>, processor: &Arc<MediaProcessor>) -> JoinHandle<()> {
+        let manager = self.clone();
+        let processor = processor.clone();
         // Auto resume on server start.
         tokio::spawn(async move {
             // 1. Extract items quickly to drop the DashMap lock
-            let items: Vec<VaultItem> = active_items
+            let items: Vec<VaultItem> = manager
+                .active_items
                 .iter()
                 .filter_map(|v| {
                     if v.value().status != VaultStatus::PAUSED {
@@ -124,7 +129,7 @@ impl DownloadManager {
                 .collect();
 
             // Wake the daemon before all items are loaded
-            bg_m.wake_daemon();
+            manager.wake_daemon();
 
             let mut set = JoinSet::new();
 
@@ -133,8 +138,8 @@ impl DownloadManager {
                 match item.status {
                     VaultStatus::COMPLETED | VaultStatus::PROCESSING => {
                         tracing::info!("Resuming post-processing for vault item: {}", item.title);
-                        let proc = media_processor.clone();
-                        let bg_m = bg_m.clone();
+                        let proc = processor.clone();
+                        let bg_m = manager.clone();
                         set.spawn(async move {
                             if let Err(e) = proc.post_process(bg_m, &item).await {
                                 tracing::error!(
@@ -146,7 +151,7 @@ impl DownloadManager {
                         });
                     }
                     VaultStatus::PENDING | VaultStatus::DOWNLOADING => {
-                        if let Some(engine) = engines.get(&item.download_type).cloned() {
+                        if let Some(engine) = manager.engines.get(&item.download_type).cloned() {
                             set.spawn(async move {
                                 if let Err(e) = engine.add(&item).await {
                                     tracing::error!(
@@ -176,10 +181,8 @@ impl DownloadManager {
             }
 
             // 4. Wake the daemon after all items are loaded
-            bg_m.wake_daemon();
-        });
-
-        Ok(m)
+            manager.wake_daemon();
+        })
     }
 
     pub fn notification(&self) -> Notified<'_> {

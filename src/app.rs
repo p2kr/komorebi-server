@@ -18,6 +18,7 @@ use tokio::sync::broadcast::Sender;
 use tokio::sync::broadcast::{self};
 
 use crate::dtos::events::AppEvent;
+use crate::streaming::daemon::start_monitoring;
 use crate::streaming::processor::MediaProcessor;
 #[allow(unused_imports)]
 use crate::{controllers, models::users, workers::downloader::DownloadWorker};
@@ -93,14 +94,21 @@ impl Hooks for App {
 
         let media_processor = MediaProcessor::new(&ctx).await;
         ctx.shared_store
-            .insert::<Arc<MediaProcessor>>(media_processor);
+            .insert::<Arc<MediaProcessor>>(media_processor.clone());
 
         let download_manager = DownloadManager::new(&ctx).await?;
         ctx.shared_store
             .insert::<Arc<DownloadManager>>(download_manager.clone());
 
         // start the download daemon
-        start_daemon(ctx.clone());
+        start_daemon(
+            ctx.db.clone(),
+            media_processor.clone(),
+            download_manager.clone(),
+        );
+        download_manager.auto_resume(&media_processor);
+        // Start post process monitor
+        start_monitoring(media_processor, download_manager);
 
         Ok(ctx)
     }

@@ -1,12 +1,11 @@
 use std::{sync::Arc, time::Duration};
 
-use loco_rs::app::AppContext;
 use sea_orm::{
-    ActiveModelTrait,
+    ActiveModelTrait, DbConn,
     DbErr::{self},
     EntityTrait,
 };
-use tokio::time::interval;
+use tokio::{task::JoinHandle, time::interval};
 
 use crate::{
     downloaders::{manager::DownloadManager, remove_vault_contents},
@@ -15,11 +14,13 @@ use crate::{
     streaming::processor::MediaProcessor,
 };
 
-pub fn start_daemon(ctx: AppContext) {
+pub fn start_daemon(
+    db: DbConn,
+    processor: Arc<MediaProcessor>,
+    manager: Arc<DownloadManager>,
+) -> JoinHandle<()> {
     tokio::spawn(async move {
         // let _ws: Sender<AppEvent> = ctx.shared_store.get().unwrap();
-        let processor: Arc<MediaProcessor> = ctx.shared_store.get().unwrap();
-        let manager: Arc<DownloadManager> = ctx.shared_store.get().unwrap();
 
         tracing::info!("starting download manger polling daemon");
         let mut timer = interval(Duration::from_secs(2));
@@ -71,7 +72,7 @@ pub fn start_daemon(ctx: AppContext) {
 
                 if item.status == VaultStatus::CANCELLED {
                     // Delete
-                    match vault::Entity::delete_by_id(item.id).exec(&ctx.db).await {
+                    match vault::Entity::delete_by_id(item.id).exec(&db).await {
                         Ok(_) => {
                             manager.active_items.remove(&item.id);
                             remove_vault_contents(item);
@@ -87,7 +88,7 @@ pub fn start_daemon(ctx: AppContext) {
                 // save to db
                 if let Err(e) = vault::ActiveModel::from(item.clone())
                     .update_progress_mut()
-                    .update(&ctx.db)
+                    .update(&db)
                     .await
                 {
                     match e {
@@ -111,5 +112,5 @@ pub fn start_daemon(ctx: AppContext) {
 
             timer.tick().await;
         }
-    });
+    })
 }

@@ -4,7 +4,9 @@ use std::{
     time::Duration,
 };
 
-use ffmpeg::{Codec, CodecOptions, FFmpegBuilder, Input, Output, PixelFormat};
+use ffmpeg::{
+    Codec, CodecOptions, FFmpegBuilder, Input, Output, PixelFormat, StreamMap, StreamSpecifier,
+};
 use ffprobe::{ProbeResult, builder::FFprobeBuilder};
 use loco_rs::prelude::*;
 use regex::Regex;
@@ -141,8 +143,22 @@ impl VideoProcessor {
         )
     }
 
-    pub fn build_video_codec_args(mut out: Output, probe: &ProbeResult) -> Output {
-        let primary = probe.primary_video_stream();
+    pub fn build_video_codec_args(
+        mut out: Output,
+        mut ff: FFmpegBuilder,
+        probe: &ProbeResult,
+    ) -> (Output, FFmpegBuilder) {
+        let primary = probe.video_streams().into_iter().find(|v| {
+            v.is_video()
+                && !matches!(
+                    v.codec_name
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .as_str(),
+                    "mjpeg" | "png" | "bmp" | "webp" | "gif"
+                )
+        });
 
         let is_copyable = primary
             .and_then(|s| {
@@ -157,28 +173,41 @@ impl VideoProcessor {
             if primary.is_some_and(|s| matches!(s.codec_name.as_deref(), Some("hevc" | "h265"))) {
                 out = out.option("tag:v", "hvc1");
             }
-            out
         } else {
-            out.video_codec_opts(
-                CodecOptions::new(Codec::new("libx264"))
-                    // CRF 18 = visually lossless; veryfast ensures speedy encode when recoding is mandatory
-                    .quality(18)
-                    .pixel_format(PixelFormat::yuv420p()),
-            )
-            .preset("veryfast")
+            out = out
+                .video_codec_opts(
+                    CodecOptions::new(Codec::new("libx264")).pixel_format(PixelFormat::yuv420p()),
+                )
+                // CRF 18 = visually lossless; veryfast ensures speedy encode when recoding is mandatory
+                .option("crf", "18")
+                .preset("veryfast");
         }
+
+        if let Some(pv) = primary {
+            ff = ff.map(StreamMap::specific(
+                0,
+                StreamSpecifier::Index(pv.index as usize),
+            ));
+        } else {
+            ff = ff.map(StreamMap::video_from(0));
+        }
+
+        (out, ff)
     }
 
     /// Determines the audio codec arguments per stream for FFmpeg.
     /// Stream copies compatible audio. Incompatible audio is converted to AAC with VBR quality 2.
-    pub fn build_audio_codec_args(mut out: Output, probe: &ProbeResult) -> Output {
+    pub fn build_audio_codec_args(
+        mut out: Output,
+        mut ff: FFmpegBuilder,
+        probe: &ProbeResult,
+    ) -> (Output, FFmpegBuilder) {
         let streams = probe.audio_streams();
         if streams.is_empty() {
-            return out.no_audio();
+            return (out.no_audio(), ff);
         }
 
-        for s in streams.iter() {
-            let idx = s.index;
+        for (idx, s) in streams.iter().enumerate() {
             let is_compatible = s
                 .codec_name
                 .as_deref()
@@ -193,34 +222,45 @@ impl VideoProcessor {
             }
         }
 
-        out
+        // Map all audio streams
+        ff = ff.map(StreamMap::audio_from(0));
+
+        (out, ff)
     }
 
-    pub fn build_ffmpeg_args(
-        input: &str,
-        output_mp4: &str,
-        encoded_dir: &Path,
+    fn build_font_codec_args(
+        mut inp: Input,
         probe: &ProbeResult,
-    ) -> (FFmpegBuilder, Vec<VideoSubtitle>, Vec<SubtitleFont>) {
-        let mut ff = FFmpegBuilder::with_executable(FFMPEG.as_path());
-        let mut out = Output::new(output_mp4);
-
-        out = Self::build_audio_codec_args(out, probe);
-        out = Self::build_video_codec_args(out, probe);
-
-        let (fonts_dir, subs_dir) = (encoded_dir.join(FONTS_LOC), encoded_dir.join(SUBTITLES_LOC));
-        let (mut fonts, mut subs) = (Vec::new(), Vec::new());
-
+        fonts_dir: PathBuf,
+    ) -> (Vec<SubtitleFont>, Input) {
+        let mut fonts = Vec::new();
         for stream in probe.streams.iter() {
             let codec = stream.codec_name.as_deref().unwrap_or("");
 
             // Manage FONTS
             if stream.codec_type.as_deref() == Some("attachment") {
                 // 1. FILTER: Ensure the attachment is actually a font, not Cover Art (mjpeg/png)
-                if !matches!(
+                let filename = stream
+                    .tags
+                    .get("filename")
+                    .map(|s| s.to_lowercase())
+                    .unwrap_or_default();
+                let mimetype = stream
+                    .tags
+                    .get("mimetype")
+                    .map(|s| s.to_lowercase())
+                    .unwrap_or_default();
+
+                let is_font = matches!(
                     codec.to_lowercase().as_str(),
-                    "ttf" | "otf" | "woff" | "woff2"
-                ) {
+                    "ttf" | "otf" | "woff" | "woff2" | "truetype" | "opentype"
+                ) || mimetype.contains("font")
+                    || filename.ends_with(".ttf")
+                    || filename.ends_with(".otf")
+                    || filename.ends_with(".woff")
+                    || filename.ends_with(".woff2");
+
+                if !is_font {
                     continue;
                 }
 
@@ -237,70 +277,91 @@ impl VideoProcessor {
                 let font_loc = fonts_dir.join(&safe_name).to_string_lossy().into_owned();
 
                 fonts.push(SubtitleFont {
-                    file_name: safe_name,
+                    font_name: safe_name,
                     file_path: font_loc.clone(),
                     ..Default::default()
                 });
 
-                ff = ff.output(
-                    Output::new(font_loc)
-                        .format("data")
-                        .option("map", format!("0:{}", stream.index))
-                        .option("c", "copy"),
-                );
-
-            // Manage SUBTITLE
-            } else if stream.codec_type.as_deref() == Some("subtitle") {
-                if matches!(codec, "dvd_subtitle" | "vobsub") {
-                    continue; // Skip image-based subs
-                }
-
-                let ext = match codec {
-                    "ass" | "ssa" => "ass",
-                    "subrip" | "srt" => "srt",
-                    "webvtt" => "vtt",
-                    "hdmv_pgs_subtitle" => "sup",
-                    _ => codec,
-                };
-
-                let sub_loc = subs_dir
-                    .join(format!("sub_{}.{}", subs.len(), ext))
-                    .to_string_lossy()
-                    .into_owned();
-
-                subs.push(VideoSubtitle {
-                    format: ext.to_string(),
-                    title: stream
-                        .title()
-                        .filter(|t| !t.trim().is_empty())
-                        .map(String::from)
-                        .unwrap_or_else(|| format!("Subtitle {}", subs.len())),
-                    language: stream.language().unwrap_or("unk").to_string(),
-                    file_path: sub_loc.clone(),
-                    track: subs.len() as i64,
-                    is_forced: stream
-                        .disposition
-                        .as_ref()
-                        .is_some_and(|v| v.get("forced") == Some(&1u8)),
-                    ..Default::default()
-                });
-
-                ff = ff.output(
-                    Output::new(sub_loc)
-                        .option("map", format!("0:{}", stream.index))
-                        .subtitle_codec(Codec::copy()),
-                );
+                inp = inp.option(format!("dump_attachment:{}", stream.index), font_loc);
             }
         }
+        (fonts, inp)
+    }
 
-        // Map primary video and all audio streams sequentially
-        out = out
-            .no_subtitles()
-            .faststart()
-            .option("map", "0:v?")
-            .option("map", "0:a?");
+    fn build_subtitle_codec_args(
+        mut ff: FFmpegBuilder,
+        probe: &ProbeResult,
+        subs_dir: PathBuf,
+    ) -> (Vec<VideoSubtitle>, FFmpegBuilder) {
+        let mut subs = vec![];
+        for stream in probe.subtitle_streams().iter() {
+            let codec = stream.codec_name.as_deref().unwrap_or("");
 
-        ff = ff.input(Input::new(input)).output(out);
+            if matches!(codec, "dvd_subtitle" | "vobsub") {
+                continue; // Skip image-based subs
+            }
+
+            let ext = match codec {
+                "ass" | "ssa" => "ass",
+                "subrip" | "srt" => "srt",
+                "webvtt" => "vtt",
+                "hdmv_pgs_subtitle" => "sup",
+                _ => codec,
+            };
+
+            let sub_loc = subs_dir
+                .join(format!("sub_{}.{}", subs.len(), ext))
+                .to_string_lossy()
+                .into_owned();
+
+            subs.push(VideoSubtitle {
+                format: ext.to_string(),
+                title: stream
+                    .title()
+                    .filter(|t| !t.trim().is_empty())
+                    .map(String::from)
+                    .unwrap_or_else(|| format!("Subtitle {}", subs.len())),
+                language: stream.language().unwrap_or("unk").to_string(),
+                file_path: sub_loc.clone(),
+                track: subs.len() as i64,
+                is_forced: stream
+                    .disposition
+                    .as_ref()
+                    .is_some_and(|v| v.get("forced") == Some(&1u8)),
+                ..Default::default()
+            });
+
+            ff = ff.output(
+                Output::new(sub_loc)
+                    .option("map", format!("0:{}", stream.index))
+                    .subtitle_codec(Codec::copy()),
+            );
+        }
+        (subs, ff)
+    }
+
+    pub fn build_ffmpeg_args(
+        input: &str,
+        output_mp4: &str,
+        encoded_dir: &Path,
+        probe: &ProbeResult,
+    ) -> (FFmpegBuilder, Vec<VideoSubtitle>, Vec<SubtitleFont>) {
+        let mut ff = FFmpegBuilder::with_executable(FFMPEG.as_path());
+        let mut inp = Input::new(input);
+        let mut out = Output::new(output_mp4);
+
+        (out, ff) = Self::build_audio_codec_args(out, ff, probe);
+        (out, ff) = Self::build_video_codec_args(out, ff, probe);
+
+        out = out.no_subtitles().faststart();
+
+        let (fonts_dir, subs_dir) = (encoded_dir.join(FONTS_LOC), encoded_dir.join(SUBTITLES_LOC));
+        let (fonts, subs);
+
+        (fonts, inp) = Self::build_font_codec_args(inp, probe, fonts_dir);
+        ff = ff.input(inp).output(out); // Push inp and out before subs
+
+        (subs, ff) = Self::build_subtitle_codec_args(ff, probe, subs_dir);
 
         (ff, subs, fonts)
     }

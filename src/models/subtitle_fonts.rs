@@ -18,7 +18,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub metadata_id: Uuid,
-    pub file_name: String,
+    pub font_name: String,
     pub file_path: String,
 
     #[educe(Default = Utc::now())]

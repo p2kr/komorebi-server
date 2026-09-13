@@ -15,12 +15,15 @@ pub fn start_monitoring(
     manager: Arc<DownloadManager>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
+        tracing::info!("starting monitoring");
         let mut timer = interval(Duration::from_secs(2));
         let mut last_db_sync = Instant::now();
         loop {
             if processor.active_sub_items.is_empty() {
+                tracing::info!("processor monitoring waiting for notification");
                 processor.notification().await;
                 timer.reset();
+                tracing::info!("processor monitoring resuming after notification");
                 continue;
             }
 
