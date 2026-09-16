@@ -3,6 +3,10 @@ malClientId = "${MAL_CLIENT_ID}"
 anilistClientId = "${ANILIST_CLIENT_ID}"
 appEnv = "${APP_ENV:dev}"
 
+[db]
+path = "${DB_LOC:assets/main.sqlite}"
+forceCreation = true
+
 [logger]
 logLevel = "debug"
 pretty = true

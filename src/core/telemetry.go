@@ -2,6 +2,7 @@ package core
 
 import (
 	"komorebi-server/configs"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -9,7 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func SetupLogger(config configs.Config) {
+func SetupLogger(config *configs.Config) {
 	// Setup log level
 	logLevel := config.Logger.LogLevel
 
@@ -27,4 +28,8 @@ func SetupLogger(config configs.Config) {
 	if config.Logger.Pretty {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	}
+}
+
+func GetSlogLogger() *slog.Logger {
+	return slog.New(zerolog.NewSlogHandler(log.Logger))
 }

@@ -1,24 +1,23 @@
 package core
 
 import (
+	"komorebi-server/configs"
 	"komorebi-server/src/controllers"
-	"log/slog"
 	"path/filepath"
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 func GetServer() *echo.Echo {
 	e := echo.New()
 
-	e.Logger = slog.New(zerolog.NewSlogHandler(log.Logger))
+	e.Logger = GetSlogLogger()
 
 	e.Use(middleware.RequestLogger())
 
-	staticPath, err := filepath.Abs(GetAppConfig().Frontend.StaticPath)
+	staticPath, err := filepath.Abs(configs.GetConfig().Frontend.StaticPath)
 	if err != nil {
 		log.Err(err).Msg("Failed to get static path")
 	} else {
@@ -28,7 +27,7 @@ func GetServer() *echo.Echo {
 	e.Use(middleware.Recover())
 	e.Use(middleware.CSRFWithConfig(middleware.CSRFConfig{
 		Skipper: func(_ *echo.Context) bool {
-			return GetAppConfig().Env.AppEnv == "dev"
+			return configs.GetConfig().Env.AppEnv == "dev"
 		},
 	}))
 	e.Use(middleware.Static(staticPath))
