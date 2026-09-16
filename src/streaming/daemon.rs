@@ -1,82 +1,225 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc};
 
-use itertools::Itertools;
-use sea_orm::{ActiveModelTrait, IntoActiveModel};
-use tokio::{
-    task::JoinHandle,
-    time::{Instant, interval},
-};
+use loco_rs::{Result, app::AppContext};
+use sea_orm::{ActiveModelTrait, DbConn};
+use tokio::{spawn, sync::broadcast, task::JoinHandle};
 use uuid::Uuid;
 
-use crate::{downloaders::manager::DownloadManager, streaming::processor::MediaProcessor};
+use crate::{
+    core::ResultExt,
+    downloaders::manager::DownloadManager,
+    dtos::{VaultStatus, events::AppEvent, vault::VaultSubItemDto},
+    streaming::{
+        StreamingEvent,
+        processor::{MediaProcessor, cached_resolve_file_paths, remove_original},
+    },
+};
 
-pub fn start_monitoring(
-    processor: Arc<MediaProcessor>,
-    manager: Arc<DownloadManager>,
-) -> JoinHandle<()> {
+#[derive(Copy, Clone, Default)]
+struct Progress {
+    total: i64,
+    success: i64,
+    progress: f64,
+    speed_bps: i64,
+    eta_sec: i64,
+}
+
+pub fn start_monitoring(ctx: &AppContext) -> JoinHandle<()> {
+    let db = ctx.db.clone();
+    let processor: Arc<MediaProcessor> = ctx.shared_store.get().unwrap();
+    let manager: Arc<DownloadManager> = ctx.shared_store.get().unwrap();
+    let tx: broadcast::Sender<AppEvent> = ctx.shared_store.get().unwrap();
+
     tokio::spawn(async move {
+        let manager = manager.clone();
+        let mut rx = tx.subscribe();
+
         tracing::info!("starting monitoring");
-        let mut timer = interval(Duration::from_secs(2));
-        let mut last_db_sync = Instant::now();
-        loop {
-            if processor.active_sub_items.is_empty() {
-                tracing::info!("processor monitoring waiting for notification");
-                processor.notification().await;
-                timer.reset();
-                tracing::info!("processor monitoring resuming after notification");
-                continue;
-            }
 
-            let sub_items = processor
-                .active_sub_items
-                .iter()
-                .map(|v| v.value().clone())
-                .collect_vec();
+        // [vault_id] : [total count, total progress, total speed, total eta]
+        let mut freq_map: HashMap<Uuid, Progress> = HashMap::new();
 
-            // [vault_id] : [total count, total progress, total speed, total eta]
-            let mut vault_aggregates: HashMap<Uuid, (i64, f64, i64, i64)> = HashMap::new();
+        while !rx.is_closed() {
+            if let Ok(AppEvent::StreamingEvents(event)) = rx.recv().await {
+                match event {
+                    StreamingEvent::Init { total, vault_id } => {
+                        let entry = freq_map.entry(vault_id).or_insert(Progress {
+                            total: total as i64,
+                            ..Default::default()
+                        });
+                        entry.total = total as i64;
+                    }
+                    StreamingEvent::Complete {
+                        sub_item_id,
+                        vault_id,
+                        is_last,
+                    } => {
+                        if is_last {
+                            // Handle parent vault item aggregation
+                            handle_vault_item(&manager, vault_id, &mut freq_map);
 
-            let should_sync_db = last_db_sync.elapsed() >= Duration::from_secs(10);
-            for sub_item in sub_items {
-                let vault_id = sub_item.vault_id;
-                let speed_bps = sub_item.speed_bps;
-                let progress = sub_item.progress;
-                let eta_sec = sub_item.eta_seconds.unwrap_or_default();
+                            // Remove all related sub items
+                            processor
+                                .active_sub_items
+                                .retain(|_, v| v.sub_item.vault_id != vault_id);
+                            continue;
+                        }
 
-                // Update in db
-                if should_sync_db {
-                    sub_item
-                        .into_active_model()
-                        .update_progress_mut()
-                        .update(&processor.db)
-                        .await
-                        .ok();
+                        // Clone to release lock early.
+                        let dto = if let Some(dto) = processor.active_sub_items.get(&sub_item_id) {
+                            dto.clone()
+                        } else {
+                            continue;
+                        };
+
+                        match handle_sub_item(&db, &manager, &mut freq_map, dto).await {
+                            Ok(_) => {
+                                processor.active_sub_items.remove(&sub_item_id);
+                            }
+                            Err(e) => {
+                                tracing::error!(error=%e, "error saving sub item/meta data to db");
+                                if let Some((_, dto)) =
+                                    processor.active_sub_items.remove(&sub_item_id)
+                                {
+                                    dto.sub_item
+                                        .to_active_model_and_update_status(
+                                            VaultStatus::FAILED,
+                                            Some(e.to_string()),
+                                        )
+                                        .update(&db)
+                                        .await
+                                        .log_err_custom("error setting status to failed")
+                                        .ok();
+                                }
+                            }
+                        }
+                    }
+                    StreamingEvent::Progress {
+                        sub_item_id,
+                        total_size,
+                        eta_secs,
+                        speed,
+                        progress,
+                    } => {
+                        let dto = if let Some(mut item) =
+                            processor.active_sub_items.get_mut(&sub_item_id)
+                        {
+                            item.sub_item.status = VaultStatus::PROCESSING;
+                            item.sub_item.total_bytes = total_size;
+                            item.sub_item.speed_bps = speed;
+                            item.sub_item.progress = progress;
+                            item.sub_item.eta_seconds = eta_secs;
+                            item.clone()
+                        } else {
+                            continue;
+                        };
+
+                        handle_sub_item(&db, &manager, &mut freq_map, dto)
+                            .await
+                            .ok();
+                    }
                 }
-
-                let entry = vault_aggregates.entry(vault_id).or_insert((0, 0.0, 0, 0));
-
-                entry.0 += 1;
-                entry.1 += progress;
-                entry.2 += speed_bps;
-                entry.3 = entry.3.max(eta_sec);
             }
-
-            if should_sync_db {
-                last_db_sync = Instant::now();
-            }
-
-            for (vault_id, (total_count, total_progress, total_speed, total_eta)) in
-                vault_aggregates
-            {
-                if let Some(mut vault_item) = manager.active_items.get_mut(&vault_id) {
-                    vault_item.progress = total_progress / total_count as f64;
-                    vault_item.speed_bps = total_speed;
-                    vault_item.eta_seconds = Some(total_eta);
-                }
-            }
-
-            manager.wake_daemon();
-            timer.tick().await;
         }
     })
+}
+
+/// Aggregates progress from sub item and updates parent vault item
+async fn handle_sub_item(
+    db: &DbConn,
+    manager: &Arc<DownloadManager>,
+    freq_map: &mut HashMap<Uuid, Progress>,
+    dto: VaultSubItemDto,
+) -> Result<()> {
+    if let Some(metadata) = dto.metadata {
+        metadata.save_vault_metadata_dto(db).await?;
+    }
+
+    dto.sub_item
+        .to_active_model_and_update_progress()
+        .update(db)
+        .await?;
+
+    let entry = freq_map.entry(dto.sub_item.vault_id).or_default();
+
+    if entry.total == 0 {
+        return Ok(());
+    }
+
+    entry.success += if dto.sub_item.status == VaultStatus::READY {
+        1
+    } else {
+        0
+    };
+    let completed_progress = entry.success as f64 * 100.0;
+    let in_flight_progress = if dto.sub_item.status == VaultStatus::READY {
+        0.0
+    } else {
+        dto.sub_item.progress.max(0.0)
+    };
+    entry.progress =
+        ((completed_progress + in_flight_progress) / entry.total as f64).clamp(0.0, 100.0);
+    entry.speed_bps = entry.speed_bps.max(dto.sub_item.speed_bps); // Ideally should be min.
+    entry.eta_sec = entry
+        .eta_sec
+        .max(dto.sub_item.eta_seconds.unwrap_or_default());
+
+    // Aggregate all vault items in manager active items.
+    for (vault_id, progress) in freq_map {
+        if let Some(mut vault_item) = manager.active_items.get_mut(vault_id) {
+            // No *100 because total_progress is already in percentage.
+            vault_item.progress = progress.progress / progress.total as f64;
+            vault_item.speed_bps = progress.speed_bps;
+            vault_item.eta_seconds = Some(progress.eta_sec);
+        }
+    }
+    manager.wake_daemon();
+    Ok(())
+}
+
+fn handle_vault_item(
+    manager: &Arc<DownloadManager>,
+    vault_id: Uuid,
+    freq_map: &mut HashMap<Uuid, Progress>,
+) {
+    // Handle manager
+    if let Some(mut item) = manager.active_items.get_mut(&vault_id) {
+        let freq = freq_map.remove(&vault_id).unwrap_or_default();
+
+        item.speed_bps = 0;
+        item.eta_seconds = Some(0);
+
+        // Floating point approximation
+        if freq.total == 0 {
+            item.status = VaultStatus::FAILED;
+            item.error_msg = Some("No playable media found".into());
+        } else if freq.success == freq.total {
+            item.progress = 100.0;
+            item.status = VaultStatus::READY;
+            item.error_msg = None;
+
+            // Remove all downloaded files.
+            let bg_m = manager.clone();
+            let dest_path = item.dest_path.clone();
+            let download_type = item.download_type.clone();
+            spawn(async move {
+                for (file_path, _) in cached_resolve_file_paths(&dest_path).await.iter() {
+                    remove_original(file_path, &bg_m, &download_type, vault_id).await;
+                }
+            });
+        } else if freq.success == 0 {
+            item.progress = 0.0;
+            item.status = VaultStatus::FAILED;
+            item.error_msg = Some("All sub items failed".into());
+        } else {
+            item.progress = (freq.success as f64 / freq.total as f64) * 100.0;
+            item.status = VaultStatus::PARTIAL;
+            item.error_msg = Some(format!(
+                "[{}/{}] Sub items failed",
+                freq.total - freq.success,
+                freq.total
+            ))
+        }
+    }
+    manager.wake_daemon();
 }

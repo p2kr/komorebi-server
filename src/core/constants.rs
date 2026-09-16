@@ -11,4 +11,4 @@ pub static ENCODED_LOC: LazyLock<String> = LazyLock::new(|| {
 
 pub const FONTS_LOC: &str = "fonts";
 pub const SUBTITLES_LOC: &str = "subs";
-pub const METADATA_LOC: &str = "metadata.json";
+pub const MANIFEST_LOC: &str = "manifest.mpd";

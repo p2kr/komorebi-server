@@ -24,6 +24,25 @@ pub struct VaultSubItemDto {
     pub metadata: Option<VaultMetadataDto>,
 }
 
+impl VaultSubItemDto {
+    pub fn new(sub_item: VaultSubItem) -> Self {
+        VaultSubItemDto {
+            sub_item,
+            metadata: None,
+        }
+    }
+
+    pub fn set_metadata(&mut self, metadata: VaultMetadataDto) {
+        self.metadata = Some(metadata);
+    }
+}
+
+impl From<VaultSubItem> for VaultSubItemDto {
+    fn from(value: VaultSubItem) -> Self {
+        VaultSubItemDto::new(value)
+    }
+}
+
 #[derive(Serialize, Deserialize, Default, Clone, TS)]
 #[ts(export)]
 pub struct VaultMetadataDto {

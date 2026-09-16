@@ -14,7 +14,6 @@ use loco_rs::{
 use migration::Migrator;
 use reqwest::Client;
 use std::{path::Path, sync::Arc, time::Duration};
-use tokio::sync::broadcast::Sender;
 use tokio::sync::broadcast::{self};
 
 use crate::dtos::events::AppEvent;
@@ -88,27 +87,24 @@ impl Hooks for App {
         let client = client::get_reqwest_client()?;
         ctx.shared_store.insert::<Client>(client.clone());
 
-        // 100 will round off to 128.
-        let (tx, _) = broadcast::channel::<AppEvent>(100);
-        ctx.shared_store.insert::<Sender<AppEvent>>(tx.clone());
+        let (tx, _) = broadcast::channel::<AppEvent>(128);
+        ctx.shared_store
+            .insert::<broadcast::Sender<AppEvent>>(tx.clone());
 
-        let media_processor = MediaProcessor::new(&ctx).await;
+        let media_processor = MediaProcessor::new(&ctx.db, tx).await;
         ctx.shared_store
             .insert::<Arc<MediaProcessor>>(media_processor.clone());
 
-        let download_manager = DownloadManager::new(&ctx).await?;
+        let download_manager = DownloadManager::new(&ctx.db, &client).await?;
         ctx.shared_store
             .insert::<Arc<DownloadManager>>(download_manager.clone());
 
         // start the download daemon
-        start_daemon(
-            ctx.db.clone(),
-            media_processor.clone(),
-            download_manager.clone(),
-        );
+        start_daemon(&ctx);
         download_manager.auto_resume(&media_processor);
+
         // Start post process monitor
-        start_monitoring(media_processor, download_manager);
+        start_monitoring(&ctx);
 
         Ok(ctx)
     }

@@ -5,7 +5,11 @@ pub mod vault_path_resolver;
 
 use cached::cached;
 use loco_rs::Error;
-use std::{fmt::Display, path::Path};
+use std::{
+    fmt::Display,
+    path::Path,
+    time::{Duration, Instant},
+};
 
 use crate::dtos::VaultStatus;
 
@@ -22,6 +26,14 @@ pub trait ResultExt<T, E> {
 
     /// Converts the error to a string and wraps it in `loco_rs::Error::Message`
     fn to_loco_string(self) -> loco_rs::Result<T>
+    where
+        E: Display;
+
+    fn log_err(self) -> Self
+    where
+        E: Display;
+
+    fn log_err_custom(self, msg: impl AsRef<str>) -> Self
     where
         E: Display;
 }
@@ -57,6 +69,26 @@ impl<T, E> ResultExt<T, E> for Result<T, E> {
             tracing::error!(error=%e);
         }
         self.map_err(|e| Error::Message(e.to_string()))
+    }
+
+    fn log_err(self) -> Self
+    where
+        E: Display,
+    {
+        if let Err(e) = &self {
+            tracing::error!(error=%e);
+        }
+        self
+    }
+
+    fn log_err_custom(self, msg: impl AsRef<str>) -> Self
+    where
+        E: Display,
+    {
+        if let Err(e) = &self {
+            tracing::error!(error=%e, "{}", msg.as_ref());
+        }
+        self
     }
 }
 
@@ -136,4 +168,31 @@ pub fn sanitize_filename(name: &str) -> String {
     }
 
     safe_name
+}
+
+pub struct Ticker {
+    interval: Duration,
+    last_tick: Option<Instant>,
+}
+
+impl Ticker {
+    pub fn new(interval: Duration) -> Self {
+        Self {
+            interval,
+            last_tick: None,
+        }
+    }
+
+    pub fn tick(&mut self) -> bool {
+        let now = Instant::now();
+        if self
+            .last_tick
+            .is_none_or(|last| now.duration_since(last) >= self.interval)
+        {
+            self.last_tick = Some(now);
+            true
+        } else {
+            false
+        }
+    }
 }

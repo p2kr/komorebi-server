@@ -83,30 +83,35 @@ impl ActiveModelBehavior for ActiveModel {
     }
 }
 
-impl Model {}
-
-impl ActiveModel {
-    pub fn update_status_mut(mut self, new_status: VaultStatus, error_msg: Option<String>) -> Self {
-        self.status = ActiveValue::Set(new_status);
-        if let Some(msg) = error_msg {
-            self.error_msg = ActiveValue::Set(Some(msg));
+impl Model {
+    pub fn to_active_model_and_update_progress(&self) -> ActiveModel {
+        ActiveModel {
+            id: Set(self.id),
+            total_bytes: Set(self.total_bytes),
+            progress: Set(self.progress),
+            speed_bps: Set(self.speed_bps),
+            eta_seconds: Set(self.eta_seconds),
+            status: Set(self.status),
+            error_msg: Set(self.error_msg.clone()),
+            ..Default::default()
         }
-
-        self
     }
 
-    pub fn update_progress_mut(mut self) -> Self {
-        self.total_bytes.reset();
-        self.progress.reset();
-        self.speed_bps.reset();
-        self.eta_seconds.reset();
-        self.status.reset();
-        self.dest_path.reset();
-        self.error_msg.reset();
-
-        self
+    pub fn to_active_model_and_update_status(
+        &self,
+        new_status: VaultStatus,
+        error_msg: Option<String>,
+    ) -> ActiveModel {
+        ActiveModel {
+            id: Set(self.id),
+            status: Set(new_status),
+            error_msg: Set(error_msg),
+            ..Default::default()
+        }
     }
 }
+
+impl ActiveModel {}
 
 impl Entity {
     pub async fn find_by_vault_id(db: &DbConn, vault_id: Uuid) -> Vec<Model> {

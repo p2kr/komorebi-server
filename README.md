@@ -1,6 +1,6 @@
 # komorebi-server
 
-A high-performance, unified media backend server written in Rust — built on the [Loco](https://loco.rs) framework. It aggregates and normalizes anime and manga list data across multiple third-party providers (MyAnimeList, AniList), provides a configurable web crawler subsystem, and features a multi-backend download manager with real-time WebSocket progress streaming.
+A high-performance, unified media backend server written in Rust — built on the [Loco](https://loco.rs) framework. It aggregates and normalizes anime and manga list data across multiple third-party providers (MyAnimeList, AniList), provides a configurable web crawler subsystem, features a multi-backend download manager, and includes a complete media processing and video streaming pipeline with real-time Server-Sent Events (SSE).
 
 ## Features
 
@@ -10,29 +10,34 @@ A high-performance, unified media backend server written in Rust — built on th
 - **OAuth token exchange** — exchange OAuth authorization codes + PKCE verifiers for provider access tokens
 - **Paginated list fetching** — anime and manga lists with filtering, sorting, and cursor/offset pagination
 - **Multi-backend Download Engine** — concurrent downloading for Direct HTTP/HTTPS (with HTTP `Range` resumption) and BitTorrent / Magnet links via `librqbit`
-- **Real-time WebSockets** — live download progress, speed, ETA, and state streaming over `/api/v1/vault/ws`
+- **Real-time Server-Sent Events (SSE)** — live download progress, transcoding state, speeds, and ETAs streamed over `/api/v1/vault/all`
 - **Isolated Vault Storage** — per-item UUID v7 isolated folders (`{VAULT_LOC}/{vault_id}/`), download lifecycle control (add, pause, resume, delete), and DB tracking
+- **Media Post-Processing & Transcoding** — automated FFmpeg transcoding, thumbnail generation, and stream extraction for audio tracks, embedded subtitles (ASS/SRT/VTT), fonts, and chapters
+- **Sub-Item & Metadata Hierarchy** — automatic scanning of downloaded folders into distinct sub-items (`vault_sub_item`) with detailed metadata relations
+- **Video & File Streaming** — direct range-compatible streaming of media files, DASH manifests, fonts, and extracted subtitles via `/api/v1/vault/stream/{*path}`
 - **Crawler subsystem** — scrapes torrent and media sites (e.g. Nyaa.si) using configurable YAML/CSS selector rules and Anitomy-based title parsing
 - **TypeScript bindings** — `ts-rs` automatically emits TypeScript types from Rust DTOs for frontend consumption
-- **Background workers & Daemons** — Loco background worker queue alongside a dedicated download polling daemon
+- **Background workers & Daemons** — Loco background worker queue, download polling daemon, and background media monitoring daemon
 
 ## Tech Stack
 
-| Layer             | Technology                   |
-| ----------------- | ---------------------------- |
-| Language          | Rust (Edition 2024)          |
-| Framework         | [Loco](https://loco.rs) 1.1  |
-| Web & WebSockets  | Axum 0.8 (with `ws` feature) |
-| Database          | SQLite via Sea-ORM 2.0       |
-| Async runtime     | Tokio                        |
-| HTTP client       | reqwest 0.13                 |
-| BitTorrent engine | librqbit 9.0                 |
-| IDs               | UUID v7                      |
-| Timestamps        | chrono                       |
-| HTML parsing      | scraper 0.27                 |
-| Title parsing     | anitomy-rs                   |
-| Enum strings      | strum / strum_macros 0.28    |
-| TS bindings       | ts-rs 12                     |
+| Layer             | Technology                                      |
+| ----------------- | ----------------------------------------------- |
+| Language          | Rust (Edition 2024)                             |
+| Framework         | [Loco](https://loco.rs) 1.1                     |
+| Web & Streaming   | Axum 0.8 (SSE, Range streaming, ServeFile)      |
+| Database          | SQLite via Sea-ORM 2.0                          |
+| Async runtime     | Tokio                                           |
+| HTTP client       | reqwest 0.13                                    |
+| BitTorrent engine | librqbit 9.0                                    |
+| Media Processing  | FFmpeg, FFprobe (`rust_ffmpeg`, `rust_ffprobe`) |
+| IDs               | UUID v7                                         |
+| Timestamps        | chrono                                          |
+| HTML parsing      | scraper 0.27                                    |
+| Title parsing     | anitomy-rs                                      |
+| Caching           | cached                                          |
+| Enum strings      | strum / strum_macros 0.28                       |
+| TS bindings       | ts-rs 12                                        |
 
 ## Project Layout
 
@@ -43,9 +48,9 @@ komorebi-server/
 ├── docs/
 │   ├── CONTEXT.md           # Architecture & codebase reference
 │   ├── openapi.yaml         # OpenAPI 3.1 specification
-│   ├── schema.sql           # SQLite table DDL reference
+│   ├── schema.sql           # SQLite table DDL reference (8 tables)
 │   └── *.schema.json        # Upstream provider response schemas (MAL, AniList)
-├── migration/               # Sea-ORM migrations (users, vaults)
+├── migration/               # Sea-ORM migrations & initial SQL schema
 ├── src/
 │   ├── app.rs               # Loco Hooks impl — route, worker, and shared state wiring hub
 │   ├── adapters/            # Upstream provider client abstractions & DTO adapters
@@ -59,13 +64,23 @@ komorebi-server/
 │   │   ├── user_controller.rs     # /api/v1/user routes
 │   │   ├── media_controller.rs    # /api/v1/media routes
 │   │   ├── crawler_controller.rs  # /api/v1/crawler routes
-│   │   └── vault_controller.rs    # /api/v1/vault routes & WebSocket handler
-│   ├── models/              # Domain entities & Sea-ORM models
+│   │   ├── vault_controller.rs    # /api/v1/vault lifecycle & SSE routes
+│   │   └── vault_stream.rs        # /api/v1/vault metadata & range streaming handlers
+│   ├── streaming/           # Media post-processing & video streaming subsystem
+│   │   ├── mod.rs           # PostProcessor trait & StreamingEvent enum
+│   │   ├── processor.rs     # MediaProcessor lifecycle & file resolver
+│   │   ├── video.rs         # VideoProcessor (FFmpeg transcoding, font/sub/audio extraction)
+│   │   └── daemon.rs        # Background post-processing monitoring daemon
+│   ├── models/              # Sea-ORM active models & entities
 │   │   ├── _entities/       # Generated Sea-ORM entities (do not edit)
-│   │   ├── media.rs         # Core domain types (Media, ListEntry, MediaEntry, enums)
 │   │   ├── users.rs         # User model, ActiveModelBehavior, DB operations
-│   │   ├── crawler.rs       # CrawlerConfig, CrawlerResult, ParsedTitle
-│   │   └── vault.rs         # VaultItem model, VaultDownloadType, VaultItemStatus
+│   │   ├── vault.rs         # VaultItem model, VaultDownloadType, VaultStatus
+│   │   ├── vault_sub_item.rs# VaultSubItem model (individual media files in folder)
+│   │   ├── vault_metadata.rs# VaultMetadata model (probed media info & thumbnails)
+│   │   ├── audio_tracks.rs  # Extracted audio tracks per sub-item
+│   │   ├── video_subtitles.rs # Extracted subtitle tracks per sub-item
+│   │   ├── video_chapters.rs  # Extracted chapter markers per sub-item
+│   │   └── subtitle_fonts.rs  # Extracted embedded fonts per sub-item
 │   ├── crawlers/            # Web scraping & title parsing subsystem
 │   │   ├── crawler_engine.rs      # Concurrent crawler orchestrator
 │   │   ├── html_crawler.rs        # CSS-selector HTML scraper
@@ -77,9 +92,14 @@ komorebi-server/
 │   │   ├── manager.rs       # DownloadManager singleton
 │   │   ├── direct.rs        # Direct HTTP downloader (Range resumption)
 │   │   ├── torrent.rs       # Torrent & magnet downloader (librqbit)
-│   │   └── daemon.rs        # Polling daemon & WebSocket broadcast pump
+│   │   └── daemon.rs        # Polling daemon & stats persistence
 │   ├── core/                # App-wide constants, path resolvers, reqwest client & tracker fetcher, ResultExt
-│   ├── dtos/                # TypeScript-exported DTO types (ts-rs)
+│   ├── dtos/                # Domain types & TypeScript-exported DTOs (ts-rs)
+│   │   ├── crawler.rs       # CrawlerConfig, CrawlerResult, ParsedTitle
+│   │   ├── enums.rs         # VaultStatus, MediaType, MediaFormat, ListStatus, etc.
+│   │   ├── events.rs        # AppEvent & SSE serialization
+│   │   ├── media.rs         # Media, ListEntry, MediaEntry, PaginatedResponse
+│   │   └── vault.rs         # VaultSubItemDto, VaultMetadataDto
 │   └── workers/
 │       └── downloader.rs    # Background download worker
 └── tests/                   # Request, model, crawler, and adapter integration tests
@@ -113,17 +133,17 @@ All application routes are prefixed with `/api/v1`.
 | ------ | ------------------------ | --------------------------------------------------------------- |
 | `POST` | `/api/v1/crawler/search` | Search configured crawlers for media titles and parsed torrents |
 
-### Vault (Downloads)
+### Vault (Downloads & Streaming)
 
-| Method | Path                   | Description                                                     |
-| ------ | ---------------------- | --------------------------------------------------------------- |
-| `POST` | `/api/v1/vault/add`    | Add a download item to the vault (direct URL or magnet/torrent) |
-| `POST` | `/api/v1/vault/one`    | Get single vault item metadata and progress by UUID             |
-| `POST` | `/api/v1/vault/all`    | List all vault items in database                                |
-| `POST` | `/api/v1/vault/pause`  | Pause an active direct or torrent download                      |
-| `POST` | `/api/v1/vault/resume` | Resume a paused download                                        |
-| `POST` | `/api/v1/vault/delete` | Delete / cancel a download and remove files from disk           |
-| `GET`  | `/api/v1/vault/ws`     | WebSocket upgrade endpoint for live progress update stream      |
+| Method | Path                           | Description                                                            |
+| ------ | ------------------------------ | ---------------------------------------------------------------------- |
+| `POST` | `/api/v1/vault/add`            | Add a download item to the vault (direct URL or magnet/torrent)        |
+| `GET`  | `/api/v1/vault/all`            | Server-Sent Events (SSE) stream for real-time vault download progress  |
+| `POST` | `/api/v1/vault/pause`          | Pause an active direct or torrent download                             |
+| `POST` | `/api/v1/vault/resume`         | Resume a paused download                                               |
+| `POST` | `/api/v1/vault/delete`         | Delete / cancel a download and remove files from disk                  |
+| `POST` | `/api/v1/vault/metadata`       | Batch fetch sub-items and relational metadata (tracks, subs, chapters) |
+| `GET`  | `/api/v1/vault/stream/{*path}` | Stream media files, DASH manifests, fonts, and subtitles from vault    |
 
 ### Response Envelopes
 
@@ -156,7 +176,7 @@ cargo loco start
 
 ## Environment Variables
 
-Configure provider credentials and storage settings in `.env` or via `config/*.yaml`:
+Configure provider credentials, storage locations, and transcoding paths in `.env` or via `config/*.yaml`:
 
 | Variable                | Description                                       | Default                                 |
 | ----------------------- | ------------------------------------------------- | --------------------------------------- |
@@ -165,6 +185,7 @@ Configure provider credentials and storage settings in `.env` or via `config/*.y
 | `DATABASE_URL`          | SQLite database URI                               | `sqlite://assets/main.sqlite?mode=rwc`  |
 | `QUEUE_URL`             | SQLite job queue URI                              | `sqlite://assets/queue.sqlite?mode=rwc` |
 | `VAULT_LOC`             | Storage root directory for downloaded vault files | `vault`                                 |
+| `ENCODED_LOC`           | Destination directory for transcoded media files  | `encoded`                               |
 | `MAL_CLIENT_ID`         | MyAnimeList API client ID                         |                                         |
 | `MAL_CLIENT_SECRET`     | MyAnimeList API client secret                     |                                         |
 | `ANILIST_CLIENT_ID`     | AniList OAuth client ID                           |                                         |

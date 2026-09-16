@@ -171,7 +171,7 @@ fn test_build_ffmpeg_args_hevc_10bit_stream_copy() {
     let (args, _, _) = VideoProcessor::build_ffmpeg_args(
         "input.mkv",
         "output.mp4",
-        std::path::Path::new(""),
+        &std::path::PathBuf::from(""),
         &probe,
     );
 
@@ -218,7 +218,7 @@ fn test_build_ffmpeg_args_h264_10bit_recodes_video_copies_audio() {
     let (args, _, _) = VideoProcessor::build_ffmpeg_args(
         "input.mkv",
         "output.mp4",
-        std::path::Path::new(""),
+        &std::path::PathBuf::from(""),
         &probe,
     );
     let args = args.build_args().expect("expected build args");
@@ -261,7 +261,7 @@ fn test_build_ffmpeg_args_copies_video_recodes_dts_audio() {
     let (args, _, _) = VideoProcessor::build_ffmpeg_args(
         "input.mkv",
         "output.mp4",
-        std::path::Path::new(""),
+        &std::path::PathBuf::from(""),
         &probe,
     );
     let args = args.build_args().expect("expected build args");
@@ -296,7 +296,7 @@ fn test_build_ffmpeg_args_no_audio_stream() {
     let (args, _, _) = VideoProcessor::build_ffmpeg_args(
         "input.mp4",
         "output.mp4",
-        std::path::Path::new(""),
+        &std::path::PathBuf::from(""),
         &probe,
     );
     let args = args.build_args().expect("expected build args");
@@ -347,7 +347,7 @@ fn test_build_ffmpeg_args_ignores_attached_pic_video_stream() {
     let (args, _, _) = VideoProcessor::build_ffmpeg_args(
         "input.mkv",
         "output.mp4",
-        std::path::Path::new(""),
+        &std::path::PathBuf::from(""),
         &probe,
     );
     let args = args.build_args().expect("expected build args");

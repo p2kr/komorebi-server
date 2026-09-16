@@ -959,6 +959,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5813789573ae815c8b4be58c4428e0e7ae05f0227678ba9de332ded585b9159"
 
 [[package]]
+name = "camino"
+version = "1.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbad30e4b4c14a39e3cc8aed085a12a327257c316619c93581e017bc52be591"
+
+[[package]]
 name = "capacity_builder"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3501,6 +3507,7 @@ dependencies = [
  "async-stream",
  "axum",
  "cached",
+ "camino",
  "chrono",
  "dashmap",
  "dotenv-build",

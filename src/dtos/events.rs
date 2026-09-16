@@ -3,16 +3,23 @@ use std::convert::Infallible;
 use axum::response::sse::Event;
 use serde::Serialize;
 use strum::AsRefStr;
+use tokio::sync::broadcast::{Sender, error::SendError};
 use ts_rs::TS;
 
-use crate::models::{vault::VaultItem, vault_sub_item::VaultSubItem};
+use crate::{
+    models::{vault::VaultItem, vault_sub_item::VaultSubItem},
+    streaming::StreamingEvent,
+};
 
-#[derive(Clone, Serialize, TS, AsRefStr)]
+#[derive(Clone, Serialize, TS, AsRefStr, Default)]
 #[ts(export)]
 #[serde(tag = "type", content = "data")] // Creates clean JSON for the frontend
 pub enum AppEvent {
+    #[default]
+    Unknown,
     VaultItems(Vec<VaultItem>),
     VaultSubItems(Vec<VaultSubItem>),
+    StreamingEvents(StreamingEvent),
     Error(String),
 }
 
@@ -33,5 +40,9 @@ impl AppEvent {
                 .json_data(self)
                 .unwrap_or_default(),
         )
+    }
+
+    pub fn send(self, tx: &Sender<AppEvent>) -> Result<usize, SendError<AppEvent>> {
+        tx.send(self)
     }
 }

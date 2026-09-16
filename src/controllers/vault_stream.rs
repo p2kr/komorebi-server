@@ -6,7 +6,6 @@ use dashmap::DashMap;
 use itertools::Itertools;
 use loco_rs::prelude::*;
 use sea_orm::{DbConn, LoaderTrait};
-use serde::Deserialize;
 use tokio::fs;
 use tokio::task::JoinSet;
 use tower_http::services::ServeFile;
@@ -20,13 +19,6 @@ use crate::models::{
     audio_tracks, subtitle_fonts, vault_metadata, vault_sub_item, video_chapters, video_subtitles,
 };
 
-#[derive(Deserialize, TS)]
-#[ts(export)]
-pub struct VaultStreamPayload {
-    /// Path to streaming file
-    pub path: String,
-}
-
 #[derive(Clone, Debug, serde::Deserialize, TS)]
 #[ts(export)]
 pub struct VaultSubItemPayload {
@@ -35,10 +27,10 @@ pub struct VaultSubItemPayload {
 
 pub async fn stream(
     State(_ctx): State<AppContext>,
-    Query(params): Query<VaultStreamPayload>,
+    Path(path): Path<String>,
     req: Request<Body>,
 ) -> Result<impl IntoResponse> {
-    let path = PathBuf::from(params.path);
+    let path = PathBuf::from(path);
     if fs::try_exists(&path).await? {
         if is_file_in_vault(&path) {
             let mut sf = ServeFile::new(&path);
@@ -52,7 +44,7 @@ pub async fn stream(
     }
 }
 
-#[cached(max_size = 100)]
+#[cached(max_size = 100, ttl_secs = 60)]
 fn is_file_in_vault(file_path: &PathBuf) -> bool {
     let vault_root = PathBuf::from(VAULT_LOC.to_owned());
     for entry in WalkDir::new(vault_root)

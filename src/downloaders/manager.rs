@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use dashmap::DashMap;
 use librqbit::{DhtSessionConfig, Session, SessionOptions, dht::DhtPersistenceConfig};
-use loco_rs::{Result, app::AppContext};
+use loco_rs::Result;
 use reqwest::Client;
 use sea_orm::{ColumnTrait, DbConn, EntityTrait, QueryFilter};
 use tokio::{
@@ -53,11 +53,9 @@ impl DownloadManager {
         map
     }
 
-    pub async fn new(ctx: &AppContext) -> Result<Arc<Self>> {
-        let db = &ctx.db;
-        let client: Client = ctx.shared_store.get().unwrap();
-
+    pub async fn new(db: &DbConn, client: &Client) -> Result<Arc<Self>> {
         let active_items = Arc::new(Self::get_active_items(db).await);
+        let _ = db; // Db to be used only to fetch active items.
 
         tracing::info!("loading {} active items", active_items.len());
 
@@ -93,7 +91,8 @@ impl DownloadManager {
         let mut engines: SharedEngineMap = HashMap::new();
 
         let direct_engine = DirectDownloader::new(client.clone(), active_items.clone()).await;
-        let torrent_engine = TorrentDownloader::new(client, session, active_items.clone()).await;
+        let torrent_engine =
+            TorrentDownloader::new(client.clone(), session, active_items.clone()).await;
 
         engines.insert(VaultDownloadType::DIRECT, direct_engine);
         engines.insert(VaultDownloadType::TFILE, torrent_engine.clone());
@@ -136,12 +135,11 @@ impl DownloadManager {
             // 2. Iterate and spawn isolated tasks
             for item in items {
                 match item.status {
-                    VaultStatus::COMPLETED | VaultStatus::PROCESSING => {
+                    VaultStatus::PROCESSING => {
                         tracing::info!("Resuming post-processing for vault item: {}", item.title);
                         let proc = processor.clone();
-                        let bg_m = manager.clone();
                         set.spawn(async move {
-                            if let Err(e) = proc.post_process(bg_m, &item).await {
+                            if let Err(e) = proc.post_process(&item).await {
                                 tracing::error!(
                                     "Failed to resume post-processing for item {}: {}",
                                     item.id,

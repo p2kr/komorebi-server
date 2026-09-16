@@ -1,7 +1,9 @@
 use crate::dtos::{VaultDownloadType, VaultStatus};
 use std::any::Any;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::{fmt::Display, sync::Arc};
 
+use cached::cached;
 use dashmap::DashMap;
 use librqbit::{AddTorrent, AddTorrentOptions, AddTorrentResponse, ManagedTorrent, Session};
 use loco_rs::prelude::async_trait;
@@ -46,7 +48,7 @@ impl TorrentDownloader {
     }
 
     pub async fn remove_handle(&self, id: Uuid) -> Result<()> {
-        if let Some(handle) = self.handles.get(&id) {
+        if let Some((_, handle)) = self.handles.remove(&id) {
             self.session
                 .delete(handle.info_hash().into(), false)
                 .await
@@ -56,23 +58,33 @@ impl TorrentDownloader {
     }
 }
 
+#[cached(max_size = 100)]
+fn uuid_to_usize_hashed(uuid: &Uuid) -> usize {
+    let mut hasher = DefaultHasher::new();
+    uuid.hash(&mut hasher);
+    hasher.finish() as usize
+}
+
 #[async_trait]
 impl DownloadEngine for TorrentDownloader {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    async fn add(&self, vault_item: &VaultItem) -> Result<()> {
-        let url = Url::parse(&vault_item.source_url).to_loco_string()?;
+    async fn add(&self, item: &VaultItem) -> Result<()> {
+        let url = Url::parse(&item.source_url).to_loco_string()?;
 
         let trackers = get_common_trackers(&self.client).await;
+
+        let preferred_id = uuid_to_usize_hashed(&item.id);
 
         // 1. Configure the torrent
         let opts = AddTorrentOptions {
             paused: false,
-            output_folder: Some(vault_item.dest_path.clone()),
+            output_folder: Some(item.dest_path.clone()),
             overwrite: true,
             trackers: Some(trackers),
+            preferred_id: Some(preferred_id),
             ..Default::default()
         };
 
@@ -87,8 +99,9 @@ impl DownloadEngine for TorrentDownloader {
         // 3. Save the handle so we can pause/resume/stat it later
         match response {
             AddTorrentResponse::Added(_, handle) => {
-                self.handles.insert(vault_item.id, handle);
-                self.active_items.insert(vault_item.id, vault_item.clone());
+                self.handles.insert(item.id, handle);
+                self.active_items.insert(item.id, item.clone());
+                tracing::info!("added torrent {:?} for item {}", preferred_id, &item.id);
             }
             AddTorrentResponse::AlreadyManaged(_, _m) => {
                 return Err(Error::Unauthorized("Torrent already added".into()));
@@ -99,33 +112,46 @@ impl DownloadEngine for TorrentDownloader {
         Ok(())
     }
 
-    async fn pause(&self, vault_id: &Uuid) -> Result<()> {
-        if let Some(handle) = self.handles.get(vault_id) {
+    async fn pause(&self, item: &VaultItem) -> Result<()> {
+        if let Some(handle) = self.handles.get(&item.id) {
             self.session.pause(handle.value()).await.to_loco_string()?;
-            if let Some(mut v) = self.active_items.get_mut(vault_id) {
+            if let Some(mut v) = self.active_items.get_mut(&item.id) {
                 v.status = VaultStatus::PAUSED;
             }
         }
         Ok(())
     }
 
-    async fn resume(&self, vault_id: &Uuid) -> Result<()> {
-        if let Some(handle) = self.handles.get(vault_id) {
+    async fn resume(&self, item: &VaultItem) -> Result<()> {
+        if let Some(mut v) = self.active_items.get_mut(&item.id) {
+            v.status = VaultStatus::PENDING;
+        }
+
+        let unpaused = if let Some(handle) = self.handles.get(&item.id) {
             self.session
                 .unpause(handle.value())
                 .await
-                .to_loco_string()?;
-            if let Some(mut v) = self.active_items.get_mut(vault_id) {
-                v.status = VaultStatus::PENDING;
+                .log_err_custom("unable to unpause from session")
+                .is_ok()
+        } else {
+            false
+        };
+
+        if !unpaused {
+            self.add(item).await?;
+        } else {
+            if let Some(mut v) = self.active_items.get_mut(&item.id) {
+                v.status = VaultStatus::DOWNLOADING;
             }
         }
+
         Ok(())
     }
 
-    async fn delete(&self, vault_id: &Uuid) -> Result<()> {
+    async fn delete(&self, item: &VaultItem) -> Result<()> {
         // 1. Remove it from our tracking maps
-        if let Some((_, handle)) = self.handles.remove(vault_id) {
-            if let Some(mut item) = self.active_items.get_mut(vault_id) {
+        if let Some((_, handle)) = self.handles.remove(&item.id) {
+            if let Some(mut item) = self.active_items.get_mut(&item.id) {
                 item.status = VaultStatus::CANCELLED;
             }
 

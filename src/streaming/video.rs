@@ -1,37 +1,33 @@
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, LazyLock},
+    sync::{Arc, LazyLock, Mutex},
     time::Duration,
 };
 
 use ffmpeg::{
-    Codec, CodecOptions, FFmpegBuilder, Input, Output, PixelFormat, StreamMap, StreamSpecifier,
+    Codec, CodecOptions, FFmpegBuilder, Input, Output, PixelFormat, Progress, StreamMap,
+    StreamSpecifier,
 };
 use ffprobe::{ProbeResult, builder::FFprobeBuilder};
 use loco_rs::prelude::*;
 use regex::Regex;
-use tokio::{
-    fs,
-    process::Command,
-    sync::watch::{self},
-    time::interval,
-};
+use tokio::{fs, process::Command};
 use which::which;
 
 use crate::{
     core::{
-        ResultExt,
-        constants::{ENCODED_LOC, FONTS_LOC, SUBTITLES_LOC},
+        ResultExt, Ticker,
+        constants::{ENCODED_LOC, FONTS_LOC, MANIFEST_LOC, SUBTITLES_LOC},
         sanitize_filename,
     },
-    dtos::vault::VaultMetadataDto,
+    dtos::vault::{VaultMetadataDto, VaultSubItemDto},
     loco_err, loco_err_msg,
     models::{
         audio_tracks::AudioTrack, subtitle_fonts::SubtitleFont, vault::VaultStatus,
-        vault_metadata::VaultMetadata, vault_sub_item::VaultSubItem, video_chapters::VideoChapter,
+        vault_metadata::VaultMetadata, video_chapters::VideoChapter,
         video_subtitles::VideoSubtitle,
     },
-    streaming::{PostProcessor, processor::MediaProcessor},
+    streaming::{PostProcessor, StreamingEvent, processor::MediaProcessor},
 };
 
 pub struct VideoProcessor {}
@@ -120,7 +116,7 @@ pub async fn run_ffprobe(builder: FFprobeBuilder) -> Result<ProbeResult> {
         return loco_err!("ffprobe failed: {}", String::from_utf8_lossy(&out.stderr));
     }
 
-    let json = String::from_utf8(out.stdout).to_loco_inspect("ffprobe stdout not utf-8")?;
+    let json = String::from_utf8_lossy(&out.stdout);
     normalize_ffprobe_json(&json)
 }
 
@@ -274,7 +270,11 @@ impl VideoProcessor {
                 // Sanitize the filename to prevent weird characters or path traversal
                 let safe_name = sanitize_filename(&original_name);
 
-                let font_loc = fonts_dir.join(&safe_name).to_string_lossy().into_owned();
+                let font_loc = fonts_dir
+                    .join(&safe_name)
+                    .to_string_lossy()
+                    .into_owned()
+                    .replace("\\", "/"); // Normalize slashes;
 
                 fonts.push(SubtitleFont {
                     font_name: safe_name,
@@ -312,7 +312,8 @@ impl VideoProcessor {
             let sub_loc = subs_dir
                 .join(format!("sub_{}.{}", subs.len(), ext))
                 .to_string_lossy()
-                .into_owned();
+                .into_owned()
+                .replace("\\", "/"); // Normalize slashes;;
 
             subs.push(VideoSubtitle {
                 format: ext.to_string(),
@@ -350,10 +351,24 @@ impl VideoProcessor {
         let mut inp = Input::new(input);
         let mut out = Output::new(output_mp4);
 
-        (out, ff) = Self::build_audio_codec_args(out, ff, probe);
         (out, ff) = Self::build_video_codec_args(out, ff, probe);
+        (out, ff) = Self::build_audio_codec_args(out, ff, probe);
 
-        out = out.no_subtitles().faststart();
+        // let mut base_url = encoded_dir.to_string_lossy().replace("\\", "/");
+        // if !base_url.ends_with("/") {
+        //     base_url.push_str("/");
+        // }
+
+        let mut adaptation_sets = String::from("id=0,streams=v");
+        for (i, _) in probe.audio_streams().iter().enumerate() {
+            adaptation_sets.push_str(&format!(" id={},streams=a:{}", i + 1, i));
+        }
+
+        out = out.no_subtitles().format("dash").for_hls(10);
+        // .option("hls_playlist", "1") // Simultaneously generate master.m3u8
+        // .option("seg_duration", "10"); // 10-second chunk size
+        // .option("adaptation_sets", adaptation_sets);
+        // .option("base_url", &base_url);
 
         let (fonts_dir, subs_dir) = (encoded_dir.join(FONTS_LOC), encoded_dir.join(SUBTITLES_LOC));
         let (fonts, subs);
@@ -429,33 +444,37 @@ impl VideoProcessor {
 }
 
 impl PostProcessor for VideoProcessor {
-    async fn post_process(
-        processor: Arc<MediaProcessor>,
-        item: VaultSubItem,
-    ) -> Result<VaultMetadataDto> {
-        if let Some(mut item) = processor.active_sub_items.get_mut(&item.id) {
-            item.status = VaultStatus::PROCESSING;
-            item.error_msg = None;
+    async fn post_process(processor: Arc<MediaProcessor>, item: &VaultSubItemDto) -> Result<()> {
+        if let Some(mut item) = processor.active_sub_items.get_mut(&item.sub_item.id) {
+            item.sub_item.status = VaultStatus::PROCESSING;
+            item.sub_item.error_msg = None;
         }
 
-        let sub_item_id = item.id;
-        let source_path = item.source_path.clone();
+        let sub_item_id = item.sub_item.id;
+        let source_path = item.sub_item.source_path.clone();
 
-        tracing::info!(vault_id = %sub_item_id, title=?item.title, source_path, "post_process started");
+        let _ = item; // Use map reference only
+
+        tracing::info!(
+            vault_id = %sub_item_id,
+            title=?&item.sub_item.title,
+            source_path,
+            "post_process started"
+        );
 
         let input_path = PathBuf::from(&source_path);
         let parent_dir = input_path
             .parent()
             .ok_or(loco_err_msg!("unable to extract parent dir"))?;
-        let stem = input_path
-            .file_stem()
-            .ok_or(loco_err_msg!("unable to extract file stem"))?;
 
         let encoded_dir = parent_dir
             .join(ENCODED_LOC.as_str())
             .join(sub_item_id.to_string());
-        let output_file = encoded_dir.join(stem).with_extension("mp4");
-        let output_path_str = output_file.to_string_lossy().into_owned();
+        let output_file = encoded_dir.join(MANIFEST_LOC);
+        let output_path_str = output_file
+            .to_string_lossy()
+            .into_owned()
+            .replace("\\", "/"); // Normalize slashes;
 
         // Ensure clean working directory
         if encoded_dir.is_dir() {
@@ -492,70 +511,89 @@ impl PostProcessor for VideoProcessor {
 
         tracing::info!(vault_id = %sub_item_id, output=?output_path_str, args=?&ff.command(), "spawning ffmpeg");
 
-        let (tx, mut rx) = watch::channel((0, 0.0, 0.0, 0.0));
-
-        let progress_task = tokio::spawn(async move {
-            let mut ticker = interval(Duration::from_secs(2));
-            while rx.changed().await.is_ok() {
-                let (size, bitrate, time_secs, speed) = *rx.borrow();
-
-                if let Some(mut item) = processor.active_sub_items.get_mut(&sub_item_id) {
-                    item.status = VaultStatus::PROCESSING;
-                    item.total_bytes = size;
-                    item.speed_bps = (bitrate / 8.0) as i64;
-
-                    item.progress = (time_secs / total_duration * 100.0).clamp(-1.0, 100.0);
-
-                    let remaining_secs = 0f64.max(total_duration - time_secs);
-                    item.eta_seconds = if speed > 0.0 {
-                        Some((remaining_secs / speed) as i64)
-                    } else {
-                        None
-                    };
-                }
-                ticker.tick().await;
-            }
-        });
-
+        let bg_proc = processor.clone();
+        let ticker = Mutex::new(Ticker::new(Duration::from_secs(2)));
         let ffmpeg_out = ff
             .on_progress(move |progress| {
-                let _ = tx.send((
-                    progress.size.unwrap_or_default() as i64,
-                    progress.bitrate.unwrap_or_default(),
-                    progress.time.unwrap_or_default().as_secs_f64(),
-                    progress.speed.unwrap_or_default(),
-                ));
+                if let Ok(mut ticker) = ticker.lock()
+                    && ticker.tick()
+                {
+                    handle_progress(&bg_proc, progress, total_duration, sub_item_id);
+                }
             })
-            .run()
-            .await
-            .to_loco_err()?;
+            .run() // TODO: Switch with spawn to get better errors.
+            .await;
 
-        progress_task.abort();
+        match ffmpeg_out {
+            Ok(ffmpeg_out) => {
+                if ffmpeg_out.success() {
+                    tracing::info!(vault_id = %sub_item_id, input=?source_path, output=?output_file, "ffmpeg finished successfully");
 
-        if ffmpeg_out.success() {
-            tracing::info!(vault_id = %sub_item_id, input=?source_path, output=?output_file, "ffmpeg finished successfully");
-
-            // Final metadata is collected and returned to update the DB on success.
-            Ok(VaultMetadataDto {
-                vault_metadata: VaultMetadata {
-                    sub_item_id,
-                    file_name: output_file
-                        .file_name()
-                        .map(|v| v.to_string_lossy().into_owned())
-                        .unwrap_or_default(),
-                    thumbnail_path: None,
-                    file_path: output_path_str,
-                    ..Default::default()
-                },
-                audio_tracks,
-                video_chapters: chapters,
-                video_subtitles: subtitles,
-                subtitle_fonts: fonts,
-            })
-        } else {
-            let code = ffmpeg_out.status.code().unwrap_or(-1);
-            tracing::error!(vault_id = %sub_item_id, title=?item.title, stderr=?ffmpeg_out.stderr_str(), "ffmpeg exited with code {}", code);
-            loco_err!("ffmpeg exited with code {}", code)
+                    // Final metadata is collected and returned to update the DB on success.
+                    if let Some(mut dto) = processor.active_sub_items.get_mut(&sub_item_id) {
+                        dto.metadata = Some(VaultMetadataDto {
+                            vault_metadata: VaultMetadata {
+                                sub_item_id,
+                                file_name: output_file
+                                    .file_name()
+                                    .map(|v| v.to_string_lossy().into_owned())
+                                    .unwrap_or_default(),
+                                thumbnail_path: None,
+                                file_path: output_path_str,
+                                ..Default::default()
+                            },
+                            audio_tracks,
+                            video_chapters: chapters,
+                            video_subtitles: subtitles,
+                            subtitle_fonts: fonts,
+                        });
+                    }
+                    Ok(())
+                } else {
+                    let code = ffmpeg_out.status.code().unwrap_or(-1);
+                    tracing::error!(
+                        vault_id = %sub_item_id,
+                        title=?&item.sub_item.title,
+                        stderr=?ffmpeg_out.stderr_str(),
+                        "ffmpeg exited with code {}", code
+                    );
+                    loco_err!("ffmpeg exited with code {}", code)
+                }
+            }
+            Err(e) => {
+                loco_err!("ffmpeg exited with error {}", e)
+            }
         }
     }
+}
+
+fn handle_progress(
+    processor: &Arc<MediaProcessor>,
+    progress: Progress,
+    total_duration: f64,
+    sub_item_id: Uuid,
+) {
+    let progress_val = progress.time.unwrap_or_default().as_secs_f64() / total_duration * 100.0;
+    let time_sec = progress.time.unwrap_or_default().as_secs_f64();
+    let remaining_secs = 0f64.max(total_duration - time_sec);
+    let speed = progress.speed.unwrap_or_default();
+
+    StreamingEvent::Progress {
+        sub_item_id,
+        total_size: progress.size.unwrap_or_default() as i64,
+        speed: (speed / 8.0) as i64,
+        progress: if progress_val.is_nan() {
+            -1.0
+        } else {
+            progress_val.clamp(-1.0, 100.0)
+        },
+        eta_secs: if speed > 0.0 {
+            Some((remaining_secs / speed) as i64)
+        } else {
+            None
+        },
+    }
+    .send(&processor.tx)
+    .log_err()
+    .ok();
 }

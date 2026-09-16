@@ -21,6 +21,7 @@ pub enum MediaProvider {
 #[derive(
     Debug,
     Clone,
+    Copy,
     PartialEq,
     Eq,
     Hash,
@@ -80,7 +81,17 @@ pub enum VaultDownloadType {
 }
 
 #[derive(
-    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default, DeriveActiveEnum, EnumIter, TS,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    Default,
+    DeriveActiveEnum,
+    EnumIter,
+    TS,
+    Copy,
 )]
 #[sea_orm(
     rs_type = "String",

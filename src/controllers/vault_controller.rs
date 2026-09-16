@@ -4,8 +4,7 @@ use loco_rs::prelude::*;
 use reqwest::Url;
 use serde::Deserialize;
 use std::{sync::Arc, time::Duration};
-use tokio::sync::broadcast::error::RecvError;
-use tokio::{sync::broadcast::Sender, time::interval};
+use tokio::time::interval;
 use ts_rs::TS;
 use uuid::Uuid;
 
@@ -132,8 +131,7 @@ pub async fn add(
 
             // Fail in db
             bg_inserted_item
-                .into_active_model()
-                .update_status(VaultStatus::FAILED, Some(e.to_string()))
+                .to_active_model_and_update_status(VaultStatus::FAILED, Some(e.to_string()))
                 .update(&ctx.db)
                 .await
                 .inspect_err(|e| tracing::error!("Error adding torrent {}", e))
@@ -175,8 +173,8 @@ pub async fn pause(
         .ok_or(Error::NotFound)?;
 
     tokio::spawn(async move {
-        manager.active_items.insert(item.id, item);
-        if let Err(e) = engine.pause(&params.vault_id).await {
+        manager.active_items.insert(item.id, item.clone());
+        if let Err(e) = engine.pause(&item).await {
             tracing::error!("Failed to pause download {}: {}", params.vault_id, e);
         }
         manager.wake_daemon();
@@ -197,7 +195,8 @@ pub async fn resume(
         .ok_or(Error::NotFound)?;
 
     if matches!(item.status, |VaultStatus::READY| VaultStatus::PENDING
-        | VaultStatus::DOWNLOADING)
+        | VaultStatus::DOWNLOADING
+        | VaultStatus::PROCESSING)
     {
         return loco_err!("Cannot resume a completed/ongoing download");
     }
@@ -209,14 +208,14 @@ pub async fn resume(
         .ok_or(Error::NotFound)?;
 
     tokio::spawn(async move {
-        manager.active_items.insert(item.id, item);
-        if let Err(e) = engine.resume(&params.vault_id).await {
+        manager.active_items.insert(item.id, item.clone());
+        if let Err(e) = engine.resume(&item).await {
             tracing::error!("Failed to resume download {}: {}", params.vault_id, e);
         }
         manager.wake_daemon();
     });
 
-    success(serde_json::json!("Download Queued for Resume"))
+    success(serde_json::json!("Resume/Retry Queued for Resume"))
 }
 
 #[debug_handler]
@@ -237,7 +236,7 @@ pub async fn delete(
         .ok_or(Error::NotFound)?;
 
     tokio::spawn(async move {
-        if let Err(e) = engine.delete(&item.id).await {
+        if let Err(e) = engine.delete(&item).await {
             tracing::error!(
                 "Failed to delete/cancel download {}: {}",
                 params.vault_id,
@@ -259,42 +258,10 @@ pub async fn delete(
         manager.wake_daemon();
 
         // also delete the destination path if it exists
-        remove_vault_contents(item);
+        remove_vault_contents(&item);
     });
 
     success(serde_json::json!("Deleted/Cancelled download"))
-}
-
-#[axum::debug_handler]
-pub async fn active(State(ctx): State<AppContext>) -> impl IntoResponse {
-    // Fetch the broadcast receiver from shared store
-    let tx = ctx.shared_store.get::<Sender<AppEvent>>().unwrap();
-
-    let manager = ctx.shared_store.get::<Arc<DownloadManager>>().unwrap();
-    let initial_items: Vec<VaultItem> = manager
-        .active_items
-        .iter()
-        .map(|v| v.value().clone())
-        .collect();
-
-    let stream = stream! {
-        yield AppEvent::VaultItems(initial_items).to_sse();
-
-        let mut rx = tx.subscribe();
-        loop {
-            match rx.recv().await {
-              Ok(v) =>  yield v.to_sse(),
-              Err(RecvError::Closed) => break,
-              _ => continue
-            }
-        }
-    };
-
-    Sse::new(stream).keep_alive(
-        KeepAlive::new()
-            .interval(Duration::from_secs(10))
-            .text("keep-alive-active"),
-    )
 }
 
 #[axum::debug_handler]
@@ -333,6 +300,5 @@ pub fn routes() -> Routes {
         .add("metadata", post(get_metadata))
         // sse
         .add("all", get(all))
-        .add("active", get(active))
-        .add("stream", get(stream))
+        .add("stream/{*path}", get(stream))
 }

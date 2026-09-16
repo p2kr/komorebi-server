@@ -160,6 +160,10 @@ impl DownloadEngine for DirectDownloader {
                 item.total_bytes = total_bytes as i64;
             }
 
+            if let Some(mut item) = active_items.get_mut(&vault_id) {
+                item.status = VaultStatus::DOWNLOADING;
+            }
+
             // Stream chunks
             loop {
                 tokio::select! {
@@ -244,28 +248,28 @@ impl DownloadEngine for DirectDownloader {
         Ok(())
     }
 
-    async fn pause(&self, vault_id: &Uuid) -> Result<()> {
-        if let Some((_, token)) = self.cancel_tokens.remove(vault_id) {
+    async fn pause(&self, item: &VaultItem) -> Result<()> {
+        if let Some((_, token)) = self.cancel_tokens.remove(&item.id) {
             token.cancel();
         }
         Ok(())
     }
 
-    async fn resume(&self, vault_id: &Uuid) -> Result<()> {
+    async fn resume(&self, item: &VaultItem) -> Result<()> {
         // Just call `add` again! Our `add` logic automatically checks for file size
         // and sends the HTTP Range header, so it will resume where it left off.
-        if let Some(item) = self.active_items.get(vault_id) {
+        if let Some(item) = self.active_items.get(&item.id) {
             self.add(item.value()).await?;
         }
         Ok(())
     }
 
-    async fn delete(&self, vault_id: &Uuid) -> Result<()> {
+    async fn delete(&self, item: &VaultItem) -> Result<()> {
         // 1. Cancel ongoing download
-        self.pause(vault_id).await?;
+        self.pause(item).await?;
 
         // 2. Remove from stats
-        if let Some(mut item) = self.active_items.get_mut(vault_id) {
+        if let Some(mut item) = self.active_items.get_mut(&item.id) {
             // 3. Delete files from disk
             item.status = VaultStatus::CANCELLED;
         }

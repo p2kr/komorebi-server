@@ -71,6 +71,7 @@ ffprobe = { package = "rust_ffprobe", version = "1.0.0" }
 ffmpeg = { package = "rust_ffmpeg", version = "1.0.0" }
 itertools = "0.15.0"
 educe = "0.7.6"
+camino = "1.2.6"
 
 [[bin]]
 name = "komorebi_server-cli"

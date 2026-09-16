@@ -2,15 +2,91 @@ openapi: 3.1.0
 info:
   title: Komorebi Server API
   description: |
-    Unified media backend REST API and real-time WebSocket server for aggregating, synchronizing, and managing anime and manga media lists (MyAnimeList, AniList), scraping torrent indexes, and managing multi-backend downloads (Direct HTTP with Range resume & BitTorrent/Magnet via librqbit).
+    Unified media backend REST API and real-time Server-Sent Events (SSE) server for aggregating, synchronizing, and managing anime and manga media lists (MyAnimeList, AniList), scraping torrent indexes, managing multi-backend downloads (Direct HTTP with Range resume & BitTorrent/Magnet via librqbit), and providing an automated FFmpeg media transcoding, stream extraction, and range-compatible video streaming pipeline.
   version: 1.1.0
+
 servers:
   - url: http://localhost:5150/api/v1
     description: Development API Server (default port)
   - url: /api/v1
     description: Relative API Base Path
 
+tags:
+  - name: Media
+    description: Media list synchronization and normalization across MAL and AniList
+  - name: User
+    description: User authentication, registration, profile management, and OAuth token exchange
+  - name: Crawler
+    description: Web scraping and torrent index search with Anitomy title parsing
+  - name: Vault
+    description: Local media file acquisition, Server-Sent Events (SSE), metadata, and video streaming
+  - name: System
+    description: Application health, connectivity, and readiness probes
+
 paths:
+  /_health:
+    get:
+      servers:
+        - url: http://localhost:5150
+        - url: /
+      summary: Health Check
+      description: Returns the overall operational health status of the Loco application.
+      operationId: getHealth
+      tags:
+        - System
+      responses:
+        "200":
+          description: Application is healthy.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "OK"
+
+  /_ping:
+    get:
+      servers:
+        - url: http://localhost:5150
+        - url: /
+      summary: Ping Probe
+      description: Simple ping endpoint for connectivity verification and keep-alive checks.
+      operationId: getPing
+      tags:
+        - System
+      responses:
+        "200":
+          description: Pong response.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "pong"
+
+  /_readiness:
+    get:
+      servers:
+        - url: http://localhost:5150
+        - url: /
+      summary: Readiness Check
+      description: Verifies that the server, database connection pool, and workers are ready to accept requests.
+      operationId: getReadiness
+      tags:
+        - System
+      responses:
+        "200":
+          description: Server is ready to receive traffic.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "OK"
+        "500":
+          description: Server or database is not ready.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "ERROR"
   /media/anime:
     post:
       summary: Get User Anime List
@@ -321,53 +397,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/FailureResponse"
 
-  /vault/one:
-    post:
-      summary: Get Single Vault Item
-      description: Retrieves metadata and status for a specific vault item by UUID.
-      operationId: getVaultItem
-      tags:
-        - Vault
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/VaultActionPayload"
-      responses:
-        "200":
-          description: Successfully retrieved vault item.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/VaultItemResponse"
-        "404":
-          description: Vault item not found.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/FailureResponse"
-
   /vault/all:
-    post:
-      summary: Get All Vault Items
-      description: Retrieves all vault records stored in the database.
-      operationId: getAllVaultItems
+    get:
+      summary: Stream All Vault Items (SSE)
+      description: Returns a continuous Server-Sent Events (SSE) stream periodically yielding the complete list of vault records and active download/transcoding progress (`AppEvent::VaultItems`).
+      operationId: streamAllVaultItems
       tags:
         - Vault
       responses:
         "200":
-          description: Successfully retrieved all vault items.
+          description: Real-time Server-Sent Events stream emitting serialized AppEvent frames.
           content:
-            application/json:
+            text/event-stream:
               schema:
-                $ref: "#/components/schemas/VaultItemListResponse"
-        "500":
-          description: Database error.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/FailureResponse"
+                type: string
+                description: Continuous stream of SSE event lines containing AppEvent JSON.
 
   /vault/pause:
     post:
@@ -450,19 +494,81 @@ paths:
               schema:
                 $ref: "#/components/schemas/FailureResponse"
 
-  /vault/ws:
-    get:
-      summary: Real-Time Download Stats WebSocket
-      description: |
-        Upgrades HTTP connection to a WebSocket.
-        On connect, immediately sends the current active `Vec<VaultItem>` state as a JSON text message.
-        Subsequently streams real-time updates of active downloads every 2 seconds whenever downloads are active.
-      operationId: streamVaultWebSocket
+  /vault/metadata:
+    post:
+      summary: Batch Fetch Vault Sub-Item Metadata
+      description: Queries relational media metadata (audio tracks, video subtitles, chapters, and fonts) for each sub-item belonging to the requested vault IDs.
+      operationId: getVaultMetadata
       tags:
         - Vault
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultSubItemPayload"
       responses:
-        "101":
-          description: Switching Protocols to WebSocket.
+        "200":
+          description: Map of Vault ID to array of VaultSubItemDto records.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultMetadataResponse"
+        "500":
+          description: Database or loader error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureResponse"
+
+  /vault/stream/{path}:
+    get:
+      summary: Stream Vault Media or Auxiliary Asset
+      description: Range-compatible streaming endpoint for media files, DASH manifests, extracted subtitles, and fonts within the vault. Validates that the requested path resides strictly inside the configured vault directory.
+      operationId: streamVaultFile
+      tags:
+        - Vault
+      parameters:
+        - name: path
+          in: path
+          required: true
+          description: Relative file path within the vault repository.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Complete file payload stream.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+            application/dash+xml:
+              schema:
+                type: string
+        "206":
+          description: Partial Content byte-range response for seekable media streaming.
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Access denied (requested file is not located inside the vault).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureResponse"
+        "404":
+          description: File not found on disk.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureResponse"
 
 components:
   schemas:
@@ -878,9 +984,11 @@ components:
           description: Optional user passcode (Argon2 hashed or plaintext).
         created_at:
           type: string
+          format: date-time
           description: Creation timestamp.
         updated_at:
           type: string
+          format: date-time
           description: Last update timestamp.
 
     LoginParams:
@@ -1018,6 +1126,7 @@ components:
 
     ParsedTitle:
       type: object
+      description: Structured anime title tokens extracted by Anitomy parser.
       properties:
         title:
           type: array
@@ -1035,27 +1144,11 @@ components:
           type: array
           items:
             type: string
-        release_group:
+        part:
           type: array
           items:
             type: string
-        video_resolution:
-          type: array
-          items:
-            type: string
-        subtitles:
-          type: array
-          items:
-            type: string
-        audio_term:
-          type: array
-          items:
-            type: string
-        file_extension:
-          type: array
-          items:
-            type: string
-        type:
+        volume:
           type: array
           items:
             type: string
@@ -1063,6 +1156,63 @@ components:
           type: array
           items:
             type: string
+        release_group:
+          type: array
+          items:
+            type: string
+        release_information:
+          type: array
+          items:
+            type: string
+        release_version:
+          type: array
+          items:
+            type: string
+        video_resolution:
+          type: array
+          items:
+            type: string
+        video_term:
+          type: array
+          items:
+            type: string
+        audio_term:
+          type: array
+          items:
+            type: string
+        subtitles:
+          type: array
+          items:
+            type: string
+        language:
+          type: array
+          items:
+            type: string
+        source:
+          type: array
+          items:
+            type: string
+        device:
+          type: array
+          items:
+            type: string
+        file_extension:
+          type: array
+          items:
+            type: string
+        file_checksum:
+          type: array
+          items:
+            type: string
+        other:
+          type: array
+          items:
+            type: string
+        type:
+          type: array
+          items:
+            type: string
+          description: Media kind (e.g. TV, Movie, OVA, ONA).
 
     CrawlerResult:
       type: object
@@ -1114,23 +1264,29 @@ components:
         - TFILE
       default: MAGNET
 
-    VaultItemStatus:
+    VaultStatus:
       type: string
       enum:
         - PENDING
         - DOWNLOADING
         - PAUSED
         - COMPLETED
+        - PROCESSING
+        - READY
+        - PARTIAL
         - FAILED
         - CANCELLED
       default: PENDING
+
+    VaultItemStatus:
+      $ref: "#/components/schemas/VaultStatus"
 
     VaultItem:
       type: object
       required:
         - id
         - user_id
-        - destination_path
+        - dest_path
         - title
         - raw_title
         - source_url
@@ -1140,7 +1296,6 @@ components:
         - downloaded_bytes
         - progress
         - speed_bps
-        - temp_path
         - created_at
         - updated_at
       properties:
@@ -1150,8 +1305,81 @@ components:
         user_id:
           type: string
           format: uuid
-        destination_path:
+        dest_path:
           type: string
+          description: Isolated storage directory ({VAULT_LOC}/{vault_id}/).
+        media_type:
+          $ref: "#/components/schemas/MediaType"
+        media_id:
+          type:
+            - string
+            - "null"
+        title:
+          type: string
+        raw_title:
+          type: string
+        source_url:
+          type: string
+        download_type:
+          $ref: "#/components/schemas/VaultDownloadType"
+        status:
+          $ref: "#/components/schemas/VaultStatus"
+        total_bytes:
+          type: integer
+          format: int64
+        downloaded_bytes:
+          type: integer
+          format: int64
+        progress:
+          type: number
+          format: float
+        speed_bps:
+          type: integer
+          format: int64
+        eta_seconds:
+          type:
+            - integer
+            - "null"
+          format: int64
+        error_msg:
+          type:
+            - string
+            - "null"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    VaultSubItem:
+      type: object
+      required:
+        - id
+        - vault_id
+        - source_path
+        - media_type
+        - title
+        - raw_title
+        - status
+        - total_bytes
+        - progress
+        - speed_bps
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        vault_id:
+          type: string
+          format: uuid
+        source_path:
+          type: string
+        dest_path:
+          type:
+            - string
+            - "null"
         media_type:
           $ref: "#/components/schemas/MediaType"
         media_id:
@@ -1170,16 +1398,9 @@ components:
           type:
             - string
             - "null"
-        source_url:
-          type: string
-        download_type:
-          $ref: "#/components/schemas/VaultDownloadType"
         status:
-          $ref: "#/components/schemas/VaultItemStatus"
+          $ref: "#/components/schemas/VaultStatus"
         total_bytes:
-          type: integer
-          format: int64
-        downloaded_bytes:
           type: integer
           format: int64
         progress:
@@ -1193,16 +1414,346 @@ components:
             - integer
             - "null"
           format: int64
-        temp_path:
-          type: string
         error_msg:
           type:
             - string
             - "null"
         created_at:
           type: string
+          format: date-time
         updated_at:
           type: string
+          format: date-time
+
+    VaultMetadata:
+      type: object
+      required:
+        - id
+        - sub_item_id
+        - file_name
+        - file_path
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        sub_item_id:
+          type: string
+          format: uuid
+        file_name:
+          type: string
+        file_path:
+          type: string
+        thumbnail_path:
+          type:
+            - string
+            - "null"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AudioTrack:
+      type: object
+      required:
+        - id
+        - metadata_id
+        - language
+        - title
+        - channels
+        - is_default
+      properties:
+        id:
+          type: string
+          format: uuid
+        metadata_id:
+          type: string
+          format: uuid
+        language:
+          type: string
+        title:
+          type: string
+        channels:
+          type: string
+        is_default:
+          type: boolean
+
+    VideoSubtitle:
+      type: object
+      required:
+        - id
+        - metadata_id
+        - track
+        - language
+        - title
+        - format
+        - file_path
+        - is_forced
+      properties:
+        id:
+          type: string
+          format: uuid
+        metadata_id:
+          type: string
+          format: uuid
+        track:
+          type: integer
+        language:
+          type: string
+        title:
+          type: string
+        format:
+          type: string
+        file_path:
+          type: string
+        is_forced:
+          type: boolean
+
+    VideoChapter:
+      type: object
+      required:
+        - id
+        - metadata_id
+        - chapter_id
+        - title
+        - start_time
+        - end_time
+      properties:
+        id:
+          type: string
+          format: uuid
+        metadata_id:
+          type: string
+          format: uuid
+        chapter_id:
+          type: integer
+        title:
+          type: string
+        start_time:
+          type: number
+          format: float
+        end_time:
+          type: number
+          format: float
+
+    SubtitleFont:
+      type: object
+      required:
+        - id
+        - metadata_id
+        - font_name
+        - file_path
+      properties:
+        id:
+          type: string
+          format: uuid
+        metadata_id:
+          type: string
+          format: uuid
+        font_name:
+          type: string
+        file_path:
+          type: string
+
+    VaultMetadataDto:
+      allOf:
+        - $ref: "#/components/schemas/VaultMetadata"
+        - type: object
+          required:
+            - audio_tracks
+            - video_subtitles
+            - video_chapters
+            - subtitle_fonts
+          properties:
+            audio_tracks:
+              type: array
+              items:
+                $ref: "#/components/schemas/AudioTrack"
+            video_subtitles:
+              type: array
+              items:
+                $ref: "#/components/schemas/VideoSubtitle"
+            video_chapters:
+              type: array
+              items:
+                $ref: "#/components/schemas/VideoChapter"
+            subtitle_fonts:
+              type: array
+              items:
+                $ref: "#/components/schemas/SubtitleFont"
+
+    VaultSubItemDto:
+      allOf:
+        - $ref: "#/components/schemas/VaultSubItem"
+        - type: object
+          properties:
+            metadata:
+              type:
+                - object
+                - "null"
+              allOf:
+                - $ref: "#/components/schemas/VaultMetadataDto"
+
+    VaultSubItemPayload:
+      type: object
+      required:
+        - vault_ids
+      properties:
+        vault_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    VaultMetadataResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          description: Map of Vault UUID to array of VaultSubItemDto
+          additionalProperties:
+            type: array
+            items:
+              $ref: "#/components/schemas/VaultSubItemDto"
+
+    AppEvent:
+      type: object
+      description: Server-Sent Event frame emitted over `/api/v1/vault/all`.
+      oneOf:
+        - type: object
+          required:
+            - type
+          properties:
+            type:
+              type: string
+              enum:
+                - Unknown
+        - type: object
+          required:
+            - type
+            - data
+          properties:
+            type:
+              type: string
+              enum:
+                - VaultItems
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/VaultItem"
+        - type: object
+          required:
+            - type
+            - data
+          properties:
+            type:
+              type: string
+              enum:
+                - VaultSubItems
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/VaultSubItem"
+        - type: object
+          required:
+            - type
+            - data
+          properties:
+            type:
+              type: string
+              enum:
+                - StreamingEvents
+            data:
+              $ref: "#/components/schemas/StreamingEvent"
+        - type: object
+          required:
+            - type
+            - data
+          properties:
+            type:
+              type: string
+              enum:
+                - Error
+            data:
+              type: string
+              description: Error message description.
+      discriminator:
+        propertyName: type
+
+    StreamingEvent:
+      oneOf:
+        - type: object
+          required:
+            - Init
+          properties:
+            Init:
+              type: object
+              required:
+                - vault_id
+                - total
+              properties:
+                vault_id:
+                  type: string
+                  format: uuid
+                total:
+                  type: integer
+        - type: object
+          required:
+            - Progress
+          properties:
+            Progress:
+              type: object
+              required:
+                - sub_item_id
+                - total_size
+                - speed
+                - progress
+              properties:
+                sub_item_id:
+                  type: string
+                  format: uuid
+                total_size:
+                  type: integer
+                  format: int64
+                speed:
+                  type: integer
+                  format: int64
+                progress:
+                  type: number
+                  format: float
+                eta_secs:
+                  type:
+                    - integer
+                    - "null"
+                  format: int64
+        - type: object
+          required:
+            - Complete
+          properties:
+            Complete:
+              type: object
+              required:
+                - sub_item_id
+                - vault_id
+                - is_last
+              properties:
+                sub_item_id:
+                  type: string
+                  format: uuid
+                vault_id:
+                  type: string
+                  format: uuid
+                is_last:
+                  type: boolean
 
     VaultAddPayload:
       type: object
