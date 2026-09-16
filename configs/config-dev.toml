@@ -6,3 +6,6 @@ appEnv = "${APP_ENV:dev}"
 [logger]
 logLevel = "debug"
 pretty = true
+
+[frontend]
+staticPath = "../komorebi-web/build/"

@@ -38,6 +38,9 @@ type Config struct {
 		LogLevel string
 		Pretty   bool
 	}
+	Frontend struct {
+		StaticPath string
+	}
 }
 
 func DefaultConfig() (c Config) {
@@ -47,7 +50,11 @@ func DefaultConfig() (c Config) {
 	if c.Env.AppEnv == "" {
 		c.Env.AppEnv = "dev"
 	}
+
 	c.Logger.LogLevel = "debug"
 	c.Logger.Pretty = true
+
+	c.Frontend.StaticPath = "../static"
+
 	return c
 }
