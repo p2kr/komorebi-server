@@ -1,0 +1,8 @@
+[env]
+malClientId = "${MAL_CLIENT_ID}"
+anilistClientId = "${ANILIST_CLIENT_ID}"
+appEnv = "${APP_ENV:prod}"
+
+[logger]
+logLevel = "debug"
+pretty = false
