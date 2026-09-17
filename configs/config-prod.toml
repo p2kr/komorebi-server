@@ -1,8 +1,10 @@
 [env]
-malClientId = "${MAL_CLIENT_ID}"
-anilistClientId = "${ANILIST_CLIENT_ID}"
-appEnv = "${APP_ENV:prod}"
+# Secrets are injected via environment variables (MAL_CLIENT_ID, ANILIST_CLIENT_ID).
+# Do NOT use ${...} placeholders here — koanf does not expand them.
+malClientId = ""
+anilistClientId = ""
+appEnv = "prod"
 
 [logger]
-logLevel = "debug"
+logLevel = "info"
 pretty = false

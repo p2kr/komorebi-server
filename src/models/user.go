@@ -5,6 +5,7 @@ import (
 	"komorebi-server/src/dto"
 	"uuid"
 
+	z "github.com/Oudwins/zog"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -12,7 +13,7 @@ import (
 type User struct {
 	Model
 
-	Username    string            `gorm:"not null;uniqueIndex:idx_uniq" json:"username"`
+	Username    string            `gorm:"not null;uniqueIndex:idx_user_uniq" json:"username"`
 	ProviderId  *string           `json:"provider_id"`
 	AvatarUrl   *string           `json:"avatar_url"`
 	Provider    dto.MediaProvider `gorm:"not null;uniqueIndex:idx_uniq" json:"provider"`
@@ -20,6 +21,11 @@ type User struct {
 	AccessToken *string           `json:"access_token,omitempty"`
 	Passcode    *string           `json:"passcode,omitempty"`
 }
+
+var IUser = z.Struct(z.Shape{
+	"Provider":  z.StringLike[dto.MediaProvider]().Required(),
+	"IsSandbox": z.Bool(),
+})
 
 // Hide [Passcode] and [AccessToken]
 func (u User) MarshalJSON() ([]byte, error) {
@@ -30,10 +36,6 @@ func (u User) MarshalJSON() ([]byte, error) {
 	a.AccessToken = nil
 
 	return json.Marshal(a)
-}
-
-func (User) TableOptions() string {
-	return "STRICT"
 }
 
 func (u *User) BeforeSave(tx *gorm.DB) error {

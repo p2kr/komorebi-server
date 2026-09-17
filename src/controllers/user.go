@@ -3,12 +3,14 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"komorebi-server/src/adapters"
 	"komorebi-server/src/db"
 	"komorebi-server/src/dto"
 	"komorebi-server/src/models"
 	"net/http"
 
+	"github.com/Oudwins/zog"
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
@@ -26,6 +28,11 @@ func AddUser(c *echo.Context) error {
 	var user models.User
 	if err := c.Bind(&user); err != nil {
 		return fail(c, http.StatusBadRequest, err)
+	}
+
+	errs := models.IUser.Validate(&user)
+	if errs != nil {
+		return fail(c, http.StatusNotAcceptable, fmt.Errorf("%v", zog.Issues.Flatten(errs)))
 	}
 
 	err := validateUser(&user)
@@ -75,7 +82,7 @@ func DeleteUser(c *echo.Context) error {
 }
 
 func validateUser(user *models.User) error {
-	client := adapters.GetMediaClient(dto.MediaProvider(user.Provider), client, user)
+	client := adapters.GetMediaClient(dto.MediaProvider(user.Provider), httpClient, user)
 
 	if user.AccessToken != nil {
 		log.Info().Msg("Fetching username and avatar url for user")
@@ -99,6 +106,8 @@ func validateUser(user *models.User) error {
 	_, err = client.GetMangaList(params)
 	if err == nil {
 		log.Info().Msg("Validated user by manga list")
+		return nil
 	}
+
 	return err
 }

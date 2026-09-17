@@ -35,7 +35,7 @@ func fail(c *echo.Context, status int, error error, details ...any) error {
 	})
 }
 
-var client *resty.Client
+var httpClient *resty.Client
 
 func InitClient() {
 	c := resty.New()
@@ -47,7 +47,7 @@ func InitClient() {
 		c.SetCurlCmdGenerate(true)
 	}
 
-	client = c
+	httpClient = c
 }
 
 type RestyLogger struct{}

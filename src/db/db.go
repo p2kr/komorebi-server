@@ -60,7 +60,7 @@ func SetupDb() {
 }
 
 func MigrateSchema() {
-	err := appDb.AutoMigrate(&models.User{})
+	err := appDb.AutoMigrate(&models.User{}, &models.CrawlerConfig{})
 	if err != nil {
 		log.Err(err).Msg("Failed to migrate")
 	} else {

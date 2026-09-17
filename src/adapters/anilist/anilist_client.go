@@ -3,6 +3,7 @@ package anilist
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"komorebi-server/configs"
 	"komorebi-server/src/dto"
 	"komorebi-server/src/models"
@@ -151,7 +152,7 @@ func (c *AnilistClient) fetchList(params *dto.MediaClientParams, mediaType strin
 	resp, err := req.Post(ANILIST_GRAPHQL_URL)
 	if err != nil || resp.StatusCode() != 200 {
 		log.Err(err).Str("request", req.CurlCmd()).Msg("Failed to get anilist list")
-		return dto.PaginatedResponse{}, errors.Join(err, errors.New("response : "+resp.Status()))
+		return dto.PaginatedResponse{}, fmt.Errorf("%w response %s", err, resp.Status())
 	}
 
 	var anilistResp AniListResponse
@@ -181,7 +182,7 @@ func (c *AnilistClient) ValidateNewUser(accessToken string) error {
 	resp, err := req.Post(ANILIST_GRAPHQL_URL)
 	if err != nil || resp.StatusCode() != 200 {
 		log.Err(err).Str("request", req.CurlCmd()).Msg("Failed to get anilist validation")
-		return errors.Join(err, errors.New("response : "+resp.Status()))
+		return fmt.Errorf("%w response %s", err, resp.Status())
 	}
 
 	var result struct {

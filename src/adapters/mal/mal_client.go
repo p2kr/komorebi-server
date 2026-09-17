@@ -2,7 +2,7 @@ package mal
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"komorebi-server/configs"
 	"komorebi-server/src/dto"
 	"komorebi-server/src/models"
@@ -79,7 +79,7 @@ func (c *MalClient) fetchList(params *dto.MediaClientParams, isManga bool) (dto.
 	resp, err := req.Get(url)
 	if err != nil || resp.StatusCode() != 200 {
 		log.Err(err).Str("request", req.CurlCmd()).Bool("isManga", isManga).Msg("Failed to get mal list")
-		return dto.PaginatedResponse{}, errors.Join(err, errors.New("response : "+resp.Status()))
+		return dto.PaginatedResponse{}, fmt.Errorf("%w response %s", err, resp.Status())
 	}
 
 	var malResp MalResponse
@@ -102,7 +102,7 @@ func (c *MalClient) ValidateNewUser(accessToken string) error {
 	resp, err := req.Get(USER_INFO_URL)
 	if err != nil || resp.StatusCode() != 200 {
 		log.Err(err).Any("request", req.Body).Msg("Failed to ValidateNewUser in MAL")
-		return errors.Join(err, errors.New("response : "+resp.Status()))
+		return fmt.Errorf("%w response %s", err, resp.Status())
 	}
 
 	var result struct {

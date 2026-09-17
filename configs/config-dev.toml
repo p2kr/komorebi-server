@@ -1,11 +1,11 @@
 [env]
-malClientId = "${MAL_CLIENT_ID}"
-anilistClientId = "${ANILIST_CLIENT_ID}"
-appEnv = "${APP_ENV:dev}"
-defaultHostedAuthPage = "${DEFAULT_HOSTED_AUTH_PAGE:https://p2kr.github.io/komorebi-web/auth.html"}
+malClientId = ""
+anilistClientId = ""
+appEnv = "dev"
+defaultHostedAuthPage = "https://p2kr.github.io/komorebi-web/auth.html"
 
 [db]
-path = "${DB_LOC:assets/main.sqlite}?mode=rwc"
+path = "assets/main.sqlite?mode=rwc"
 forceCreation = false
 debug = true
 
