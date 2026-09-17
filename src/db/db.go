@@ -53,14 +53,16 @@ func SetupDb() {
 	appDb = db
 
 	if configs.GetConfig().Db.ForceCreation {
-		DropSchema()
+		DropSchema(appDb)
 	}
 
-	MigrateSchema()
+	MigrateSchema(appDb)
+
+	LoadSeedsInDb(appDb)
 }
 
-func MigrateSchema() {
-	err := appDb.AutoMigrate(&models.User{}, &models.CrawlerConfig{})
+func MigrateSchema(db *gorm.DB) {
+	err := db.AutoMigrate(&models.User{}, &models.CrawlerConfig{})
 	if err != nil {
 		log.Err(err).Msg("Failed to migrate")
 	} else {
@@ -68,8 +70,8 @@ func MigrateSchema() {
 	}
 }
 
-func DropSchema() {
-	err := appDb.Migrator().DropTable(&models.User{})
+func DropSchema(db *gorm.DB) {
+	err := db.Migrator().DropTable(&models.User{}, &models.CrawlerConfig{})
 	if err != nil {
 		log.Err(err).Msg("Failed to drop table")
 	} else {

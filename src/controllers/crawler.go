@@ -31,9 +31,20 @@ func SearchQuery(c *echo.Context) error {
 	}
 
 	ctx := context.Background()
-	configs, err := gorm.G[models.CrawlerConfig](db.GetDb()).Find(ctx)
-	if err != nil || len(configs) == 0 {
-		log.Err(err).Msg("No config found")
+	conf, ok := cache().ComputeIfAbsent("configs", func() (any, bool) {
+		var c []models.CrawlerConfig
+		c, err = gorm.G[models.CrawlerConfig](db.GetDb()).Find(ctx)
+		if err != nil {
+			log.Err(err).Any("config from db", c).Msg("failed to get db config")
+			return c, true
+		} else {
+			return c, false
+		}
+	})
+	configs, ok := conf.([]models.CrawlerConfig)
+	//gorm.G[models.CrawlerConfig](db.GetDb()).Find(ctx)
+	if !ok || len(configs) == 0 {
+		log.Err(err).Any("configs", configs).Msg("No config found")
 		return fail(c, http.StatusNotFound, err, "Configs", configs)
 	}
 

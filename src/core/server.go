@@ -47,7 +47,7 @@ func GetServer() *echo.Echo {
 	// Map Routers
 	g := e.Group("/api/v1")
 
-	controllers.UserRoutes(g) // Add routes below
-
+	controllers.UserRoutes(g)
+	controllers.CrawlerRoutes(g) // Add routes below
 	return e
 }

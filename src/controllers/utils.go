@@ -4,9 +4,13 @@ import (
 	"komorebi-server/configs"
 	"net/http"
 
+	"sync"
+
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
 	"resty.dev/v3"
+
+	"github.com/maypok86/otter/v2"
 )
 
 type SuccessResponse struct {
@@ -63,3 +67,14 @@ func (r *RestyLogger) Warnf(format string, v ...any) {
 func (r *RestyLogger) Debugf(format string, v ...any) {
 	log.Debug().Msgf(format, v...)
 }
+
+// cache is global cache for controllers
+var cache = sync.OnceValue(func() *otter.Cache[string, any] {
+	c, err := otter.New[string, any](&otter.Options[string, any]{
+		MaximumSize: 100,
+	})
+	if err != nil {
+		log.Err(err).Msg("failed to initialize controller cache")
+	}
+	return c
+})

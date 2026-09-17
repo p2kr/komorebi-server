@@ -2,24 +2,26 @@ package models
 
 import (
 	"komorebi-server/src/dto"
+	"uuid"
 
 	"github.com/Oudwins/zog"
+	"gorm.io/gorm"
 )
 
 type CrawlerConfig struct {
 	Model
 
-	Key       string        `gorm:"not null;uniqueIndex=idx_cc_uniq" json:"key"`
-	Name      string        `json:"name"`
-	Url       string        `json:"url"`
-	IsDeleted bool          `gorm:"not null;uniqueIndex=idx_cc_uniq" json:"is_deleted"`
-	Category  dto.MediaType `gorm:"not null;uniqueIndex=idx_cc_uniq" json:"category"`
+	Key       string `gorm:"not null;uniqueIndex:idx_cc_uniq"`
+	Name      string
+	Url       string
+	IsDeleted bool          `gorm:"not null;uniqueIndex:idx_cc_uniq"`
+	Category  dto.MediaType `gorm:"not null;uniqueIndex:idx_cc_uniq"`
 
-	RowSelector        string  `gorm:"not null" json:"row_selector"`
-	TitleSelector      string  `gorm:"not null" json:"title_selector"`
-	LinkSelector       string  `gorm:"not null" json:"link_selector"`
-	PopularitySelector *string `json:"popularity_selector"`
-	SizeSelector       *string `json:"size_selector"`
+	RowSelector        string `gorm:"not null"`
+	TitleSelector      string `gorm:"not null"`
+	LinkSelector       string `gorm:"not null"`
+	PopularitySelector *string
+	SizeSelector       *string
 }
 
 var ICrawlerConfig = zog.Struct(zog.Shape{
@@ -30,3 +32,16 @@ var ICrawlerConfig = zog.Struct(zog.Shape{
 	"TitleSelector": zog.String().Min(1),
 	"LinkSelector":  zog.String().Min(1),
 })
+
+var ICrawlerResult = zog.Struct(zog.Shape{
+	"Title": zog.String().Min(1),
+	"Link":  zog.String().URL(),
+})
+
+func (c *CrawlerConfig) BeforeSave(tx *gorm.DB) error {
+	if c.Id == uuid.Nil() {
+		c.Id = uuid.NewV7()
+	}
+
+	return nil
+}

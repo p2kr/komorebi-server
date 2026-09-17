@@ -16,8 +16,8 @@ type User struct {
 	Username    string            `gorm:"not null;uniqueIndex:idx_user_uniq" json:"username"`
 	ProviderId  *string           `json:"provider_id"`
 	AvatarUrl   *string           `json:"avatar_url"`
-	Provider    dto.MediaProvider `gorm:"not null;uniqueIndex:idx_uniq" json:"provider"`
-	IsSandbox   bool              `gorm:"not null;uniqueIndex:idx_uniq" json:"is_sandbox"`
+	Provider    dto.MediaProvider `gorm:"not null;uniqueIndex:idx_user_uniq" json:"provider"`
+	IsSandbox   bool              `gorm:"not null;uniqueIndex:idx_user_uniq" json:"is_sandbox"`
 	AccessToken *string           `json:"access_token,omitempty"`
 	Passcode    *string           `json:"passcode,omitempty"`
 }

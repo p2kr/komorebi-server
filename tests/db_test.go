@@ -44,3 +44,14 @@ func TestGormLoggerOutput(t *testing.T) {
 	assert.Contains(t, output, "sql", "expected output to contain 'sql'")
 	assert.Contains(t, output, "elapsed", "expected output to contain 'elapsed'")
 }
+
+func TestCrawlerConfigIndex(t *testing.T) {
+	dbConn, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err, "failed to open sqlite memory db")
+
+	err = dbConn.AutoMigrate(&models.CrawlerConfig{})
+	require.NoError(t, err, "failed to migrate CrawlerConfig")
+
+	hasIndex := dbConn.Migrator().HasIndex(&models.CrawlerConfig{}, "idx_cc_uniq")
+	assert.True(t, hasIndex, "expected index idx_cc_uniq to be created")
+}
