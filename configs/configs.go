@@ -20,7 +20,7 @@ var ProdConfigFS []byte
 //go:embed config-test.toml
 var TestConfigFS []byte
 
-func GetEmbeddedConfig(appEnv string) []byte {
+func getEmbeddedConfig(appEnv string) []byte {
 	switch strings.ToLower(strings.TrimSpace(appEnv)) {
 	case "dev":
 		return DevConfigFS
@@ -35,20 +35,27 @@ func GetEmbeddedConfig(appEnv string) []byte {
 
 type Config struct {
 	Env struct {
-		MalClientId     string
-		AnilistClientId string
-		AppEnv          string
+		MalClientId           string
+		AnilistClientId       string
+		AppEnv                string
+		DefaultHostedAuthPage string
 	}
 	Db struct {
 		Path          string
 		ForceCreation bool
+		Debug         bool
 	}
 	Logger struct {
-		LogLevel string
-		Pretty   bool
+		LogLevel    string
+		Pretty      bool
+		PrintConfig bool
 	}
 	Frontend struct {
 		StaticPath string
+	}
+	HttpClient struct {
+		Debug   bool
+		CurlCmd bool
 	}
 }
 
@@ -63,11 +70,13 @@ func getEnv(key string, fallback ...string) string {
 	}
 }
 
-func DefaultConfig() (c Config) {
+func defaultConfig() *Config {
+	c := Config{}
 	// Env configs
 	c.Env.MalClientId = os.Getenv("MAL_CLIENT_ID")
 	c.Env.AnilistClientId = os.Getenv("ANILIST_CLIENT_ID")
 	c.Env.AppEnv = getEnv("APP_ENV", "dev")
+	c.Env.DefaultHostedAuthPage = getEnv("DEFAULT_HOSTED_AUTH_PAGE", "https://p2kr.github.io/komorebi-web/auth.html")
 
 	// Db configs
 	c.Db.Path = getEnv("DB_LOC", "assets/main.sqlite")
@@ -79,10 +88,12 @@ func DefaultConfig() (c Config) {
 	// Frontend configs
 	c.Frontend.StaticPath = "../static"
 
-	return c
+	// Web client
+
+	return &c
 }
 
-var appConfig Config
+var appConfig *Config
 
 func LoadConfigs() {
 	gotenv.Load(".env")
@@ -97,7 +108,7 @@ func LoadConfigs() {
 	config, err := os.ReadFile(fileName)
 	if err != nil {
 		log.Err(err).Str("fileName", fileName).Msg("failed to read config from app env")
-		config = GetEmbeddedConfig(appEnv)
+		config = getEmbeddedConfig(appEnv)
 	}
 
 	log.Info().Str("fileName", fileName).Msg("Loading [fileName] for env")
@@ -124,12 +135,15 @@ func LoadConfigs() {
 	// Find not embedded file
 	if err = toml.Unmarshal(config, &appConfig); err != nil {
 		log.Err(err).Bytes("config", config).Msg("failed to unmarshal")
-		appConfig = DefaultConfig()
+		appConfig = defaultConfig()
 	}
 
+	if appConfig.Logger.PrintConfig {
+		log.Debug().Any("configs", GetConfig()).Msg("Loaded configs")
+	}
 	log.Debug().Msg("Loaded configs")
 }
 
 func GetConfig() *Config {
-	return &appConfig
+	return appConfig
 }

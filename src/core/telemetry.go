@@ -28,6 +28,8 @@ func SetupLogger(config *configs.Config) {
 	if config.Logger.Pretty {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	}
+
+	zerolog.DefaultContextLogger = &log.Logger
 }
 
 func GetSlogLogger() *slog.Logger {

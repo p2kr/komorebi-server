@@ -2,6 +2,7 @@ package core
 
 import (
 	"komorebi-server/configs"
+	"komorebi-server/src/controllers"
 	"komorebi-server/src/db"
 
 	"github.com/rs/zerolog/log"
@@ -17,6 +18,9 @@ func Init() {
 
 	// Setup db
 	db.SetupDb()
+
+	// Init resty client
+	controllers.InitClient()
 
 	log.Info().Msg("Initialized App")
 }

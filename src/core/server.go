@@ -3,7 +3,9 @@ package core
 import (
 	"komorebi-server/configs"
 	"komorebi-server/src/controllers"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -30,10 +32,17 @@ func GetServer() *echo.Echo {
 			return configs.GetConfig().Env.AppEnv == "dev"
 		},
 	}))
-	e.Use(middleware.Static(staticPath))
 
-	// Static files
-	e.Static("/", staticPath)
+	e.Use(middleware.StaticWithConfig(middleware.StaticConfig{
+		Root:       ".",
+		Index:      "index.html",
+		HTML5:      true,
+		Browse:     false,
+		Filesystem: os.DirFS(staticPath),
+		Skipper: func(c *echo.Context) bool {
+			return strings.HasPrefix(c.Request().URL.Path, "/api")
+		},
+	}))
 
 	// Map Routers
 	g := e.Group("/api/v1")

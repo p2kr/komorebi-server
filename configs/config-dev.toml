@@ -2,14 +2,21 @@
 malClientId = "${MAL_CLIENT_ID}"
 anilistClientId = "${ANILIST_CLIENT_ID}"
 appEnv = "${APP_ENV:dev}"
+defaultHostedAuthPage = "${DEFAULT_HOSTED_AUTH_PAGE:https://p2kr.github.io/komorebi-web/auth.html"}
 
 [db]
-path = "${DB_LOC:assets/main.sqlite}"
-forceCreation = true
+path = "${DB_LOC:assets/main.sqlite}?mode=rwc"
+forceCreation = false
+debug = true
 
 [logger]
 logLevel = "debug"
 pretty = true
+printConfig = true
 
 [frontend]
 staticPath = "../komorebi-web/build/"
+
+[httpClient]
+debug = false
+curlCmd = true

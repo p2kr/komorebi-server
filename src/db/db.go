@@ -2,18 +2,16 @@ package db
 
 import (
 	_ "embed"
-	"komorebi-server/configs"
-	"komorebi-server/src/models"
 	"os"
 	"path/filepath"
+
+	"komorebi-server/configs"
+	"komorebi-server/src/models"
 
 	"github.com/glebarez/sqlite"
 	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
 )
-
-//go:embed schema.sql
-var schema string
 
 var appDb *gorm.DB
 
@@ -22,7 +20,10 @@ func GetDb() *gorm.DB {
 }
 
 func SetupDb() {
-	config := gorm.Config{} // TODO: Setup logger
+	config := gorm.Config{}
+	if configs.GetConfig().Db.Debug {
+		config.Logger = &GormLogger{}
+	}
 	dbPath, _ := filepath.Abs(configs.GetConfig().Db.Path)
 	if err := os.MkdirAll(filepath.Dir(dbPath), os.ModePerm); err != nil {
 		log.Err(err).Str("dbPath", dbPath).Msg("failed to mkdir")
@@ -39,6 +40,14 @@ func SetupDb() {
 		}
 	} else {
 		log.Info().Str("dbPath", dbPath).Msg("Loaded db from dbPath")
+	}
+
+	sqlDb, err := db.DB()
+	if err == nil {
+		sqlDb.Exec("PRAGMA journal_mode=WAL;")
+		sqlDb.Exec("PRAGMA synchronous=NORMAL;")
+		sqlDb.Exec("PRAGMA busy_timeout=5000;")
+		sqlDb.Exec("PRAGMA foreign_keys = ON;")
 	}
 
 	appDb = db

@@ -6,7 +6,7 @@ import (
 )
 
 type Model struct {
-	Id        uuid.UUID `gorm:"primarykey;not null"`
-	CreatedAt time.Time `gorm:"not null"`
-	UpdatedAt time.Time `gorm:"not null"`
+	Id        uuid.UUID `gorm:"primarykey;not null;default=uuid.NewV7()" json:"id"`
+	CreatedAt time.Time `gorm:"not null" json:"created_at"`
+	UpdatedAt time.Time `gorm:"not null" json:"updated_at"`
 }
