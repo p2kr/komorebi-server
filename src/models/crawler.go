@@ -31,7 +31,6 @@ var ICrawlerConfig = zog.Struct(zog.Shape{
 	"Category":     zog.String().OneOf([]string{"Anime", "Manga", "Novel"}),
 	"RowSelector":  zog.String().Min(1),
 	"LinkSelector": zog.String().Min(1),
-	// TitleSelector is optional when DecodeLinkTitle is true.
 })
 
 func (c *CrawlerConfig) BeforeSave(tx *gorm.DB) error {

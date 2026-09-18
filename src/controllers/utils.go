@@ -1,13 +1,17 @@
 package controllers
 
 import (
+	"context"
 	"net/http"
 	"sync"
 
 	"komorebi-server/configs"
+	"komorebi-server/src/db"
+	"komorebi-server/src/models"
 
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
+	"gorm.io/gorm"
 	"resty.dev/v3"
 
 	"github.com/maypok86/otter/v2"
@@ -84,3 +88,18 @@ var Cache = sync.OnceValue(func() *otter.Cache[string, any] {
 	}
 	return c
 })
+
+func getCrawlerConfigs(ctx context.Context) ([]models.CrawlerConfig, bool) {
+	r, ok := Cache().ComputeIfAbsent("configs", func() (any, bool) {
+		var c []models.CrawlerConfig
+		c, err := gorm.G[models.CrawlerConfig](db.GetDb()).Find(ctx)
+		if err != nil {
+			log.Err(err).Any("config from db", c).Msg("failed to get db config")
+			return c, true
+		} else {
+			return c, false
+		}
+	})
+	m, ok := r.([]models.CrawlerConfig)
+	return m, ok
+}

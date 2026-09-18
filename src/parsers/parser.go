@@ -32,18 +32,18 @@ func (p *TitleParser) Parse(content string) *dto.ParsedTitle {
 	return nil
 }
 
-func (p *TitleParser) ParseMany(contents *[]dto.CrawlerResult) {
+func (p *TitleParser) ParseMany(contents []dto.CrawlerResult) {
 	start := time.Now()
 
 	if p.Ctx == nil {
 		p.Ctx = context.Background()
 	}
-	g, _ := errgroup.WithContext(p.Ctx)
+	g := errgroup.Group{}
 	g.SetLimit(100)
-	for i, title := range *contents {
+	for i, title := range contents {
 		g.Go(func() error {
 			// Mutex not required as each index is isolated
-			(*contents)[i].ParsedTitle = p.Parse(title.Title)
+			contents[i].ParsedTitle = p.Parse(title.Title)
 			return nil
 		})
 	}
@@ -53,7 +53,7 @@ func (p *TitleParser) ParseMany(contents *[]dto.CrawlerResult) {
 	if configs.GetConfig().Logger.PrintCrawling {
 		log.Debug().
 			Dur("duration", time.Since(start)).
-			Int("results", len(*contents)).
+			Int("results", len(contents)).
 			Msg("Title parsing benchmark")
 	}
 }

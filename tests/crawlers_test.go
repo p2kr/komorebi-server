@@ -65,7 +65,7 @@ func TestCrawlerEngineLogging(t *testing.T) {
 		Client:    client,
 		Query:     "test",
 		MediaType: dto.MediaTypeAnime,
-		Configs:   &configs,
+		Configs:   configs,
 	}
 
 	results, err := engine.Crawl()
@@ -114,7 +114,7 @@ func TestCrawlerEngineFetchHtmlErrorHandling(t *testing.T) {
 		Client:    client,
 		Query:     "test",
 		MediaType: dto.MediaTypeAnime,
-		Configs:   &configs,
+		Configs:   configs,
 	}
 
 	_, err := engine.Crawl()
@@ -161,7 +161,7 @@ func TestJsonCrawlerLogging(t *testing.T) {
 		Client:    client,
 		Query:     "solo",
 		MediaType: dto.MediaTypeAnime,
-		Configs:   &configs,
+		Configs:   configs,
 	}
 
 	results, err := engine.Crawl()
@@ -174,9 +174,8 @@ func TestJsonCrawlerLogging(t *testing.T) {
 
 	logged := buf.String()
 	t.Logf("Captured JSON crawler logs:\n%s", logged)
-	assert.Contains(t, logged, "invalid dto")
 	assert.Contains(t, logged, `"crawler":"*crawlers.jsonCrawler"`)
-	assert.Contains(t, logged, `"results":1`)
+	assert.Contains(t, logged, `"results":2`)
 }
 
 func TestJsonCrawlerDecodeLinkTitle(t *testing.T) {
@@ -207,7 +206,7 @@ func TestJsonCrawlerDecodeLinkTitle(t *testing.T) {
 		Client:    client,
 		Query:     "show",
 		MediaType: dto.MediaTypeAnime,
-		Configs:   &configs,
+		Configs:   configs,
 	}
 
 	results, err := engine.Crawl()

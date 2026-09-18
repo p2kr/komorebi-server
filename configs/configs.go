@@ -66,8 +66,9 @@ type Config struct {
 		StaticPath string `koanf:"staticPath"`
 	} `koanf:"frontend"`
 	HttpClient struct {
-		Debug   bool `koanf:"debug"`
-		CurlCmd bool `koanf:"curlCmd"`
+		Debug          bool   `koanf:"debug"`
+		CurlCmd        bool   `koanf:"curlCmd"`
+		CrawlerTimeout string `koanf:"crawlerTimeoutSec"`
 	} `koanf:"httpClient"`
 }
 
@@ -85,12 +86,13 @@ func LoadConfigs() {
 	// below. Koanf''s internal map is case-sensitive: mismatched casing creates
 	// duplicate keys and causes non-deterministic Unmarshal results.
 	k.Load(confmap.Provider(map[string]any{
-		"env.appEnv":                "dev",
-		"env.defaultHostedAuthPage": "https://p2kr.github.io/komorebi-web/auth.html",
-		"db.path":                   "assets/main.sqlite",
-		"logger.logLevel":           "debug",
-		"logger.pretty":             false,
-		"frontend.staticPath":       "../static",
+		"env.appEnv":                   "dev",
+		"env.defaultHostedAuthPage":    "https://p2kr.github.io/komorebi-web/auth.html",
+		"db.path":                      "assets/main.sqlite",
+		"logger.logLevel":              "debug",
+		"logger.pretty":                false,
+		"frontend.staticPath":          "../static",
+		"httpClient.crawlerTimeoutSec": "60s",
 	}, "."), nil)
 
 	// -- Layer 2: .env file -> pushed into OS env so the steps below can read it

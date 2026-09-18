@@ -5,6 +5,7 @@ go 1.27.0
 require (
 	github.com/Oudwins/zog v0.23.0
 	github.com/PuerkitoBio/goquery v1.13.0
+	github.com/andybalholm/cascadia v1.3.4
 	github.com/deckarep/golang-set/v3 v3.0.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-co-op/gocron/v2 v2.22.0
@@ -21,16 +22,15 @@ require (
 	github.com/ohler55/ojg v1.28.6
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/rs/zerolog v1.35.1
-	github.com/samber/lo v1.53.0
 	github.com/stretchr/testify v1.12.1
 	github.com/subosito/gotenv v1.6.0
+	golang.org/x/net v0.59.0
 	golang.org/x/sync v0.23.0
 	gorm.io/gorm v1.31.2
 	resty.dev/v3 v3.0.0-rc.4
 )
 
 require (
-	github.com/andybalholm/cascadia v1.3.4 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
@@ -54,7 +54,6 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.16.0 // indirect

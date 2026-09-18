@@ -1,6 +1,7 @@
 package crawlers
 
 import (
+	"bytes"
 	"net/url"
 	"strings"
 
@@ -9,33 +10,18 @@ import (
 	"komorebi-server/src/models"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/maypok86/otter/v2"
 	"github.com/rs/zerolog/log"
 )
 
 type htmlCrawler struct{}
 
-var htmlCrawlerCache, _ = otter.New[string, bool](&canCrawlCacheConfig)
-
-func (c *htmlCrawler) CanCrawl(content string) bool {
-	v, ok := htmlCrawlerCache.ComputeIfAbsent(content, func() (bool, bool) {
-		reader := strings.NewReader(content)
-		_, err := goquery.NewDocumentFromReader(reader)
-		if err != nil {
-			return false, false
-		}
-		return true, false
-	})
-	return v && ok
-}
-
-func (c *htmlCrawler) Crawl(content string, config *models.CrawlerConfig) ([]dto.CrawlerResult, error) {
+func (c *htmlCrawler) Crawl(content []byte, config *models.CrawlerConfig) ([]dto.CrawlerResult, error) {
 	logger := log.With().Str("config", config.Key).Type("crawler", c).Logger()
 	var dtos []dto.CrawlerResult
-	reader := strings.NewReader(content)
+	reader := bytes.NewReader(content)
 	doc, err := goquery.NewDocumentFromReader(reader)
 	if err != nil {
-		logger.Err(err).Msg("Failed to parse document")
+		logger.Warn().Err(err).Msg("Failed to parse HTML document")
 		return dtos, err
 	} else {
 		logger.Info().Msg("Parsed document")
@@ -49,16 +35,16 @@ func (c *htmlCrawler) Crawl(content string, config *models.CrawlerConfig) ([]dto
 	}
 
 	doc.Find(config.RowSelector).Each(func(i int, s *goquery.Selection) {
-		title := strings.TrimSpace(s.Find(config.TitleSelector).Text())
-		link, _ := s.Find(config.LinkSelector).Attr("href")
+		title := strings.TrimSpace(findWithMatcher(s, config.TitleSelector).Text())
+		link, _ := findWithMatcher(s, config.LinkSelector).Attr("href")
 		link = strings.TrimSpace(link)
 
 		var popularity, size string
 		if config.PopularitySelector != nil {
-			popularity = strings.TrimSpace(s.Find(*config.PopularitySelector).Text())
+			popularity = strings.TrimSpace(findWithMatcher(s, *config.PopularitySelector).Text())
 		}
 		if config.SizeSelector != nil {
-			size = strings.TrimSpace(s.Find(*config.SizeSelector).Text())
+			size = strings.TrimSpace(findWithMatcher(s, *config.SizeSelector).Text())
 		}
 
 		if title == "" && strings.HasPrefix(link, "magnet:") {

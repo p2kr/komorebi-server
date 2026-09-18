@@ -5,17 +5,18 @@ import (
 	"net/http"
 
 	"komorebi-server/src/crawlers"
-	"komorebi-server/src/db"
 	"komorebi-server/src/dto"
-	"komorebi-server/src/models"
 	"komorebi-server/src/parsers"
 
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
-	"gorm.io/gorm"
 )
 
 func CrawlerRoutes(g *echo.Group) {
+	// Load crawler configs in background
+	ctx := context.Background()
+	go getCrawlerConfigs(ctx)
+
 	r := g.Group("/crawler")
 
 	r.POST("/search", SearchQuery)
@@ -33,18 +34,7 @@ func SearchQuery(c *echo.Context) error {
 	}
 
 	ctx := context.Background()
-	conf, ok := Cache().ComputeIfAbsent("configs", func() (any, bool) {
-		var c []models.CrawlerConfig
-		c, err = gorm.G[models.CrawlerConfig](db.GetDb()).Find(ctx)
-		if err != nil {
-			log.Err(err).Any("config from db", c).Msg("failed to get db config")
-			return c, true
-		} else {
-			return c, false
-		}
-	})
-	configs, ok := conf.([]models.CrawlerConfig)
-	// gorm.G[models.CrawlerConfig](db.GetDb()).Find(ctx)
+	configs, ok := getCrawlerConfigs(ctx)
 	if !ok || len(configs) == 0 {
 		log.Err(err).Any("configs", configs).Msg("No config found")
 		return fail(c, http.StatusNotFound, err, "Configs", configs)
@@ -54,7 +44,7 @@ func SearchQuery(c *echo.Context) error {
 		Client:    httpClient,
 		Query:     params.Query,
 		MediaType: params.MediaType,
-		Configs:   &configs,
+		Configs:   configs,
 	}
 
 	res, err := engine.Crawl()
@@ -63,7 +53,7 @@ func SearchQuery(c *echo.Context) error {
 		return fail(c, http.StatusInternalServerError, err)
 	}
 	tp := parsers.TitleParser{Ctx: ctx}
-	tp.ParseMany(&res)
+	tp.ParseMany(res)
 
 	return success(c, res)
 }
