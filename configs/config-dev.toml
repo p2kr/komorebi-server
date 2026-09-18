@@ -13,6 +13,7 @@ debug = true
 logLevel = "debug"
 pretty = true
 printConfig = true
+printCrawling = false
 
 [frontend]
 staticPath = "../komorebi-web/build/"

@@ -57,9 +57,10 @@ type Config struct {
 		Debug         bool   `koanf:"debug"`
 	} `koanf:"db"`
 	Logger struct {
-		LogLevel    string `koanf:"logLevel"`
-		Pretty      bool   `koanf:"pretty"`
-		PrintConfig bool   `koanf:"printConfig"`
+		LogLevel      string `koanf:"logLevel"`
+		Pretty        bool   `koanf:"pretty"`
+		PrintConfig   bool   `koanf:"printConfig"`
+		PrintCrawling bool   `koanf:"printCrawling"`
 	} `koanf:"logger"`
 	Frontend struct {
 		StaticPath string `koanf:"staticPath"`

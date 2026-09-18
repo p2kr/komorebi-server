@@ -8,6 +8,7 @@ import (
 	"komorebi-server/src/db"
 	"komorebi-server/src/dto"
 	"komorebi-server/src/models"
+	"komorebi-server/src/parsers"
 
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
@@ -43,7 +44,7 @@ func SearchQuery(c *echo.Context) error {
 		}
 	})
 	configs, ok := conf.([]models.CrawlerConfig)
-	//gorm.G[models.CrawlerConfig](db.GetDb()).Find(ctx)
+	// gorm.G[models.CrawlerConfig](db.GetDb()).Find(ctx)
 	if !ok || len(configs) == 0 {
 		log.Err(err).Any("configs", configs).Msg("No config found")
 		return fail(c, http.StatusNotFound, err, "Configs", configs)
@@ -61,5 +62,8 @@ func SearchQuery(c *echo.Context) error {
 		log.Err(err).Msg("Failed to crawl")
 		return fail(c, http.StatusInternalServerError, err)
 	}
+	tp := parsers.TitleParser{Ctx: ctx}
+	tp.ParseMany(&res)
+
 	return success(c, res)
 }

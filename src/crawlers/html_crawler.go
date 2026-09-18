@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"strings"
 
+	"komorebi-server/configs"
 	"komorebi-server/src/dto"
 	"komorebi-server/src/models"
 
@@ -41,51 +42,64 @@ func (c *htmlCrawler) Crawl(content string, config *models.CrawlerConfig) ([]dto
 	}
 
 	logger.Debug().Msg("Crawling started")
-	defer logger.Debug().Int("results", len(dtos)).Msg("Crawling Ended")
+
+	printCrawling := configs.GetConfig().Logger.PrintCrawling
 
 	doc.Find(config.RowSelector).Each(func(i int, s *goquery.Selection) {
-		l := logger.Debug().Int("index", i)
-
-		dto := dto.CrawlerResult{}
-
 		title := strings.TrimSpace(s.Find(config.TitleSelector).Text())
-		l.Str("title", truncate(title))
 		if title == "" {
-			l.Msg("Skipping empty title")
+			if printCrawling {
+				logger.Debug().Int("index", i).Str("title", truncate(title)).Msg("Skipping empty title")
+			}
 			return
 		}
-		dto.Title = title
 
 		link, _ := s.Find(config.LinkSelector).Attr("href")
-		l.Str("link", truncate(link))
-		// Check if link is valid url
 		_, err := url.ParseRequestURI(link)
 		if err != nil {
-			l.AnErr("link parsing failed", err).Msg("Failed to parse link")
+			if printCrawling {
+				logger.Debug().Int("index", i).Str("title", truncate(title)).Str("link", truncate(link)).AnErr("link parsing failed", err).Msg("Failed to parse link")
+			}
 			return
 		}
-		dto.Link = link
 
+		dto := dto.CrawlerResult{
+			Title:    title,
+			Link:     link,
+			Source:   config.Key,
+			Category: config.Category,
+		}
+
+		var popularity, size string
 		if config.PopularitySelector != nil {
-			popularity := strings.TrimSpace(s.Find(*config.PopularitySelector).Text())
-			l.Str("popularity", truncate(popularity))
+			popularity = strings.TrimSpace(s.Find(*config.PopularitySelector).Text())
 			if popularity != "" {
 				dto.Popularity = &popularity
 			}
 		}
 
 		if config.SizeSelector != nil {
-			size := strings.TrimSpace(s.Find(*config.SizeSelector).Text())
-			l.Str("size", truncate(size))
+			size = strings.TrimSpace(s.Find(*config.SizeSelector).Text())
 			if size != "" {
 				dto.Size = &size
 			}
 		}
-		l.Str("category", truncate(string(config.Category)))
-		dto.Source = config.Key
-		dto.Category = config.Category
-		l.Msg("Found result")
+
+		if printCrawling {
+			logger.Debug().
+				Int("index", i).
+				Str("title", truncate(title)).
+				Str("link", truncate(link)).
+				Str("popularity", truncate(popularity)).
+				Str("size", truncate(size)).
+				Str("category", truncate(string(config.Category))).
+				Msg("Found result")
+		}
+
 		dtos = append(dtos, dto)
 	})
+
+	logger.Debug().Int("results", len(dtos)).Msg("Crawling Ended")
+
 	return dtos, nil
 }

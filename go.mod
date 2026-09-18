@@ -5,6 +5,7 @@ go 1.27.0
 require (
 	github.com/Oudwins/zog v0.23.0
 	github.com/PuerkitoBio/goquery v1.13.0
+	github.com/deckarep/golang-set/v3 v3.0.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-co-op/gocron/v2 v2.22.0
 	github.com/gzuidhof/tygo v0.2.21
@@ -16,6 +17,7 @@ require (
 	github.com/knadh/koanf/v2 v2.3.6
 	github.com/labstack/echo/v5 v5.3.1
 	github.com/maypok86/otter/v2 v2.3.0
+	github.com/nssteinbrenner/anitogo v1.0.0
 	github.com/ohler55/ojg v1.28.6
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/rs/zerolog v1.35.1
