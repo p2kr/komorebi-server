@@ -2,8 +2,9 @@ package models
 
 import (
 	"encoding/json"
-	"komorebi-server/src/dto"
 	"uuid"
+
+	"komorebi-server/src/dto"
 
 	z "github.com/Oudwins/zog"
 	"gorm.io/gorm"

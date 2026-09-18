@@ -2,9 +2,10 @@ package crawlers
 
 import (
 	"encoding/json"
+	"strings"
+
 	"komorebi-server/src/dto"
 	"komorebi-server/src/models"
-	"strings"
 
 	"github.com/Oudwins/zog"
 	"github.com/maypok86/otter/v2"
@@ -15,10 +16,6 @@ import (
 )
 
 type jsonCrawler struct{}
-
-func (c *jsonCrawler) Name() string {
-	return "json"
-}
 
 var jsonCrawlerCache, _ = otter.New[string, bool](&canCrawlCacheConfig)
 
@@ -39,16 +36,17 @@ func (c *jsonCrawler) CanCrawl(content string) bool {
 }
 
 func (c *jsonCrawler) Crawl(content string, config *models.CrawlerConfig) ([]dto.CrawlerResult, error) {
+	logger := log.With().Str("config", config.Key).Type("crawler", c).Logger()
 	var dtos []dto.CrawlerResult
 	obj, err := oj.ParseString(content)
 	if err != nil {
-		log.Err(err).Str("config", truncate(config.Key)).Msg("Failed to parse JSON content")
+		logger.Err(err).Msg("Failed to parse JSON content")
 		return dtos, err
 	}
 
 	expr, err := jp.ParseString(config.RowSelector)
 	if err != nil {
-		log.Err(err).Str("config", truncate(config.Key)).Str("selector", truncate(config.RowSelector)).Msg("Failed to parse JSON row selector")
+		logger.Err(err).Str("selector", truncate(config.RowSelector)).Msg("Failed to parse JSON row selector")
 		return dtos, err
 	}
 
@@ -62,7 +60,7 @@ func (c *jsonCrawler) Crawl(content string, config *models.CrawlerConfig) ([]dto
 
 	expr, err = jp.ParseString(config.TitleSelector)
 	if err != nil {
-		log.Err(err).Str("config", truncate(config.Key)).Str("selector", truncate(config.TitleSelector)).Msg("Failed to parse JSON title selector")
+		logger.Err(err).Str("selector", truncate(config.TitleSelector)).Msg("Failed to parse JSON title selector")
 		return dtos, err
 	}
 
@@ -76,7 +74,7 @@ func (c *jsonCrawler) Crawl(content string, config *models.CrawlerConfig) ([]dto
 
 	expr, err = jp.ParseString(config.LinkSelector)
 	if err != nil {
-		log.Err(err).Str("config", truncate(config.Key)).Str("selector", truncate(config.LinkSelector)).Msg("Failed to parse JSON link selector")
+		logger.Err(err).Str("selector", truncate(config.LinkSelector)).Msg("Failed to parse JSON link selector")
 		return dtos, err
 	}
 
@@ -120,16 +118,13 @@ func (c *jsonCrawler) Crawl(content string, config *models.CrawlerConfig) ([]dto
 	validDtos := lo.Filter(dtos, func(dto dto.CrawlerResult, _ int) bool {
 		errs := models.ICrawlerResult.Validate(&dto)
 		if errs != nil {
-			log.Debug().Any("errors", zog.Issues.Flatten(errs)).
-				Str("source", truncate(config.Key)).
-				Str("title", truncate(dto.Title)).
-				Str("link", truncate(dto.Link)).
-				Msg("invalid dto")
+			logger.Warn().Any("errors", zog.Issues.Flatten(errs)).Msg("invalid dto")
 			return false
 		} else {
 			return true
 		}
 	})
 
+	logger.Debug().Int("count", len(validDtos)).Msg("Found results")
 	return validDtos, nil
 }

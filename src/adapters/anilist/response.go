@@ -24,7 +24,7 @@ type AniListData struct {
 }
 
 type AniListPage struct {
-	PageInfo  *AniListPageInfo         `json:"pageInfo"`
+	PageInfo  *AniListPageInfo        `json:"pageInfo"`
 	MediaList []AniListMediaListEntry `json:"mediaList"`
 }
 

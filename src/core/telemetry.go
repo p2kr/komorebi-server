@@ -1,10 +1,11 @@
 package core
 
 import (
-	"komorebi-server/configs"
 	"log/slog"
 	"os"
 	"strings"
+
+	"komorebi-server/configs"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

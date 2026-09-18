@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+
 	"komorebi-server/src/adapters"
 	"komorebi-server/src/db"
 	"komorebi-server/src/dto"
 	"komorebi-server/src/models"
-	"net/http"
 
 	"github.com/Oudwins/zog"
 	"github.com/labstack/echo/v5"

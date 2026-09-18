@@ -1,8 +1,9 @@
 package models
 
 import (
-	"komorebi-server/src/dto"
 	"uuid"
+
+	"komorebi-server/src/dto"
 
 	"github.com/Oudwins/zog"
 	"gorm.io/gorm"

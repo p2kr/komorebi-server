@@ -3,10 +3,10 @@ package tests
 import (
 	"encoding/json"
 	"testing"
+	"uuid"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"uuid"
 
 	"komorebi-server/src/adapters/mal"
 	"komorebi-server/src/dto"

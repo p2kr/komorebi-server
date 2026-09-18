@@ -59,18 +59,18 @@ type MalGenre struct {
 }
 
 type MalListStatus struct {
-	Status             *string   `json:"status"`
-	Score              *float32  `json:"score"`
-	NumEpisodesWatched *float64  `json:"num_episodes_watched"`
-	NumChaptersRead    *int      `json:"num_chapters_read"`
-	NumVolumesRead     *int      `json:"num_volumes_read"`
-	IsRewatching       *bool     `json:"is_rewatching"`
-	IsRereading        *bool     `json:"is_rereading"`
-	NumTimesRewatched  *int      `json:"num_times_rewatched"`
-	NumTimesReread     *int      `json:"num_times_reread"`
-	Tags               []string  `json:"tags"`
-	Comments           *string   `json:"comments"`
-	UpdatedAt          *string   `json:"updated_at"`
+	Status             *string  `json:"status"`
+	Score              *float32 `json:"score"`
+	NumEpisodesWatched *float64 `json:"num_episodes_watched"`
+	NumChaptersRead    *int     `json:"num_chapters_read"`
+	NumVolumesRead     *int     `json:"num_volumes_read"`
+	IsRewatching       *bool    `json:"is_rewatching"`
+	IsRereading        *bool    `json:"is_rereading"`
+	NumTimesRewatched  *int     `json:"num_times_rewatched"`
+	NumTimesReread     *int     `json:"num_times_reread"`
+	Tags               []string `json:"tags"`
+	Comments           *string  `json:"comments"`
+	UpdatedAt          *string  `json:"updated_at"`
 }
 
 type MalStatus string

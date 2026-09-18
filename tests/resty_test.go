@@ -2,11 +2,12 @@ package tests
 
 import (
 	"bytes"
-	"komorebi-server/src/controllers"
 	"net/http"
 	"net/http/httptest"
-	"resty.dev/v3"
 	"testing"
+
+	"komorebi-server/src/controllers"
+	"resty.dev/v3"
 
 	"github.com/stretchr/testify/assert"
 

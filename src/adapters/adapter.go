@@ -13,7 +13,7 @@ type MediaClient interface {
 	GetAnimeList(params dto.MediaClientParams) (dto.PaginatedResponse, error)
 	GetMangaList(params dto.MediaClientParams) (dto.PaginatedResponse, error)
 	ValidateNewUser(accessToken string) error
-	ExchangeOauthToken(code string, codeVerifier string) (string, error)
+	ExchangeOauthToken(code, codeVerifier string) (string, error)
 }
 
 func GetMediaClient(provider dto.MediaProvider, client *resty.Client, user *models.User) MediaClient {

@@ -1,18 +1,22 @@
 package crawlers
 
 import (
+	"context"
 	"errors"
-	"komorebi-server/src/dto"
-	"komorebi-server/src/models"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
+
+	"komorebi-server/src/dto"
+	"komorebi-server/src/models"
 
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sync/semaphore"
 	"resty.dev/v3"
 )
 
 type Crawler interface {
-	Name() string
 	CanCrawl(content string) bool
 	Crawl(content string, config *models.CrawlerConfig) ([]dto.CrawlerResult, error)
 }
@@ -22,45 +26,52 @@ type CrawlerEngine struct {
 	Query     string
 	MediaType dto.MediaType
 	Configs   *[]models.CrawlerConfig
+	Ctx       context.Context
 }
 
 var crawlers = []Crawler{&jsonCrawler{}, &htmlCrawler{}}
 
 func (c *CrawlerEngine) Crawl() ([]dto.CrawlerResult, error) {
-	var dtos []dto.CrawlerResult
-	var errs []error
+	mu := sync.Mutex{}
+	wg := sync.WaitGroup{}           // To wait for all goroutines
+	sem := semaphore.NewWeighted(10) // semaphore to limit max goroutines
+
+	dtos := make([]dto.CrawlerResult, 0, len(*c.Configs))
+	errs := make([]error, 0, len(*c.Configs))
+
+	if c.Ctx == nil {
+		c.Ctx = context.Background()
+	}
 
 	for _, config := range *c.Configs {
 		if config.IsDeleted {
 			continue
 		}
 
-		l := log.Info().Str("query", truncate(c.Query)).Str("config", truncate(config.Key))
-
-		content, err := c.FetchHtml(&config)
-		if err == nil {
-			for _, crawler := range crawlers {
-				if crawler.CanCrawl(content) {
-					l.Str("crawler", truncate(crawler.Name()))
-					dto, err := crawler.Crawl(content, &config)
-					if err == nil {
-						// add to list
-						dtos = append(dtos, dto...)
-						l.Int("results", len(dto))
-						break
-					} else {
-						l.AnErr("error in can crawl", err)
-						errs = append(errs, err)
-					}
-				}
-			}
-		} else {
-			l.AnErr("fetch html err", err)
+		if err := sem.Acquire(c.Ctx, 1); err != nil {
+			mu.Lock()
 			errs = append(errs, err)
+			mu.Unlock()
+			continue
 		}
+		wg.Add(1)
+		go func() {
+			defer sem.Release(1)
+			defer wg.Done()
 
-		l.Msg("Crawling Info")
+			rCtx, cancel := context.WithTimeout(c.Ctx, time.Second*60)
+			defer cancel()
+
+			rDtos, rErrs := c.CrawlConfig(rCtx, &config)
+			mu.Lock()
+			dtos = append(dtos, rDtos...)
+			errs = append(errs, rErrs...)
+			mu.Unlock()
+		}()
+
 	}
+
+	wg.Wait()
 
 	if len(dtos) == 0 && len(errs) > 0 {
 		return dtos, errors.Join(errs...)
@@ -69,9 +80,9 @@ func (c *CrawlerEngine) Crawl() ([]dto.CrawlerResult, error) {
 	return dtos, nil
 }
 
-func (c *CrawlerEngine) FetchHtml(config *models.CrawlerConfig) (string, error) {
+func (c *CrawlerEngine) fetchHtml(ctx context.Context, config *models.CrawlerConfig) (string, error) {
 	u := strings.ReplaceAll(config.Url, "{query}", url.PathEscape(c.Query))
-	resp, err := c.Client.R().Get(u)
+	resp, err := c.Client.R().SetContext(ctx).Get(u)
 	if err != nil {
 		log.Err(err).Str("url", truncate(u)).Str("config", truncate(config.Key)).Msg("Failed to get [url]")
 		return "", err
@@ -82,4 +93,42 @@ func (c *CrawlerEngine) FetchHtml(config *models.CrawlerConfig) (string, error) 
 	}
 
 	return resp.String(), nil
+}
+
+func (c *CrawlerEngine) CrawlConfig(
+	ctx context.Context,
+	config *models.CrawlerConfig,
+) ([]dto.CrawlerResult, []error) {
+	var dtos []dto.CrawlerResult
+	var errs []error
+
+	logger := log.With().
+		Str("query", truncate(c.Query)).
+		Str("config", truncate(config.Key)).
+		Logger()
+
+	content, err := c.fetchHtml(ctx, config)
+	if err != nil {
+		logger.Error().Err(err).Msg("fetch html err")
+		errs = append(errs, err)
+		return dtos, errs
+	}
+
+	for _, crawler := range crawlers {
+		if crawler.CanCrawl(content) {
+			crawlLog := logger.With().Type("crawler", crawler).Logger()
+
+			resDto, err := crawler.Crawl(content, config)
+			if err == nil {
+				dtos = resDto
+				crawlLog.Info().Int("results", len(resDto)).Msg("Crawling Info")
+				break
+			} else {
+				crawlLog.Error().Err(err).Msg("error in can crawl")
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	return dtos, errs
 }

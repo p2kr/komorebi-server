@@ -1,9 +1,10 @@
 package tests
 
 import (
-	"komorebi-server/configs"
 	"os"
 	"testing"
+
+	"komorebi-server/configs"
 
 	"github.com/stretchr/testify/assert"
 )

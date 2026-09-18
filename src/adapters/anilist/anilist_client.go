@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"komorebi-server/configs"
 	"komorebi-server/src/dto"
 	"komorebi-server/src/models"
-	"strconv"
-	"strings"
 
 	"github.com/rs/zerolog/log"
 	"resty.dev/v3"
@@ -214,7 +215,7 @@ func (c *AnilistClient) ValidateNewUser(accessToken string) error {
 	return nil
 }
 
-func (c *AnilistClient) ExchangeOauthToken(code string, codeVerifier string) (string, error) {
+func (c *AnilistClient) ExchangeOauthToken(code, codeVerifier string) (string, error) {
 	code, codeVerifier = strings.TrimSpace(code), strings.TrimSpace(codeVerifier)
 	if code == "" || codeVerifier == "" {
 		msg := "code and codeVerifier both cannot be empty"

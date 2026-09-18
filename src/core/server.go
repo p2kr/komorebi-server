@@ -1,11 +1,12 @@
 package core
 
 import (
-	"komorebi-server/configs"
-	"komorebi-server/src/controllers"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"komorebi-server/configs"
+	"komorebi-server/src/controllers"
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"

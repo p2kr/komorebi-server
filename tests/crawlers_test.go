@@ -2,12 +2,13 @@ package tests
 
 import (
 	"bytes"
-	"komorebi-server/src/crawlers"
-	"komorebi-server/src/dto"
-	"komorebi-server/src/models"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"komorebi-server/src/crawlers"
+	"komorebi-server/src/dto"
+	"komorebi-server/src/models"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

@@ -1,10 +1,10 @@
 package controllers
 
 import (
-	"komorebi-server/configs"
 	"net/http"
-
 	"sync"
+
+	"komorebi-server/configs"
 
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"

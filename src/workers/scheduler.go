@@ -26,7 +26,6 @@ func AddJob(jd gocron.JobDefinition, task gocron.Task, opts ...gocron.JobOption)
 	j, err := scheduler.NewJob(
 		jd, task, opts...,
 	)
-
 	if err != nil {
 		return j, err
 	}

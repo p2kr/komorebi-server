@@ -1,10 +1,11 @@
 package crawlers
 
 import (
-	"komorebi-server/src/dto"
-	"komorebi-server/src/models"
 	"net/url"
 	"strings"
+
+	"komorebi-server/src/dto"
+	"komorebi-server/src/models"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/maypok86/otter/v2"
@@ -12,10 +13,6 @@ import (
 )
 
 type htmlCrawler struct{}
-
-func (c *htmlCrawler) Name() string {
-	return "html"
-}
 
 var htmlCrawlerCache, _ = otter.New[string, bool](&canCrawlCacheConfig)
 
@@ -32,23 +29,22 @@ func (c *htmlCrawler) CanCrawl(content string) bool {
 }
 
 func (c *htmlCrawler) Crawl(content string, config *models.CrawlerConfig) ([]dto.CrawlerResult, error) {
+	logger := log.With().Str("config", config.Key).Type("crawler", c).Logger()
 	var dtos []dto.CrawlerResult
 	reader := strings.NewReader(content)
 	doc, err := goquery.NewDocumentFromReader(reader)
 	if err != nil {
-		log.Err(err).Str("config", truncate(config.Key)).Msg("Failed to parse document")
+		logger.Err(err).Msg("Failed to parse document")
 		return dtos, err
 	} else {
-		log.Info().Str("config", truncate(config.Key)).Str("crawler", truncate(c.Name())).Msg("Parsed document")
+		logger.Info().Msg("Parsed document")
 	}
 
-	log.Debug().Str("config", truncate(config.Key)).Msg("Crawling started")
-	defer func() {
-		log.Debug().Str("config", truncate(config.Key)).Int("results", len(dtos)).Msg("Crawling Ended")
-	}()
+	logger.Debug().Msg("Crawling started")
+	defer logger.Debug().Int("results", len(dtos)).Msg("Crawling Ended")
 
 	doc.Find(config.RowSelector).Each(func(i int, s *goquery.Selection) {
-		l := log.Debug().Int("index", i)
+		l := logger.Debug().Int("index", i)
 
 		dto := dto.CrawlerResult{}
 
@@ -85,7 +81,6 @@ func (c *htmlCrawler) Crawl(content string, config *models.CrawlerConfig) ([]dto
 				dto.Size = &size
 			}
 		}
-		l.Str("source", truncate(config.Key))
 		l.Str("category", truncate(string(config.Category)))
 		dto.Source = config.Key
 		dto.Category = config.Category

@@ -3,6 +3,7 @@ package mal
 import (
 	"encoding/json"
 	"fmt"
+
 	"komorebi-server/configs"
 	"komorebi-server/src/dto"
 	"komorebi-server/src/models"
@@ -11,13 +12,15 @@ import (
 	"resty.dev/v3"
 )
 
-const DEFAULT_MAL_BASE_URL = "https://api.myanimelist.net/v2"
-const HEADER_NAME = "X-MAL-CLIENT-ID"
-const MAL_ANIME_FIELDS = "synopsis,media_type,my_list_status,rating,mean,num_episodes,popularity,alternative_titles,genres"
-const MAL_MANGA_FIELDS = "synopsis,media_type,my_list_status,mean,num_chapters,num_volumes,popularity,alternative_titles,genres"
-const USER_INFO_URL = "https://api.myanimelist.net/v2/users/@me?fields=id,name,picture"
-const MAL_TOKEN_URL = "https://myanimelist.net/v1/oauth2/token"
-const CORS_HEADER = "Access-Control-Allow-Origin"
+const (
+	DEFAULT_MAL_BASE_URL = "https://api.myanimelist.net/v2"
+	HEADER_NAME          = "X-MAL-CLIENT-ID"
+	MAL_ANIME_FIELDS     = "synopsis,media_type,my_list_status,rating,mean,num_episodes,popularity,alternative_titles,genres"
+	MAL_MANGA_FIELDS     = "synopsis,media_type,my_list_status,mean,num_chapters,num_volumes,popularity,alternative_titles,genres"
+	USER_INFO_URL        = "https://api.myanimelist.net/v2/users/@me?fields=id,name,picture"
+	MAL_TOKEN_URL        = "https://myanimelist.net/v1/oauth2/token"
+	CORS_HEADER          = "Access-Control-Allow-Origin"
+)
 
 type MalClient struct {
 	client *resty.Client
@@ -94,9 +97,11 @@ func (c *MalClient) fetchList(params *dto.MediaClientParams, isManga bool) (dto.
 func (c *MalClient) GetAnimeList(params dto.MediaClientParams) (dto.PaginatedResponse, error) {
 	return c.fetchList(&params, false)
 }
+
 func (c *MalClient) GetMangaList(params dto.MediaClientParams) (dto.PaginatedResponse, error) {
 	return c.fetchList(&params, true)
 }
+
 func (c *MalClient) ValidateNewUser(accessToken string) error {
 	req := c.client.R().SetHeader(HEADER_NAME, configs.GetConfig().Env.MalClientId).SetAuthToken(*c.user.AccessToken)
 	resp, err := req.Get(USER_INFO_URL)
@@ -127,7 +132,7 @@ func (c *MalClient) ValidateNewUser(accessToken string) error {
 	return nil
 }
 
-func (c *MalClient) ExchangeOauthToken(code string, codeVerifier string) (string, error) {
+func (c *MalClient) ExchangeOauthToken(code, codeVerifier string) (string, error) {
 	req := c.client.R().SetHeader(CORS_HEADER, MAL_TOKEN_URL).SetFormData(map[string]string{
 		"client_id":     configs.GetConfig().Env.MalClientId,
 		"code":          code,
