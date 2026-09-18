@@ -74,8 +74,8 @@ func (r *RestyLogger) Debugf(format string, v ...any) {
 	log.Debug().Msgf(format, v...)
 }
 
-// cache is global cache for controllers
-var cache = sync.OnceValue(func() *otter.Cache[string, any] {
+// Cache is global Cache for controllers
+var Cache = sync.OnceValue(func() *otter.Cache[string, any] {
 	c, err := otter.New[string, any](&otter.Options[string, any]{
 		MaximumSize: 100,
 	})

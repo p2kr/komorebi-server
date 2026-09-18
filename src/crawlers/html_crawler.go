@@ -43,10 +43,37 @@ func (c *htmlCrawler) Crawl(content string, config *models.CrawlerConfig) ([]dto
 
 	logger.Debug().Msg("Crawling started")
 
-	printCrawling := configs.GetConfig().Logger.PrintCrawling
+	printCrawling := false
+	if cfg := configs.GetConfig(); cfg != nil {
+		printCrawling = cfg.Logger.PrintCrawling
+	}
 
 	doc.Find(config.RowSelector).Each(func(i int, s *goquery.Selection) {
 		title := strings.TrimSpace(s.Find(config.TitleSelector).Text())
+		link, _ := s.Find(config.LinkSelector).Attr("href")
+		link = strings.TrimSpace(link)
+
+		var popularity, size string
+		if config.PopularitySelector != nil {
+			popularity = strings.TrimSpace(s.Find(*config.PopularitySelector).Text())
+		}
+		if config.SizeSelector != nil {
+			size = strings.TrimSpace(s.Find(*config.SizeSelector).Text())
+		}
+
+		if title == "" && strings.HasPrefix(link, "magnet:") {
+			if u, err := url.Parse(link); err == nil {
+				if dn := u.Query().Get("dn"); dn != "" {
+					title = dn
+				}
+				if size == "" {
+					if xl := u.Query().Get("xl"); xl != "" {
+						size = xl
+					}
+				}
+			}
+		}
+
 		if title == "" {
 			if printCrawling {
 				logger.Debug().Int("index", i).Str("title", truncate(title)).Msg("Skipping empty title")
@@ -54,7 +81,6 @@ func (c *htmlCrawler) Crawl(content string, config *models.CrawlerConfig) ([]dto
 			return
 		}
 
-		link, _ := s.Find(config.LinkSelector).Attr("href")
 		_, err := url.ParseRequestURI(link)
 		if err != nil {
 			if printCrawling {
@@ -70,19 +96,11 @@ func (c *htmlCrawler) Crawl(content string, config *models.CrawlerConfig) ([]dto
 			Category: config.Category,
 		}
 
-		var popularity, size string
-		if config.PopularitySelector != nil {
-			popularity = strings.TrimSpace(s.Find(*config.PopularitySelector).Text())
-			if popularity != "" {
-				dto.Popularity = &popularity
-			}
+		if popularity != "" {
+			dto.Popularity = &popularity
 		}
-
-		if config.SizeSelector != nil {
-			size = strings.TrimSpace(s.Find(*config.SizeSelector).Text())
-			if size != "" {
-				dto.Size = &size
-			}
+		if size != "" {
+			dto.Size = &size
 		}
 
 		if printCrawling {

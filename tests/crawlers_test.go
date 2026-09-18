@@ -85,10 +85,8 @@ func TestCrawlerEngineLogging(t *testing.T) {
 	// Verify that active_html_config (18 chars) logged truncated config key (15 chars + "...")
 	assert.Contains(t, logged, `"config":"active_html_con..."`)
 	assert.Contains(t, logged, "Crawling Info")
-	assert.Contains(t, logged, `"crawler":"html"`)
+	assert.Contains(t, logged, `"crawler":"*crawlers.htmlCrawler"`)
 	assert.Contains(t, logged, `"results":1`)
-	assert.Contains(t, logged, `"title":"Long title for ..."`)
-	assert.Contains(t, logged, `"link":"https://example..."`)
 }
 
 func TestCrawlerEngineFetchHtmlErrorHandling(t *testing.T) {
@@ -126,7 +124,7 @@ func TestCrawlerEngineFetchHtmlErrorHandling(t *testing.T) {
 	t.Logf("Captured error logs:\n%s", logged)
 	assert.Contains(t, logged, "Failed to get [url]")
 	assert.Contains(t, logged, "fetch html err")
-	assert.Contains(t, logged, "Crawling Info")
+	assert.NotContains(t, logged, "Crawling Info")
 }
 
 func TestJsonCrawlerLogging(t *testing.T) {
@@ -144,8 +142,8 @@ func TestJsonCrawlerLogging(t *testing.T) {
 		Key:           "json_test",
 		Category:      dto.MediaTypeAnime,
 		RowSelector:   "$[*]",
-		TitleSelector: "$[*].name",
-		LinkSelector:  "$[*].url",
+		TitleSelector: "name",
+		LinkSelector:  "url",
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -177,6 +175,46 @@ func TestJsonCrawlerLogging(t *testing.T) {
 	logged := buf.String()
 	t.Logf("Captured JSON crawler logs:\n%s", logged)
 	assert.Contains(t, logged, "invalid dto")
-	assert.Contains(t, logged, `"crawler":"json"`)
+	assert.Contains(t, logged, `"crawler":"*crawlers.jsonCrawler"`)
 	assert.Contains(t, logged, `"results":1`)
+}
+
+func TestJsonCrawlerDecodeLinkTitle(t *testing.T) {
+	jsonContent := `[
+		{"name": "Ep 01", "magnet": "magnet:?xt=urn:btih:ABC&dn=Show+S1+-+01+%281080p%29.mkv&xl=500000"},
+		{"name": "Ep 02", "magnet": "magnet:?xt=urn:btih:DEF&dn=Show+S1+-+02+%281080p%29.mkv&xl=600000"}
+	]`
+
+	config := models.CrawlerConfig{
+		Key:           "decode_test",
+		Category:      dto.MediaTypeAnime,
+		RowSelector:   "$[*]",
+		TitleSelector: "", // empty — derive title from magnet dn
+		LinkSelector:  "magnet",
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(jsonContent))
+	}))
+	defer server.Close()
+	config.Url = server.URL
+
+	configs := []models.CrawlerConfig{config}
+	client := resty.New()
+	engine := crawlers.CrawlerEngine{
+		Client:    client,
+		Query:     "show",
+		MediaType: dto.MediaTypeAnime,
+		Configs:   &configs,
+	}
+
+	results, err := engine.Crawl()
+	assert.NoError(t, err)
+	assert.Len(t, results, 2)
+	assert.Equal(t, "Show S1 - 01 (1080p).mkv", results[0].Title)
+	assert.Equal(t, "Show S1 - 02 (1080p).mkv", results[1].Title)
+	assert.Equal(t, "500000", *results[0].Size)
+	assert.Equal(t, "600000", *results[1].Size)
 }

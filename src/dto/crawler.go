@@ -1,6 +1,11 @@
 package dto
 
-import mapset "github.com/deckarep/golang-set/v3"
+import (
+	"net/url"
+
+	"github.com/Oudwins/zog"
+	mapset "github.com/deckarep/golang-set/v3"
+)
 
 type CrawlerResult struct {
 	Title      string    `json:"title"`
@@ -12,6 +17,14 @@ type CrawlerResult struct {
 
 	ParsedTitle *ParsedTitle `json:"parsed_title"`
 }
+
+var ICrawlerResult = zog.Struct(zog.Shape{
+	"Title": zog.String().Min(1),
+	"Link": zog.String().TestFunc(func(v *string, ctx zog.Ctx) bool {
+		u, err := url.Parse(*v)
+		return err == nil && u.Scheme != ""
+	}),
+})
 
 type ParsedTitle struct {
 	AudioTerm          mapset.Set[string] `json:"audio_term,omitempty"`

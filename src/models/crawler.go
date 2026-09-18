@@ -26,17 +26,12 @@ type CrawlerConfig struct {
 }
 
 var ICrawlerConfig = zog.Struct(zog.Shape{
-	"Key":           zog.String().Min(1),
-	"Url":           zog.String().URL(),
-	"Category":      zog.String().OneOf([]string{"Anime", "Manga", "Novel"}),
-	"RowSelector":   zog.String().Min(1),
-	"TitleSelector": zog.String().Min(1),
-	"LinkSelector":  zog.String().Min(1),
-})
-
-var ICrawlerResult = zog.Struct(zog.Shape{
-	"Title": zog.String().Min(1),
-	"Link":  zog.String().URL(),
+	"Key":          zog.String().Min(1),
+	"Url":          zog.String().URL(),
+	"Category":     zog.String().OneOf([]string{"Anime", "Manga", "Novel"}),
+	"RowSelector":  zog.String().Min(1),
+	"LinkSelector": zog.String().Min(1),
+	// TitleSelector is optional when DecodeLinkTitle is true.
 })
 
 func (c *CrawlerConfig) BeforeSave(tx *gorm.DB) error {

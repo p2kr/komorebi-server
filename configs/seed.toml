@@ -44,11 +44,9 @@ category = "anime"
 key = "subsplease"
 name = "SubsPlease API"
 url = "https://subsplease.org/api/?f=search&tz=UTC&s={query}"
-rowSelector = "json"
-titleSelector = "show"
-linkSelector = "downloads"
-# popularitySelector is null
-sizeSelector = "filesize"
+rowSelector = "$.*"
+titleSelector = ""
+linkSelector = "downloads[*].magnet"
 isDeleted = false
 category = "anime"
 

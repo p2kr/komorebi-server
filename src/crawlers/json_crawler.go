@@ -2,6 +2,7 @@ package crawlers
 
 import (
 	"encoding/json"
+	"net/url"
 	"strings"
 
 	"komorebi-server/src/dto"
@@ -52,71 +53,127 @@ func (c *jsonCrawler) Crawl(content string, config *models.CrawlerConfig) ([]dto
 
 	rows := expr.Get(obj)
 
-	dtos = make([]dto.CrawlerResult, len(rows))
-	for i := range dtos {
-		dtos[i].Source = config.Key
-		dtos[i].Category = config.Category
-	}
-
-	expr, err = jp.ParseString(config.TitleSelector)
-	if err != nil {
-		logger.Err(err).Str("selector", truncate(config.TitleSelector)).Msg("Failed to parse JSON title selector")
-		return dtos, err
-	}
-
-	titles := expr.Get(obj)
-	for i, title := range titles {
-		if i < len(dtos) {
-			dtos[i].Title, _ = title.(string)
-			dtos[i].Title = strings.TrimSpace(dtos[i].Title)
+	var titleExpr jp.Expr
+	if config.TitleSelector != "" {
+		titleExpr, err = jp.ParseString(config.TitleSelector)
+		if err != nil {
+			logger.Err(err).Str("selector", truncate(config.TitleSelector)).Msg("Failed to parse JSON title selector")
+			return dtos, err
 		}
 	}
 
-	expr, err = jp.ParseString(config.LinkSelector)
+	linkExpr, err := jp.ParseString(config.LinkSelector)
 	if err != nil {
 		logger.Err(err).Str("selector", truncate(config.LinkSelector)).Msg("Failed to parse JSON link selector")
 		return dtos, err
 	}
 
-	links := expr.Get(obj)
-	for i, link := range links {
-		if i < len(dtos) {
-			dtos[i].Link, _ = link.(string)
-			dtos[i].Link = strings.TrimSpace(dtos[i].Link)
-		}
-	}
-
+	var popExpr, sizeExpr jp.Expr
 	if config.PopularitySelector != nil {
-		expr, err = jp.ParseString(*config.PopularitySelector)
-		if err == nil {
-			pops := expr.Get(obj)
-			for i, pop := range pops {
-				if i < len(dtos) {
-					pop2, _ := pop.(string)
-					pop2 = strings.TrimSpace(pop2)
-					dtos[i].Popularity = &pop2
-				}
-			}
-		}
+		popExpr, _ = jp.ParseString(*config.PopularitySelector)
+	}
+	if config.SizeSelector != nil {
+		sizeExpr, _ = jp.ParseString(*config.SizeSelector)
 	}
 
-	if config.SizeSelector != nil {
-		expr, err = jp.ParseString(*config.SizeSelector)
-		if err == nil {
-			sizes := expr.Get(obj)
-			for i, size := range sizes {
-				if i < len(dtos) {
-					size2, _ := size.(string)
-					size2 = strings.TrimSpace(size2)
-					dtos[i].Size = &size2
+	for _, row := range rows {
+		var titles []any
+		if titleExpr != nil {
+			titles = titleExpr.Get(row)
+		}
+
+		links := linkExpr.Get(row)
+		if len(links) == 0 {
+			continue
+		}
+
+		maxLen := len(titles)
+		if len(links) > maxLen {
+			maxLen = len(links)
+		}
+
+		var pops []any
+		if popExpr != nil {
+			pops = popExpr.Get(row)
+		}
+		var sizes []any
+		if sizeExpr != nil {
+			sizes = sizeExpr.Get(row)
+		}
+
+		for i := 0; i < maxLen; i++ {
+			item := dto.CrawlerResult{
+				Source:   config.Key,
+				Category: config.Category,
+			}
+
+			// Populate title from selector (with index fallback to first element).
+			if i < len(titles) {
+				if raw, ok := titles[i].(string); ok {
+					item.Title = strings.TrimSpace(raw)
+				}
+			} else if len(titles) > 0 {
+				if raw, ok := titles[0].(string); ok {
+					item.Title = strings.TrimSpace(raw)
 				}
 			}
+
+			// Populate link (with index fallback to first element).
+			if i < len(links) {
+				item.Link, _ = links[i].(string)
+				item.Link = strings.TrimSpace(item.Link)
+			} else if len(links) > 0 {
+				item.Link, _ = links[0].(string)
+				item.Link = strings.TrimSpace(item.Link)
+			}
+
+			// Populate optional fields.
+			if i < len(pops) {
+				if pop2, ok := pops[i].(string); ok {
+					pop2 = strings.TrimSpace(pop2)
+					item.Popularity = &pop2
+				}
+			} else if len(pops) > 0 {
+				if pop2, ok := pops[0].(string); ok {
+					pop2 = strings.TrimSpace(pop2)
+					item.Popularity = &pop2
+				}
+			}
+
+			if i < len(sizes) {
+				if size2, ok := sizes[i].(string); ok {
+					size2 = strings.TrimSpace(size2)
+					item.Size = &size2
+				}
+			} else if len(sizes) > 0 {
+				if size2, ok := sizes[0].(string); ok {
+					size2 = strings.TrimSpace(size2)
+					item.Size = &size2
+				}
+			}
+
+			// If title is still empty and the link is a magnet URI, derive
+			// title (and optionally size) from the magnet's own metadata.
+			if item.Title == "" && strings.HasPrefix(item.Link, "magnet:") {
+				if u, err := url.Parse(item.Link); err == nil {
+					if dn := u.Query().Get("dn"); dn != "" {
+						item.Title = dn
+					}
+					if item.Size == nil {
+						if xl := u.Query().Get("xl"); xl != "" {
+							item.Size = &xl
+						}
+					}
+				}
+			}
+
+			dtos = append(dtos, item)
 		}
 	}
 
 	// Filter out invalids.
-	validDtos := lo.Filter(dtos, func(dto dto.CrawlerResult, _ int) bool {
-		errs := models.ICrawlerResult.Validate(&dto)
+	validDtos := lo.Filter(dtos, func(d dto.CrawlerResult, _ int) bool {
+		errs := dto.ICrawlerResult.Validate(&d)
 		if errs != nil {
 			logger.Warn().Any("errors", zog.Issues.Flatten(errs)).Msg("invalid dto")
 			return false
