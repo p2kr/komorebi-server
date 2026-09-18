@@ -9,7 +9,7 @@ import (
 )
 
 type CrawlerConfig struct {
-	Model
+	Model `tstype:",extends"`
 
 	Key       string `gorm:"not null;uniqueIndex:idx_cc_uniq"`
 	Name      string

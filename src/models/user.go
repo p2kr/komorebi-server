@@ -11,7 +11,7 @@ import (
 )
 
 type User struct {
-	Model
+	Model `tstype:",extends"`
 
 	Username    string            `gorm:"not null;uniqueIndex:idx_user_uniq" json:"username"`
 	ProviderId  *string           `json:"provider_id"`
