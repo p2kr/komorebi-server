@@ -21,3 +21,4 @@ staticPath = "../komorebi-web/build/"
 [httpClient]
 debug = false
 curlCmd = true
+crawlerTimoutSec = "60s"

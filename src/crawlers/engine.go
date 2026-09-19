@@ -10,6 +10,7 @@ import (
 	"komorebi-server/src/dto"
 	"komorebi-server/src/models"
 
+	mapset "github.com/deckarep/golang-set/v3"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"resty.dev/v3"
@@ -27,7 +28,7 @@ type CrawlerEngine struct {
 	Ctx       context.Context
 }
 
-var crawlers = []Crawler{&jsonCrawler{}, &htmlCrawler{}}
+var crawlers = []Crawler{&gjsonCrawler{}, &jsonPathCrawler{}, &htmlCrawler{}}
 
 func (c *CrawlerEngine) Crawl() ([]dto.CrawlerResult, error) {
 	results := make([][]dto.CrawlerResult, len(c.Configs))
@@ -67,18 +68,29 @@ func (c *CrawlerEngine) Crawl() ([]dto.CrawlerResult, error) {
 
 	var dtos []dto.CrawlerResult
 
-	// Flatten and validate
+	urlSet := mapset.NewSet[string]()
+	discarded := 0
+	// Flatten, validate and find unique
 	for _, batch := range results {
 		for _, d := range batch {
+			// check if duplicate
+			if urlSet.Contains(d.Link) {
+				discarded += 1
+				continue
+			}
+
+			// Check if valid
 			errs := dto.ICrawlerResult.Validate(&d)
 			if errs != nil {
 				continue
 			}
+
+			urlSet.Add(d.Link)
 			dtos = append(dtos, d)
 		}
 	}
 
-	log.Debug().Err(err).Msg("crawler engine completed")
+	log.Debug().Err(err).Int("duplicates", discarded).Msg("crawler engine completed")
 
 	if len(dtos) == 0 && err != nil {
 		return dtos, err

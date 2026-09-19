@@ -2,7 +2,6 @@ package crawlers
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 
 	"komorebi-server/src/dto"
@@ -13,14 +12,14 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type jsonCrawler struct{}
+type jsonPathCrawler struct{}
 
-func (c *jsonCrawler) Crawl(content []byte, config *models.CrawlerConfig) ([]dto.CrawlerResult, error) {
+func (c *jsonPathCrawler) Crawl(content []byte, config *models.CrawlerConfig) ([]dto.CrawlerResult, error) {
 	logger := log.With().Str("config", config.Key).Type("crawler", c).Logger()
 	var dtos []dto.CrawlerResult
 	obj, err := oj.Parse(content)
 	if err != nil {
-		logger.Warn().Err(err).Msg("Failed to parse JSON content")
+		logger.Debug().Err(err).Msg("Failed to parse JSON content")
 		return dtos, err
 	}
 
@@ -105,20 +104,12 @@ func (c *jsonCrawler) Crawl(content []byte, config *models.CrawlerConfig) ([]dto
 				item.Size = &val
 			}
 
-			// If title is still empty and the link is a magnet URI, derive
-			// title (and optionally size) from the magnet's own metadata.
-			if item.Title == "" && strings.HasPrefix(item.Link, "magnet:") {
-				if u, err := url.Parse(item.Link); err == nil {
-					q := u.Query()
-					if dn := q.Get("dn"); dn != "" {
-						item.Title = dn
-					}
-					if item.Size == nil {
-						if xl := q.Get("xl"); xl != "" {
-							item.Size = &xl
-						}
-					}
-				}
+			t, s := parseTitleAndSize(item.Link)
+			if item.Title == "" {
+				item.Title = t
+			}
+			if item.Size == nil || *item.Size == "" {
+				item.Size = &s
 			}
 
 			dtos = append(dtos, item)
@@ -130,10 +121,14 @@ func (c *jsonCrawler) Crawl(content []byte, config *models.CrawlerConfig) ([]dto
 }
 
 func getFieldValue(values []any, index int) (string, bool) {
+	var val any
 	if index < len(values) {
-		return strings.TrimSpace(fmt.Sprintf("%v", values[index])), true
+		val = values[index]
 	} else if len(values) > 0 {
-		return strings.TrimSpace(fmt.Sprintf("%v", values[0])), true
+		val = values[0]
 	}
-	return "", false
+	if val == nil {
+		return "", false
+	}
+	return strings.TrimSpace(fmt.Sprintf("%v", val)), true
 }

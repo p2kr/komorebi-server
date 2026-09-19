@@ -21,7 +21,7 @@ func (c *htmlCrawler) Crawl(content []byte, config *models.CrawlerConfig) ([]dto
 	reader := bytes.NewReader(content)
 	doc, err := goquery.NewDocumentFromReader(reader)
 	if err != nil {
-		logger.Warn().Err(err).Msg("Failed to parse HTML document")
+		logger.Debug().Err(err).Msg("Failed to parse HTML document")
 		return dtos, err
 	} else {
 		logger.Info().Msg("Parsed document")

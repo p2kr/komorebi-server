@@ -34,6 +34,8 @@ var CssMatcherCache = sync.OnceValue(func() *otter.Cache[string, goquery.Matcher
 	return r
 })
 
+var emptyString = ""
+
 func getJpExpr(s string) (jp.Expr, bool) {
 	return JpExprCache().ComputeIfAbsent(s, func() (newValue jp.Expr, cancel bool) {
 		r, err := jp.ParseString(s)
@@ -109,4 +111,22 @@ func ReplaceInURL(rawURL string, replacements map[string]string) (string, error)
 	}
 
 	return u.String(), nil
+}
+
+// If title is still empty and the link is a magnet URI, derive
+// title (and optionally size) from the magnet's own metadata.
+func parseTitleAndSize(link string) (title, size string) {
+	if strings.HasPrefix(link, "magnet:") {
+		if u, err := url.Parse(link); err == nil {
+			q := u.Query()
+			if dn := q.Get("dn"); dn != "" {
+				title = dn
+			}
+			if xl := q.Get("xl"); xl != "" {
+				size = xl
+			}
+		}
+	}
+
+	return title, size
 }
