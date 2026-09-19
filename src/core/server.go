@@ -33,6 +33,9 @@ func GetServer() *echo.Echo {
 			return configs.GetConfig().Env.AppEnv == "dev"
 		},
 	}))
+	e.Use(middleware.Secure())
+	e.Use(middleware.Gzip())
+	e.Use(middleware.Decompress())
 
 	e.Use(middleware.StaticWithConfig(middleware.StaticConfig{
 		Root:       ".",

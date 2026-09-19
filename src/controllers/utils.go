@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"net/http"
+	"strings"
 	"sync"
 
 	"komorebi-server/configs"
@@ -15,6 +16,8 @@ import (
 	"resty.dev/v3"
 
 	"github.com/maypok86/otter/v2"
+
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 type SuccessResponse struct {
@@ -24,23 +27,52 @@ type SuccessResponse struct {
 
 type FailureResponse struct {
 	Success bool   `json:"success"`
-	Error   string `json:"error"`
+	Message string `json:"message"`
 	Details []any  `json:"details"`
 }
 
 func success(c *echo.Context, data any) error {
+	if strings.Contains(c.Request().Header.Get("Accept"), "application/x-msgpack") {
+		return successMsgPack(c, data)
+	}
 	return c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    data,
 	})
 }
 
+func successMsgPack(c *echo.Context, data any) error {
+	out, err := msgpack.Marshal(SuccessResponse{
+		Success: true,
+		Data:    data,
+	})
+	if err != nil {
+		return err
+	}
+	return c.Blob(200, "application/x-msgpack", out)
+}
+
 func fail(c *echo.Context, status int, error error, details ...any) error {
+	if strings.Contains(c.Request().Header.Get("Accept"), "application/x-msgpack") {
+		return failMsgPack(c, status, error, details...)
+	}
 	return c.JSON(status, FailureResponse{
 		Success: false,
-		Error:   error.Error(),
+		Message: error.Error(),
 		Details: details,
 	})
+}
+
+func failMsgPack(c *echo.Context, status int, error error, details ...any) error {
+	out, err := msgpack.Marshal(FailureResponse{
+		Success: false,
+		Message: error.Error(),
+		Details: details,
+	})
+	if err != nil {
+		return err
+	}
+	return c.Blob(status, "application/x-msgpack", out)
 }
 
 var httpClient *resty.Client
