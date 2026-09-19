@@ -6,9 +6,11 @@ require (
 	github.com/Oudwins/zog v0.23.0
 	github.com/PuerkitoBio/goquery v1.13.0
 	github.com/andybalholm/cascadia v1.3.4
+	github.com/cavaliergopher/grab/v3 v3.0.1
 	github.com/deckarep/golang-set/v3 v3.0.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-co-op/gocron/v2 v2.22.0
+	github.com/google/uuid v1.6.0
 	github.com/gzuidhof/tygo v0.2.21
 	github.com/knadh/koanf/parsers/toml v0.1.0
 	github.com/knadh/koanf/providers/confmap v1.0.1
@@ -22,6 +24,7 @@ require (
 	github.com/ohler55/ojg v1.28.6
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/rs/zerolog v1.35.1
+	github.com/samber/lo v1.53.0
 	github.com/stretchr/testify v1.12.1
 	github.com/subosito/gotenv v1.6.0
 	github.com/tidwall/gjson v1.19.0
@@ -39,7 +42,6 @@ require (
 	github.com/glebarez/go-sqlite v1.23.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect

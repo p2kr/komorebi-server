@@ -1,7 +1,10 @@
 package dto
 
 import (
+	"encoding/json"
 	"net/url"
+	"reflect"
+	"strings"
 
 	"github.com/Oudwins/zog"
 	mapset "github.com/deckarep/golang-set/v3"
@@ -51,4 +54,29 @@ type ParsedTitle struct {
 	Date               mapset.Set[string] `json:"date,omitempty"`
 	Kind               mapset.Set[string] `json:"kind,omitempty"`
 	Unknown            mapset.Set[string] `json:"unknown,omitempty"`
+}
+
+func (p *ParsedTitle) UnmarshalJSON(data []byte) error {
+	var aux map[string][]string
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	val := reflect.ValueOf(p).Elem()
+	typ := val.Type()
+
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		tag := field.Tag.Get("json")
+		jsonKey := strings.Split(tag, ",")[0]
+
+		if jsonKey == "" {
+			jsonKey = field.Name
+		}
+
+		if slice, ok := aux[jsonKey]; ok && slice != nil {
+			val.Field(i).Set(reflect.ValueOf(mapset.NewSet(slice...)))
+		}
+	}
+	return nil
 }

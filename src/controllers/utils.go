@@ -28,14 +28,18 @@ type SuccessResponse struct {
 type FailureResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
-	Details []any  `json:"details"`
+	Details []any  `json:"details,omitempty"`
 }
 
-func success(c *echo.Context, data any) error {
+func success(c *echo.Context, data any, customStatus ...int) error {
 	if strings.Contains(c.Request().Header.Get("Accept"), "application/x-msgpack") {
 		return successMsgPack(c, data)
 	}
-	return c.JSON(http.StatusOK, SuccessResponse{
+	status := http.StatusOK
+	if len(customStatus) > 0 {
+		status = customStatus[0]
+	}
+	return c.JSON(status, SuccessResponse{
 		Success: true,
 		Data:    data,
 	})
@@ -78,7 +82,8 @@ func failMsgPack(c *echo.Context, status int, error error, details ...any) error
 var httpClient *resty.Client
 
 func InitClient() {
-	c := resty.New()
+	c := resty.NewWithTransportSettings(&resty.TransportSettings{MaxIdleConnsPerHost: 10})
+
 	if configs.GetConfig().HttpClient.Debug {
 		c.SetLogger(&RestyLogger{})
 		c.SetDebug(true)

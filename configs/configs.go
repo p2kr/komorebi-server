@@ -50,6 +50,7 @@ type Config struct {
 		AnilistClientId       string `koanf:"anilistClientId"`
 		AppEnv                string `koanf:"appEnv"`
 		DefaultHostedAuthPage string `koanf:"defaultHostedAuthPage"`
+		VaultLoc              string `koanf:"vaultLoc"`
 	} `koanf:"env"`
 	Db struct {
 		Path          string `koanf:"path"`
@@ -88,6 +89,7 @@ func LoadConfigs() {
 	k.Load(confmap.Provider(map[string]any{
 		"env.appEnv":                   "dev",
 		"env.defaultHostedAuthPage":    "https://p2kr.github.io/komorebi-web/auth.html",
+		"env.vaultLoc":                 "vault",
 		"db.path":                      "assets/main.sqlite",
 		"logger.logLevel":              "debug",
 		"logger.pretty":                false,
@@ -140,6 +142,7 @@ func LoadConfigs() {
 			"ANILIST_CLIENT_ID":        "env.anilistClientId",
 			"APP_ENV":                  "env.appEnv",
 			"DEFAULT_HOSTED_AUTH_PAGE": "env.defaultHostedAuthPage",
+			"VAULT_LOC":                "env.vaultLoc",
 			"DB_LOC":                   "db.path",
 		}
 		return m[s] // returns "" (skip) for any key not in the map

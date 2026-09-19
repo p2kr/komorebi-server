@@ -3,6 +3,7 @@ malClientId = ""
 anilistClientId = ""
 appEnv = "dev"
 defaultHostedAuthPage = "https://p2kr.github.io/komorebi-web/auth.html"
+vaultLoc = "vault"
 
 [db]
 path = "assets/main.sqlite?mode=rwc"

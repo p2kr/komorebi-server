@@ -48,6 +48,7 @@ func SetupDb() {
 		sqlDb.Exec("PRAGMA synchronous=NORMAL;")
 		sqlDb.Exec("PRAGMA busy_timeout=5000;")
 		sqlDb.Exec("PRAGMA foreign_keys = ON;")
+		sqlDb.SetMaxOpenConns(1)
 	}
 
 	appDb = db

@@ -36,6 +36,7 @@ func GetServer() *echo.Echo {
 	e.Use(middleware.Secure())
 	e.Use(middleware.Gzip())
 	e.Use(middleware.Decompress())
+	e.Use(middleware.RequestID())
 
 	e.Use(middleware.StaticWithConfig(middleware.StaticConfig{
 		Root:       ".",
