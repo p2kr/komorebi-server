@@ -8,6 +8,8 @@ import (
 
 	"komorebi-server/src/dto"
 
+	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/storage"
 	"github.com/cavaliergopher/grab/v3"
 	"github.com/rs/zerolog/log"
 	"github.com/samber/lo"
@@ -33,13 +35,15 @@ var (
 		ActiveItems: make(map[uuid.UUID]*grab.Response),
 		ActiveJobs:  make(map[uuid.UUID]*dto.DownloadJob),
 	}
-	torrent = &torrentDownloader{
-		ActiveJobs: make(map[uuid.UUID]*dto.DownloadJob),
+	torr = &torrentDownloader{
+		ActiveItems:   make(map[uuid.UUID]*torrent.Torrent),
+		ActiveJobs:    make(map[uuid.UUID]*dto.DownloadJob),
+		ActiveStorage: make(map[uuid.UUID]storage.ClientImplCloser),
 	}
 )
 
 func GetDownloader(u string) (Downloader, error) {
-	log := log.With().Str("url", lo.Substring(u, 0, 15)).Logger()
+	log := log.With().Str("url", lo.Substring(u, 0, 25)).Logger()
 	ur, err := url.Parse(u)
 	if err != nil {
 		log.Err(err).Msg("Unparsable URL")
@@ -50,8 +54,7 @@ func GetDownloader(u string) (Downloader, error) {
 	case "http", "https":
 		return direct, nil
 	case "magnet":
-		// return &torrent, nil
-		return nil, nil
+		return torr, nil
 	default:
 		return nil, errors.New("Unsupported URL")
 	}
@@ -62,10 +65,9 @@ func GetJobById(id uuid.UUID) (*dto.DownloadJob, Downloader) {
 	if job != nil {
 		return job, direct
 	}
-	job = torrent.ActiveJobs[id]
+	job = torr.ActiveJobs[id]
 	if job != nil {
-		// return job, torrent
-		return job, nil
+		return job, torr
 	}
 
 	return nil, nil
@@ -78,8 +80,8 @@ func GetActiveJobs() []dto.DownloadJob {
 	d, _ := direct.Status(ctx)
 	jobs = append(jobs, d...)
 
-	// t, _ := torrent.Status(ctx)
-	// jobs = append(jobs, t)
+	t, _ := torr.Status(ctx)
+	jobs = append(jobs, t...)
 
 	return jobs
 }

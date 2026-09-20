@@ -23,3 +23,6 @@ staticPath = "../komorebi-web/build/"
 debug = false
 curlCmd = true
 crawlerTimoutSec = "60s"
+
+[torrentClient]
+debug = false

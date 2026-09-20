@@ -8,6 +8,7 @@ import (
 
 	"komorebi-server/src/dto"
 
+	"github.com/anacrolix/torrent"
 	"github.com/cavaliergopher/grab/v3"
 	"github.com/rs/zerolog/log"
 )
@@ -27,7 +28,7 @@ func TrackDirectDownload(ctx context.Context, id uuid.UUID, resp *grab.Response,
 
 		eta := resp.ETA()
 		if !eta.IsZero() {
-			job.EtaSec = int64(eta.Sub(time.Now()).Seconds())
+			job.EtaSec = int64(time.Until(eta).Seconds())
 		}
 		job.Progress = resp.Progress() * 100
 
@@ -55,6 +56,49 @@ func TrackDirectDownload(ctx context.Context, id uuid.UUID, resp *grab.Response,
 	}
 }
 
-func TrackTorrentDownload(ctx context.Context, resp *grab.Response) {
-	return
+func TrackTorrentDownload(ctx context.Context, id uuid.UUID, t *torrent.Torrent, updater JobUpdater) {
+	var isComplete bool
+	var err error
+
+	updater(id, func(job *dto.DownloadJob) {
+		job.Status = dto.StatusDownloading
+
+		if t.Info() == nil {
+			job.Status = dto.StatusQueued
+			job.DownloadSpeed = 0
+			job.EtaSec = -1
+			return
+		}
+
+		currentBytes := t.BytesCompleted()
+		job.DownloadSpeed = (currentBytes - job.DownloadedSize) / 2 // TODO: 2 is hardcoded, need to make it dynamic
+		job.DownloadedSize = currentBytes
+
+		job.TotalSize = t.Length()
+
+		if job.TotalSize > 0 {
+			job.Progress = float64(currentBytes) / float64(job.TotalSize) * 100.0
+		} else {
+			job.Progress = 0
+		}
+
+		if job.DownloadSpeed > 0 && job.TotalSize > 0 {
+			job.EtaSec = (job.TotalSize - currentBytes) / job.DownloadSpeed
+		} else {
+			job.EtaSec = -1
+		}
+
+		if t.Complete().Bool() {
+			isComplete = true
+			job.Status = dto.StatusCompleted
+			job.Progress = 100
+			job.DownloadSpeed = 0
+			job.EtaSec = 0
+		}
+	})
+
+	if isComplete {
+		log.Err(err).Any("id", id).Msg("job completed")
+		RemoveJob(id)
+	}
 }

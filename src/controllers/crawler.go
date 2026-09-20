@@ -161,7 +161,7 @@ func Delete(c *echo.Context) error {
 
 	log.Info().Msg("Deleted job")
 
-	return success(c, job)
+	return success(c, job, http.StatusAccepted)
 }
 
 func Pause(c *echo.Context) error {

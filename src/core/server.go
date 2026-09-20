@@ -34,7 +34,10 @@ func GetServer() *echo.Echo {
 		},
 	}))
 	e.Use(middleware.Secure())
-	e.Use(middleware.Gzip())
+	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+		Level:     6,
+		MinLength: 1024,
+	}))
 	e.Use(middleware.Decompress())
 	e.Use(middleware.RequestID())
 

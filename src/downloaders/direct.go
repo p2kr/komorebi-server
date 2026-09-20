@@ -40,10 +40,11 @@ func (d *directDownloader) createUpdater() workers.JobUpdater {
 }
 
 func (d *directDownloader) Submit(ctx context.Context, job *dto.DownloadJob) (string, error) {
-	log := log.With().Type("downloader", d).Str("job url", lo.Substring(job.Url, 0, 15)+"...").Str("job loc", job.Location).Logger()
+	log := log.With().Type("downloader", d).
+		Str("job url", lo.Substring(job.Url, 0, 25)+"...").Str("job loc", job.Location).Logger()
 	req, err := grab.NewRequest(job.Location, job.Url)
 	if err != nil {
-		log.Err(err).Msg("Failed to add download job")
+		log.Err(err).Msg("Failed to submit direct download")
 		return "", err
 	}
 
@@ -92,13 +93,13 @@ func (d *directDownloader) Pause(ctx context.Context, job *dto.DownloadJob) erro
 
 	if err == nil || errors.Is(err, context.Canceled) {
 		log.Debug().Msg("Download Paused")
-		
+
 		d.muJob.Lock()
 		if activeJob, ok := d.ActiveJobs[job.Id]; ok {
 			activeJob.Status = dto.StatusPaused
 		}
 		d.muJob.Unlock()
-		
+
 		return nil
 	} else {
 		log.Err(err).Msg("Error cancelling download")

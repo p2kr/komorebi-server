@@ -71,6 +71,9 @@ type Config struct {
 		CurlCmd        bool   `koanf:"curlCmd"`
 		CrawlerTimeout string `koanf:"crawlerTimeoutSec"`
 	} `koanf:"httpClient"`
+	TorrentClient struct {
+		Debug bool `koanf:"debug"`
+	} `koanf:"torrentClient"`
 }
 
 var appConfig *Config
