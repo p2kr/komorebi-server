@@ -3,57 +3,46 @@ package downloaders
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"os"
 	"sync"
 	"time"
 	"uuid"
 
+	"komorebi-server/src/models"
+
 	"komorebi-server/configs"
-	"komorebi-server/src/dto"
 	"komorebi-server/src/workers"
 
-	"github.com/anacrolix/torrent"
-	"github.com/anacrolix/torrent/storage"
 	"github.com/cenkalti/backoff/v7"
+	"github.com/cenkalti/rain/v2/torrent"
 	"github.com/go-co-op/gocron/v2"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/samber/lo"
 )
 
 type torrentDownloader struct {
-	ActiveItems   map[uuid.UUID]*torrent.Torrent
-	ActiveStorage map[uuid.UUID]storage.ClientImplCloser
-	ActiveJobs    map[uuid.UUID]*dto.DownloadJob
-	muItem        sync.RWMutex
-	muJob         sync.RWMutex
+	ActiveItems map[uuid.UUID]*torrent.Torrent
+	ActiveJobs  map[uuid.UUID]*models.DownloadJob
+	muItem      sync.RWMutex
+	muJob       sync.RWMutex
 }
 
-var torrentClient = sync.OnceValue(func() (cl *torrent.Client) {
-	config := torrent.NewDefaultClientConfig()
-	torrentLogger := log.Logger.Level(zerolog.WarnLevel)
-	if configs.GetConfig().TorrentClient.Debug {
-		config.Debug = true
-		torrentLogger = log.Logger.Level(zerolog.DebugLevel)
-	}
-	config.Slogger = slog.New(zerolog.NewSlogHandler(torrentLogger))
+var TorrentClient = sync.OnceValue(func() (cl *torrent.Session) {
+	config := torrent.DefaultConfig
 
-	dir, err := os.MkdirTemp("", "komorebi-torrent-*")
-	if err == nil {
-		config.DataDir = dir
-	}
+	config.DataDir = configs.GetConfig().Env.VaultLoc
+	config.CustomLogHandler = customTorrentLogger{}
 
-	cl, err = torrent.NewClient(config)
+	s, err := torrent.NewSession(config)
 	if err != nil {
-		log.Err(err).Msg("Failed to initialize torrent client")
+		log.Err(err).Msg("Failed to initialize torrent session")
 		return nil
 	}
-	return cl
+	return s
 })
 
 func (d *torrentDownloader) createUpdater() workers.JobUpdater {
-	return func(id uuid.UUID, updateFn func(*dto.DownloadJob)) {
+	return func(id uuid.UUID, updateFn func(*models.DownloadJob)) {
 		d.muJob.Lock()
 		defer d.muJob.Unlock()
 		if job, ok := d.ActiveJobs[id]; ok {
@@ -62,41 +51,37 @@ func (d *torrentDownloader) createUpdater() workers.JobUpdater {
 	}
 }
 
-func (d *torrentDownloader) Submit(ctx context.Context, job *dto.DownloadJob) (string, error) {
+func (d *torrentDownloader) Submit(ctx context.Context, job *models.DownloadJob) (string, error) {
 	log := log.With().Type("downloader", d).
 		Str("job url", lo.Substring(job.Url, 0, 25)+"...").Str("job loc", job.Location).Logger()
 
-	spec, _ := torrent.TorrentSpecFromMagnetUri(job.Url)
-	s := storage.NewFile(job.Location)
-	spec.Storage = s
-	t, _, err := torrentClient().AddTorrentSpec(spec)
+	t, err := TorrentClient().AddURI(job.Url, &torrent.AddTorrentOptions{
+		ID:                job.Id.String(),
+		StopAfterDownload: true,
+	})
 	if err != nil {
 		log.Err(err).Msg("Failed to add torrent")
-		return "", err
 	}
-	job.EngineId = t.InfoHash().String()
+
+	job.EngineId = t.ID()
 
 	d.muItem.Lock()
 	d.ActiveItems[job.Id] = t
-	d.ActiveStorage[job.Id] = s
 	d.muItem.Unlock()
 
 	d.muJob.Lock()
 	d.ActiveJobs[job.Id] = job
 	d.muJob.Unlock()
 
-	go func() {
-		<-t.GotInfo()
-		t.DownloadAll()
-	}()
+	_ = t.Start()
 
-	workers.AddJobWithId(gocron.DurationJob(time.Second*2),
+	_, _ = workers.AddJobWithId(gocron.DurationJob(time.Second*2),
 		gocron.NewTask(workers.TrackTorrentDownload, ctx, job.Id, t, d.createUpdater()), job.Id)
 
 	return job.Id.String(), nil
 }
 
-func (d *torrentDownloader) Pause(ctx context.Context, job *dto.DownloadJob) error {
+func (d *torrentDownloader) Pause(ctx context.Context, job *models.DownloadJob) error {
 	log := log.With().Any("id", job.Id).Type("downloader", d).Logger()
 
 	d.muItem.RLock()
@@ -104,13 +89,12 @@ func (d *torrentDownloader) Pause(ctx context.Context, job *dto.DownloadJob) err
 	d.muItem.RUnlock()
 
 	if t == nil {
-		msg := "No active download found"
+		msg := "no active download found"
 		log.Error().Msg(msg)
 		return errors.New(msg)
 	}
 
-	t.DisallowDataDownload()
-	t.DisallowDataUpload()
+	_ = t.Stop()
 
 	// Stop the worker
 	err := workers.RemoveJob(job.Id)
@@ -122,15 +106,15 @@ func (d *torrentDownloader) Pause(ctx context.Context, job *dto.DownloadJob) err
 
 	d.muJob.Lock()
 	if activeJob, ok := d.ActiveJobs[job.Id]; ok {
-		activeJob.Status = dto.StatusPaused
+		activeJob.Status = models.StatusPaused
 	}
 	d.muJob.Unlock()
 
 	return nil
 }
 
-func (d *torrentDownloader) Resume(ctx context.Context, job *dto.DownloadJob) error {
-	log := log.With().Any("id", job.Id).Type("downloader", d).Logger()
+func (d *torrentDownloader) Resume(ctx context.Context, job *models.DownloadJob) error {
+	logger := log.With().Any("id", job.Id).Type("downloader", d).Logger()
 
 	d.muItem.RLock()
 	t := d.ActiveItems[job.Id]
@@ -139,25 +123,23 @@ func (d *torrentDownloader) Resume(ctx context.Context, job *dto.DownloadJob) er
 	if t == nil {
 		msg := "not an active job"
 		err := errors.New(msg)
-		log.Err(err).Msg(msg)
+		logger.Err(err).Msg(msg)
 		return err
 	}
 
-	t.AllowDataDownload()
-	t.AllowDataUpload()
+	_ = t.Start()
 
-	workers.AddJobWithId(gocron.DurationJob(time.Second*2),
+	_, _ = workers.AddJobWithId(gocron.DurationJob(time.Second*2),
 		gocron.NewTask(workers.TrackTorrentDownload, ctx, job.Id, t, d.createUpdater()), job.Id)
 
 	return nil
 }
 
-func (d *torrentDownloader) Delete(ctx context.Context, job *dto.DownloadJob) error {
+func (d *torrentDownloader) Delete(ctx context.Context, job *models.DownloadJob) error {
 	log := log.With().Any("id", job.Id).Type("downloader", d).Logger()
 
 	d.muItem.RLock()
 	t := d.ActiveItems[job.Id]
-	s := d.ActiveStorage[job.Id]
 	d.muItem.RUnlock()
 
 	if t == nil {
@@ -166,7 +148,7 @@ func (d *torrentDownloader) Delete(ctx context.Context, job *dto.DownloadJob) er
 		return errors.New(msg)
 	}
 
-	t.Drop()
+	t.Stop()
 
 	err := workers.RemoveJob(job.Id)
 	if err != nil {
@@ -177,7 +159,6 @@ func (d *torrentDownloader) Delete(ctx context.Context, job *dto.DownloadJob) er
 
 	d.muItem.Lock()
 	delete(d.ActiveItems, job.Id)
-	delete(d.ActiveStorage, job.Id)
 	d.muItem.Unlock()
 
 	d.muJob.Lock()
@@ -186,11 +167,9 @@ func (d *torrentDownloader) Delete(ctx context.Context, job *dto.DownloadJob) er
 
 	// Remove files asynchronously: TODO: Not working rn
 	loc := job.Location
-	go func(loc string, t *torrent.Torrent, s storage.ClientImplCloser) {
-		<-t.Closed()
-		if s != nil {
-			s.Close()
-		}
+	go func(loc string, t *torrent.Torrent) {
+		TorrentClient().RemoveTorrent(t.ID(), false)
+		<-t.NotifyClose()
 
 		_, err := backoff.Retry(ctx, func() (any, error) {
 			return nil, os.RemoveAll(loc)
@@ -198,16 +177,16 @@ func (d *torrentDownloader) Delete(ctx context.Context, job *dto.DownloadJob) er
 		if err != nil {
 			log.Debug().Err(err).Str("loc", loc).Msg("failed to delete files after retries")
 		}
-	}(loc, t, s)
+	}(loc, t)
 
 	return nil
 }
 
-func (d *torrentDownloader) Status(ctx context.Context) ([]dto.DownloadJob, error) {
+func (d *torrentDownloader) Status(ctx context.Context) ([]models.DownloadJob, error) {
 	d.muJob.RLock()
 	defer d.muJob.RUnlock()
 
-	jobs := make([]dto.DownloadJob, 0, len(d.ActiveJobs))
+	jobs := make([]models.DownloadJob, 0, len(d.ActiveJobs))
 	for _, v := range d.ActiveJobs {
 		jobs = append(jobs, *v)
 	}

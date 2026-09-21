@@ -8,7 +8,8 @@ import (
 	"time"
 	"uuid"
 
-	"komorebi-server/src/dto"
+	"komorebi-server/src/models"
+
 	"komorebi-server/src/workers"
 
 	"github.com/cavaliergopher/grab/v3"
@@ -19,18 +20,18 @@ import (
 
 type directDownloader struct {
 	ActiveItems map[uuid.UUID]*grab.Response
-	ActiveJobs  map[uuid.UUID]*dto.DownloadJob
+	ActiveJobs  map[uuid.UUID]*models.DownloadJob
 	muItem      sync.RWMutex
 	muJob       sync.RWMutex
 }
 
-var directClient = sync.OnceValue(func() *grab.Client {
+var DirectClient = sync.OnceValue(func() *grab.Client {
 	c := grab.NewClient()
 	return c
 })
 
 func (d *directDownloader) createUpdater() workers.JobUpdater {
-	return func(id uuid.UUID, updateFn func(*dto.DownloadJob)) {
+	return func(id uuid.UUID, updateFn func(*models.DownloadJob)) {
 		d.muJob.Lock()
 		defer d.muJob.Unlock()
 		if job, ok := d.ActiveJobs[id]; ok {
@@ -39,7 +40,7 @@ func (d *directDownloader) createUpdater() workers.JobUpdater {
 	}
 }
 
-func (d *directDownloader) Submit(ctx context.Context, job *dto.DownloadJob) (string, error) {
+func (d *directDownloader) Submit(ctx context.Context, job *models.DownloadJob) (string, error) {
 	log := log.With().Type("downloader", d).
 		Str("job url", lo.Substring(job.Url, 0, 25)+"...").Str("job loc", job.Location).Logger()
 	req, err := grab.NewRequest(job.Location, job.Url)
@@ -52,7 +53,7 @@ func (d *directDownloader) Submit(ctx context.Context, job *dto.DownloadJob) (st
 		req.WithContext(ctx)
 	}
 
-	resp := directClient().Do(req)
+	resp := DirectClient().Do(req)
 
 	d.muItem.Lock()
 	d.ActiveItems[job.Id] = resp
@@ -70,7 +71,7 @@ func (d *directDownloader) Submit(ctx context.Context, job *dto.DownloadJob) (st
 	return job.Id.String(), nil
 }
 
-func (d *directDownloader) Pause(ctx context.Context, job *dto.DownloadJob) error {
+func (d *directDownloader) Pause(ctx context.Context, job *models.DownloadJob) error {
 	log := log.With().Any("id", job.Id).Type("downloader", d).Logger()
 
 	d.muItem.RLock()
@@ -96,7 +97,7 @@ func (d *directDownloader) Pause(ctx context.Context, job *dto.DownloadJob) erro
 
 		d.muJob.Lock()
 		if activeJob, ok := d.ActiveJobs[job.Id]; ok {
-			activeJob.Status = dto.StatusPaused
+			activeJob.Status = models.StatusPaused
 		}
 		d.muJob.Unlock()
 
@@ -107,7 +108,7 @@ func (d *directDownloader) Pause(ctx context.Context, job *dto.DownloadJob) erro
 	}
 }
 
-func (d *directDownloader) Resume(ctx context.Context, job *dto.DownloadJob) error {
+func (d *directDownloader) Resume(ctx context.Context, job *models.DownloadJob) error {
 	log := log.With().Any("id", job.Id).Type("downloader", d).Logger()
 
 	d.muItem.RLock()
@@ -122,7 +123,7 @@ func (d *directDownloader) Resume(ctx context.Context, job *dto.DownloadJob) err
 		return err
 	}
 
-	resp = directClient().Do(resp.Request.WithContext(ctx))
+	resp = DirectClient().Do(resp.Request.WithContext(ctx))
 
 	d.muItem.Lock()
 	d.ActiveItems[job.Id] = resp
@@ -134,7 +135,7 @@ func (d *directDownloader) Resume(ctx context.Context, job *dto.DownloadJob) err
 	return nil
 }
 
-func (d *directDownloader) Delete(ctx context.Context, job *dto.DownloadJob) error {
+func (d *directDownloader) Delete(ctx context.Context, job *models.DownloadJob) error {
 	log := log.With().Any("id", job.Id).Type("downloader", d).Logger()
 
 	d.muItem.RLock()
@@ -172,11 +173,11 @@ func (d *directDownloader) Delete(ctx context.Context, job *dto.DownloadJob) err
 	}
 }
 
-func (d *directDownloader) Status(ctx context.Context) ([]dto.DownloadJob, error) {
+func (d *directDownloader) Status(ctx context.Context) ([]models.DownloadJob, error) {
 	d.muJob.RLock()
 	defer d.muJob.RUnlock()
 
-	jobs := make([]dto.DownloadJob, 0, len(d.ActiveJobs))
+	jobs := make([]models.DownloadJob, 0, len(d.ActiveJobs))
 	for _, v := range d.ActiveJobs {
 		jobs = append(jobs, *v)
 	}

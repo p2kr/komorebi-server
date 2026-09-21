@@ -9,6 +9,8 @@ import (
 	"time"
 	"uuid"
 
+	"komorebi-server/src/models"
+
 	"komorebi-server/configs"
 	"komorebi-server/src/crawlers"
 	"komorebi-server/src/downloaders"
@@ -47,17 +49,18 @@ func SearchQuery(c *echo.Context) error {
 	}
 
 	ctx := context.Background()
-	configs, ok := getCrawlerConfigs(ctx)
-	if !ok || len(configs) == 0 {
-		log.Err(err).Any("configs", configs).Msg("No config found")
-		return fail(c, http.StatusNotFound, err, "Configs", configs)
+	cfg, ok := getCrawlerConfigs(ctx)
+	if !ok || len(cfg) == 0 {
+		log.Err(err).Any("configs", cfg).Msg("No config found")
+		return fail(c, http.StatusNotFound,
+			fmt.Errorf("%s, empty crawler configs", err), "Configs", cfg)
 	}
 
 	engine := crawlers.CrawlerEngine{
 		Client:    httpClient,
 		Query:     params.Query,
 		MediaType: params.MediaType,
-		Configs:   configs,
+		Configs:   cfg,
 	}
 
 	res, err := engine.Crawl()
@@ -82,6 +85,12 @@ func Add(c *echo.Context) error {
 		return fail(c, http.StatusBadRequest, err)
 	}
 
+	// ssrf prevention
+	err := validateUrl(params.CrawlerResult.Link)
+	if err != nil {
+		return fail(c, http.StatusBadRequest, err)
+	}
+
 	log := log.With().Str("url", params.CrawlerResult.Link).Logger()
 
 	d, err := downloaders.GetDownloader(params.CrawlerResult.Link)
@@ -91,7 +100,7 @@ func Add(c *echo.Context) error {
 	}
 
 	ctx := context.Background()
-	job := dto.NewDownloadJob(uuid.Nil().String(), configs.GetConfig().Env.VaultLoc,
+	job := models.NewDownloadJob(uuid.Nil().String(), configs.GetConfig().Env.VaultLoc,
 		params.CrawlerResult.Link, params.CrawlerResult.Title)
 
 	_, err = d.Submit(ctx, &job)
@@ -103,7 +112,7 @@ func Add(c *echo.Context) error {
 	return success(c, job, http.StatusAccepted)
 }
 
-// Get active download jobs
+// Active Gets active download jobs
 func Active(c *echo.Context) error {
 	resp := c.Response()
 	resp.Header().Set("Content-Type", "text/event-stream")
@@ -141,7 +150,7 @@ func Active(c *echo.Context) error {
 
 func Delete(c *echo.Context) error {
 	// expects job id
-	var j dto.DownloadJob
+	var j models.DownloadJob
 	if err := c.Bind(&j); err != nil {
 		return fail(c, http.StatusBadRequest, err)
 	}
@@ -166,7 +175,7 @@ func Delete(c *echo.Context) error {
 
 func Pause(c *echo.Context) error {
 	// expects job id
-	var j dto.DownloadJob
+	var j models.DownloadJob
 	if err := c.Bind(&j); err != nil {
 		return fail(c, http.StatusBadRequest, err)
 	}
@@ -192,7 +201,7 @@ func Pause(c *echo.Context) error {
 
 func Resume(c *echo.Context) error {
 	// expects job id
-	var j dto.DownloadJob
+	var j models.DownloadJob
 	if err := c.Bind(&j); err != nil {
 		return fail(c, http.StatusBadRequest, err)
 	}

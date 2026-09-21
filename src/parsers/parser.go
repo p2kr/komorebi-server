@@ -23,13 +23,16 @@ type TitleParser struct {
 var titleParsers = []Parser{&anitomyParser{}}
 
 func (p *TitleParser) Parse(content string) *dto.ParsedTitle {
-	for _, parser := range titleParsers {
-		if parser.CanParse(content) {
-			p := parser.Parse(content)
-			return &p
+	v, _ := Cache().ComputeIfAbsent(content, func() (dto.ParsedTitle, bool) {
+		for _, parser := range titleParsers {
+			if parser.CanParse(content) {
+				p := parser.Parse(content)
+				return p, false
+			}
 		}
-	}
-	return nil
+		return dto.ParsedTitle{}, true
+	})
+	return &v
 }
 
 func (p *TitleParser) ParseMany(contents []dto.CrawlerResult) {

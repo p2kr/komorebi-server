@@ -2,7 +2,10 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -118,7 +121,7 @@ func (r *RestyLogger) Debugf(format string, v ...any) {
 // Cache is global Cache for controllers
 var Cache = sync.OnceValue(func() *otter.Cache[string, any] {
 	c, err := otter.New[string, any](&otter.Options[string, any]{
-		MaximumSize: 100,
+		MaximumSize: 1000,
 	})
 	if err != nil {
 		log.Err(err).Msg("failed to initialize controller cache")
@@ -133,10 +136,70 @@ func getCrawlerConfigs(ctx context.Context) ([]models.CrawlerConfig, bool) {
 		if err != nil {
 			log.Err(err).Any("config from db", c).Msg("failed to get db config")
 			return c, true
-		} else {
-			return c, false
 		}
+		return c, false
 	})
 	m, ok := r.([]models.CrawlerConfig)
 	return m, ok
+}
+
+// IsRestrictedIP checks if an IP belongs to loopback, private, link-local, or multicast blocks.
+func IsRestrictedIP(ip net.IP) bool {
+	if ip == nil {
+		return true
+	}
+	return ip.IsLoopback() ||
+		ip.IsPrivate() ||
+		ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() ||
+		ip.IsInterfaceLocalMulticast() ||
+		ip.IsMulticast() ||
+		ip.IsUnspecified()
+}
+
+// validateUrl performs a basic upfront validation on the URL scheme and IP.
+func validateUrl(u string) error {
+	link, err := url.Parse(u)
+	if err != nil {
+		return fmt.Errorf("invalid url: %w", err)
+	}
+
+	// 1. Validate Scheme
+	if link.Scheme != "http" && link.Scheme != "https" && link.Scheme != "magnet" {
+		return fmt.Errorf("unsupported url scheme: %s", link.Scheme)
+	}
+
+	// Magnet links do not connect to a single HTTP host, so IP validation is skipped.
+	if link.Scheme == "magnet" {
+		return nil
+	}
+
+	hostname := link.Hostname()
+	if hostname == "" {
+		return fmt.Errorf("missing hostname")
+	}
+
+	// 2. Check if the hostname is a literal IP address (e.g., "192.168.1.1")
+	ip := net.ParseIP(hostname)
+	if ip != nil {
+		if IsRestrictedIP(ip) {
+			return fmt.Errorf("access to private IP blocked: %s", hostname)
+		}
+		return nil
+	}
+
+	// 3. If it's a domain name (e.g., "github.com"), perform a basic DNS lookup
+	ips, err := net.LookupIP(hostname)
+	if err != nil {
+		return fmt.Errorf("could not resolve hostname %s: %w", hostname, err)
+	}
+
+	// 4. Ensure none of the resolved IPs are restricted
+	for _, resolvedIP := range ips {
+		if IsRestrictedIP(resolvedIP) {
+			return fmt.Errorf("domain %s resolves to a blocked IP: %s", hostname, resolvedIP.String())
+		}
+	}
+
+	return nil
 }

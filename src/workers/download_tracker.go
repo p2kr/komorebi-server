@@ -6,23 +6,23 @@ import (
 	"time"
 	"uuid"
 
-	"komorebi-server/src/dto"
+	"komorebi-server/src/models"
 
-	"github.com/anacrolix/torrent"
 	"github.com/cavaliergopher/grab/v3"
+	"github.com/cenkalti/rain/v2/torrent"
 	"github.com/rs/zerolog/log"
 )
 
 // JobUpdater is a callback provided by the downloader to safely update a job's state.
 // In the future, this can be replaced by a database repository interface (e.g. db.SaveJob).
-type JobUpdater func(id uuid.UUID, updateFn func(*dto.DownloadJob))
+type JobUpdater func(id uuid.UUID, updateFn func(*models.DownloadJob))
 
 func TrackDirectDownload(ctx context.Context, id uuid.UUID, resp *grab.Response, updater JobUpdater) {
 	var isComplete bool
 	var err error
 
-	updater(id, func(job *dto.DownloadJob) {
-		job.Status = dto.StatusDownloading
+	updater(id, func(job *models.DownloadJob) {
+		job.Status = models.StatusDownloading
 		job.DownloadSpeed = int64(resp.BytesPerSecond())
 		job.DownloadedSize = resp.BytesComplete()
 
@@ -37,11 +37,11 @@ func TrackDirectDownload(ctx context.Context, id uuid.UUID, resp *grab.Response,
 			err = resp.Err()
 
 			if errors.Is(err, context.Canceled) {
-				job.Status = dto.StatusPaused
+				job.Status = models.StatusPaused
 			} else if err != nil {
-				job.Status = dto.StatusError
+				job.Status = models.StatusError
 			} else {
-				job.Status = dto.StatusCompleted
+				job.Status = models.StatusCompleted
 				job.Progress = 100
 			}
 
@@ -60,37 +60,40 @@ func TrackTorrentDownload(ctx context.Context, id uuid.UUID, t *torrent.Torrent,
 	var isComplete bool
 	var err error
 
-	updater(id, func(job *dto.DownloadJob) {
-		job.Status = dto.StatusDownloading
+	updater(id, func(job *models.DownloadJob) {
+		job.Status = models.StatusDownloading
 
-		if t.Info() == nil {
-			job.Status = dto.StatusQueued
+		if time.Until(t.AddedAt()) > 0 {
+			job.Status = models.StatusQueued
 			job.DownloadSpeed = 0
 			job.EtaSec = -1
 			return
 		}
 
-		currentBytes := t.BytesCompleted()
-		job.DownloadSpeed = (currentBytes - job.DownloadedSize) / 2 // TODO: 2 is hardcoded, need to make it dynamic
-		job.DownloadedSize = currentBytes
+		// TODO: Should this be returned?
+		<-t.NotifyMetadata() // Wait for file size to checked.
 
-		job.TotalSize = t.Length()
+		stats := t.Stats()
+
+		job.DownloadSpeed = int64(stats.Speed.Download)
+		job.DownloadedSize = stats.Bytes.Downloaded
+
+		job.TotalSize = stats.Bytes.Total
 
 		if job.TotalSize > 0 {
-			job.Progress = float64(currentBytes) / float64(job.TotalSize) * 100.0
-		} else {
-			job.Progress = 0
+			job.Progress = float64(job.DownloadedSize) / float64(job.TotalSize) * 100.0
 		}
 
-		if job.DownloadSpeed > 0 && job.TotalSize > 0 {
-			job.EtaSec = (job.TotalSize - currentBytes) / job.DownloadSpeed
+		if stats.ETA != nil {
+			job.EtaSec = int64(stats.ETA.Seconds())
 		} else {
 			job.EtaSec = -1
 		}
 
-		if t.Complete().Bool() {
+		if job.DownloadedSize == job.TotalSize {
 			isComplete = true
-			job.Status = dto.StatusCompleted
+
+			job.Status = models.StatusCompleted
 			job.Progress = 100
 			job.DownloadSpeed = 0
 			job.EtaSec = 0

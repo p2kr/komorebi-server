@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"komorebi-server/src/core"
-	"komorebi-server/src/workers"
 
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
@@ -17,10 +16,7 @@ import (
 func main() {
 	// init.
 	core.Init()
-
-	// setup scheduler
-	workers.InitScheduler()
-	defer workers.CloseScheduler()
+	defer core.Defer()
 
 	// setup web server
 	e := core.GetServer()

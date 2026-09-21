@@ -6,39 +6,37 @@ import (
 	"net/url"
 	"uuid"
 
-	"komorebi-server/src/dto"
+	"komorebi-server/src/models"
 
-	"github.com/anacrolix/torrent"
-	"github.com/anacrolix/torrent/storage"
 	"github.com/cavaliergopher/grab/v3"
+	"github.com/cenkalti/rain/v2/torrent"
 	"github.com/rs/zerolog/log"
 	"github.com/samber/lo"
 )
 
 // Downloader defines the contract for any download client (HTTP, Torrent, Aria2, etc.)
 type Downloader interface {
-	// Add submits a new URL (Magnet, HTTP, etc.) to the downloader.
+	// Submit Add submits a new URL (Magnet, HTTP, etc.) to the downloader.
 	// It returns a unique ID for the download job.
-	Submit(ctx context.Context, job *dto.DownloadJob) (string, error)
+	Submit(ctx context.Context, job *models.DownloadJob) (string, error)
 
-	// Action methods acting on a specific download job by its ID.
-	Pause(ctx context.Context, job *dto.DownloadJob) error
-	Resume(ctx context.Context, job *dto.DownloadJob) error
-	Delete(ctx context.Context, job *dto.DownloadJob) error
+	// Pause Action methods acting on a specific download job by its ID.
+	Pause(ctx context.Context, job *models.DownloadJob) error
+	Resume(ctx context.Context, job *models.DownloadJob) error
+	Delete(ctx context.Context, job *models.DownloadJob) error
 
 	// Status returns all active and completed downloads known to the client.
-	Status(ctx context.Context) ([]dto.DownloadJob, error)
+	Status(ctx context.Context) ([]models.DownloadJob, error)
 }
 
 var (
 	direct = &directDownloader{
 		ActiveItems: make(map[uuid.UUID]*grab.Response),
-		ActiveJobs:  make(map[uuid.UUID]*dto.DownloadJob),
+		ActiveJobs:  make(map[uuid.UUID]*models.DownloadJob),
 	}
 	torr = &torrentDownloader{
-		ActiveItems:   make(map[uuid.UUID]*torrent.Torrent),
-		ActiveJobs:    make(map[uuid.UUID]*dto.DownloadJob),
-		ActiveStorage: make(map[uuid.UUID]storage.ClientImplCloser),
+		ActiveItems: make(map[uuid.UUID]*torrent.Torrent),
+		ActiveJobs:  make(map[uuid.UUID]*models.DownloadJob),
 	}
 )
 
@@ -56,11 +54,11 @@ func GetDownloader(u string) (Downloader, error) {
 	case "magnet":
 		return torr, nil
 	default:
-		return nil, errors.New("Unsupported URL")
+		return nil, errors.New("unsupported URL")
 	}
 }
 
-func GetJobById(id uuid.UUID) (*dto.DownloadJob, Downloader) {
+func GetJobById(id uuid.UUID) (*models.DownloadJob, Downloader) {
 	job := direct.ActiveJobs[id]
 	if job != nil {
 		return job, direct
@@ -73,8 +71,8 @@ func GetJobById(id uuid.UUID) (*dto.DownloadJob, Downloader) {
 	return nil, nil
 }
 
-func GetActiveJobs() []dto.DownloadJob {
-	var jobs []dto.DownloadJob
+func GetActiveJobs() []models.DownloadJob {
+	var jobs []models.DownloadJob
 	ctx := context.Background()
 
 	d, _ := direct.Status(ctx)

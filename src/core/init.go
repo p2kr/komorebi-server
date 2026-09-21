@@ -4,6 +4,7 @@ import (
 	"komorebi-server/configs"
 	"komorebi-server/src/controllers"
 	"komorebi-server/src/db"
+	"komorebi-server/src/workers"
 
 	"github.com/rs/zerolog/log"
 )
@@ -21,6 +22,9 @@ func Init() {
 
 	// Init resty client
 	controllers.InitClient()
+
+	// Init schedulers
+	workers.InitScheduler()
 
 	log.Info().Msg("Initialized App")
 }

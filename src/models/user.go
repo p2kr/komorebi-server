@@ -28,11 +28,11 @@ var IUser = z.Struct(z.Shape{
 	"IsSandbox": z.Bool(),
 })
 
-// Hide [Passcode] and [AccessToken]
-func (u User) MarshalJSON() ([]byte, error) {
+// MarshalJSON Hides [Passcode] and [AccessToken]
+func (u *User) MarshalJSON() ([]byte, error) {
 	type Alias User
 
-	a := Alias(u)
+	a := Alias(*u)
 	a.Passcode = nil
 	a.AccessToken = nil
 

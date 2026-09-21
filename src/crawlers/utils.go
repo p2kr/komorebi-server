@@ -13,10 +13,10 @@ import (
 	"golang.org/x/net/html"
 )
 
-// Global JpExprCache for crawlers
+// JpExprCache is Global jp.Expr Cache for crawlers
 var JpExprCache = sync.OnceValue(func() *otter.Cache[string, jp.Expr] {
 	r, err := otter.New(&otter.Options[string, jp.Expr]{
-		MaximumSize: 100,
+		MaximumSize: 1000,
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to instantiate crawler cache")
@@ -26,7 +26,7 @@ var JpExprCache = sync.OnceValue(func() *otter.Cache[string, jp.Expr] {
 
 var CssMatcherCache = sync.OnceValue(func() *otter.Cache[string, goquery.Matcher] {
 	r, err := otter.New(&otter.Options[string, goquery.Matcher]{
-		MaximumSize: 100,
+		MaximumSize: 1000,
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to instantiate crawler cache")

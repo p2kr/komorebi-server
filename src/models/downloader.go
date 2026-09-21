@@ -1,4 +1,4 @@
-package dto
+package models
 
 import (
 	"os"
@@ -17,6 +17,7 @@ const (
 	StatusReady       DownloadStatus = "Ready"
 	StatusPartial     DownloadStatus = "Partial"
 	StatusError       DownloadStatus = "Error"
+	StatusDeleted     DownloadStatus = "Deleted"
 )
 
 // DownloadJob represents a snapshot of a download's current progress

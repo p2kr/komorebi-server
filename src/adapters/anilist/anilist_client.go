@@ -221,11 +221,11 @@ func (c *AnilistClient) ExchangeOauthToken(code, codeVerifier string) (string, e
 		msg := "code and codeVerifier both cannot be empty"
 		log.Error().Msg(msg)
 		return "", errors.New(msg)
-	} else {
-		if code != "" {
-			return code, nil
-		} else {
-			return codeVerifier, nil
-		}
 	}
+
+	if code != "" {
+		return code, nil
+	}
+
+	return codeVerifier, nil
 }
