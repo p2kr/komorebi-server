@@ -6,12 +6,15 @@ import (
 	"net/url"
 	"uuid"
 
+	"komorebi-server/src/db"
+
 	"komorebi-server/src/models"
 
 	"github.com/cavaliergopher/grab/v3"
 	"github.com/cenkalti/rain/v2/torrent"
-	"github.com/rs/zerolog/log"
+	zlog "github.com/rs/zerolog/log"
 	"github.com/samber/lo"
+	"gorm.io/gorm"
 )
 
 // Downloader defines the contract for any download client (HTTP, Torrent, Aria2, etc.)
@@ -27,6 +30,9 @@ type Downloader interface {
 
 	// Status returns all active and completed downloads known to the client.
 	Status(ctx context.Context) ([]models.DownloadJob, error)
+
+	// RestoreJob restores a download job from the database
+	RestoreJob(ctx context.Context, job *models.DownloadJob)
 }
 
 var (
@@ -41,7 +47,7 @@ var (
 )
 
 func GetDownloader(u string) (Downloader, error) {
-	log := log.With().Str("url", lo.Substring(u, 0, 25)).Logger()
+	log := zlog.With().Str("url", lo.Substring(u, 0, 25)).Logger()
 	ur, err := url.Parse(u)
 	if err != nil {
 		log.Err(err).Msg("Unparsable URL")
@@ -82,4 +88,26 @@ func GetActiveJobs() []models.DownloadJob {
 	jobs = append(jobs, t...)
 
 	return jobs
+}
+
+func RestoreJobs(ctx context.Context) {
+	jobs, err := gorm.G[models.DownloadJob](db.GetDb()).Where("status not in ?",
+		[]models.DownloadStatus{
+			models.StatusCompleted, models.StatusDeleted,
+			models.StatusReady, models.StatusPartial, models.StatusProcessing,
+		}).Find(ctx)
+	if err != nil {
+		zlog.Error().Err(err).Msg("Failed to restore jobs")
+	}
+	restored := 0
+	for i := range jobs {
+		downloader, err := GetDownloader(jobs[i].Url)
+		if err != nil {
+			zlog.Error().Any("id", jobs[i].Id).Err(err).Msg("Failed to restore job")
+			continue
+		}
+		restored += 1
+		downloader.RestoreJob(ctx, &jobs[i])
+	}
+	zlog.Info().Int("total", len(jobs)).Int("restored", restored).Msg("Restored jobs")
 }

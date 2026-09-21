@@ -14,15 +14,15 @@ func (g *GormLogger) LogMode(level logger.LogLevel) logger.Interface {
 	return g
 }
 
-func (g *GormLogger) Info(ctx context.Context, msg string, v ...interface{}) {
+func (g *GormLogger) Info(ctx context.Context, msg string, v ...any) {
 	log.Ctx(ctx).Info().Msgf(msg, v...)
 }
 
-func (g *GormLogger) Warn(ctx context.Context, msg string, v ...interface{}) {
+func (g *GormLogger) Warn(ctx context.Context, msg string, v ...any) {
 	log.Ctx(ctx).Warn().Msgf(msg, v...)
 }
 
-func (g *GormLogger) Error(ctx context.Context, msg string, v ...interface{}) {
+func (g *GormLogger) Error(ctx context.Context, msg string, v ...any) {
 	log.Ctx(ctx).Error().Msgf(msg, v...)
 }
 

@@ -65,10 +65,7 @@ func (c *jsonPathCrawler) Crawl(content []byte, config *models.CrawlerConfig) ([
 			continue
 		}
 
-		maxLen := len(titles)
-		if len(links) > maxLen {
-			maxLen = len(links)
-		}
+		maxLen := max(len(links), len(titles))
 
 		var pops []any
 		if popExpr != nil {
@@ -79,7 +76,7 @@ func (c *jsonPathCrawler) Crawl(content []byte, config *models.CrawlerConfig) ([
 			sizes = sizeExpr.Get(row)
 		}
 
-		for i := 0; i < maxLen; i++ {
+		for i := range maxLen {
 			item := dto.CrawlerResult{
 				Source:   config.Key,
 				Category: config.Category,

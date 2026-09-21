@@ -1,9 +1,12 @@
 package core
 
 import (
+	"context"
+
 	"komorebi-server/configs"
 	"komorebi-server/src/controllers"
 	"komorebi-server/src/db"
+	"komorebi-server/src/downloaders"
 	"komorebi-server/src/workers"
 
 	"github.com/rs/zerolog/log"
@@ -25,6 +28,10 @@ func Init() {
 
 	// Init schedulers
 	workers.InitScheduler()
+
+	ctx := context.Background()
+	// Restore jobs
+	downloaders.RestoreJobs(ctx)
 
 	log.Info().Msg("Initialized App")
 }

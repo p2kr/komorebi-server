@@ -63,7 +63,7 @@ func SetupDb() {
 }
 
 func MigrateSchema(db *gorm.DB) {
-	err := db.AutoMigrate(&models.User{}, &models.CrawlerConfig{})
+	err := db.AutoMigrate(&models.User{}, &models.CrawlerConfig{}, &models.DownloadJob{})
 	if err != nil {
 		log.Err(err).Msg("Failed to migrate")
 	} else {
@@ -72,7 +72,7 @@ func MigrateSchema(db *gorm.DB) {
 }
 
 func DropSchema(db *gorm.DB) {
-	err := db.Migrator().DropTable(&models.User{}, &models.CrawlerConfig{})
+	err := db.Migrator().DropTable(&models.User{}, &models.CrawlerConfig{}, &models.DownloadJob{})
 	if err != nil {
 		log.Err(err).Msg("Failed to drop table")
 	} else {

@@ -68,12 +68,9 @@ func (c *gjsonCrawler) Crawl(content []byte, config *models.CrawlerConfig) ([]dt
 		}
 
 		// 4. The Zipping Engine: Restores functionality for SubsPlease / Nyaa
-		maxLen := len(titles)
-		if len(links) > maxLen {
-			maxLen = len(links)
-		}
+		maxLen := max(len(links), len(titles))
 
-		for i := 0; i < maxLen; i++ {
+		for i := range maxLen {
 			item := dto.CrawlerResult{
 				Source:   config.Key,
 				Category: config.Category,

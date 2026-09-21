@@ -170,14 +170,14 @@ func TestMalItemWithoutTitleOrIdSkipped(t *testing.T) {
 			},
 			{
 				Node: mal.MalNode{
-					ID:    ptr(int64(1)),
+					ID:    new(int64(1)),
 					Title: nil, // missing Title
 				},
 			},
 			{
 				Node: mal.MalNode{
-					ID:    ptr(int64(2)),
-					Title: ptr("Valid Title"),
+					ID:    new(int64(2)),
+					Title: new("Valid Title"),
 				},
 			},
 		},

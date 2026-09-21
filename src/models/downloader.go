@@ -22,14 +22,14 @@ const (
 
 // DownloadJob represents a snapshot of a download's current progress
 type DownloadJob struct {
-	// The unique ID returned by the downloader (e.g., Torrent Hash)
-	Id   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
+	Model
+
+	Name string `json:"name"`
 	// specific id of each engine
 	EngineId string `json:"engine_id"`
 	// Download location
 	Location string `json:"location"`
-	// Url Location
+	// Url. Also serves as an identifier for the download engine
 	Url string `json:"url"`
 	// Current state of the download
 	Status DownloadStatus `json:"status"`
@@ -40,9 +40,9 @@ type DownloadJob struct {
 	// Total size in bytes
 	TotalSize int64 `json:"total_size"`
 	// Current speed in bytes per second
-	DownloadSpeed int64 `json:"download_speed"`
+	DownloadSpeed int64 `json:"download_speed" gorm:"-"`
 	// Eta in sec. Negative mean unknown
-	EtaSec int64 `json:"eta_sec"`
+	EtaSec int64 `json:"eta_sec" gorm:"-"`
 }
 
 func NewDownloadJob(engineId, location, url, name string) DownloadJob {

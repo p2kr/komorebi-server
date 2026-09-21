@@ -26,10 +26,10 @@ func TestMediaJSON(t *testing.T) {
 		Format:        dto.MediaFormatTv,
 		ReleaseStatus: dto.ReleaseStatusFinished,
 		Title: dto.MediaTitle{
-			Romanized: ptr("Frieren"),
+			Romanized: new("Frieren"),
 		},
 		Cover: dto.CoverImage{
-			Large: ptr("https://example.com/cover.jpg"),
+			Large: new("https://example.com/cover.jpg"),
 		},
 		MeanScore: &score,
 		Episodes:  &episodes,

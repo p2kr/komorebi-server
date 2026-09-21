@@ -68,7 +68,7 @@ func (p *ParsedTitle) UnmarshalJSON(data []byte) error {
 	for i := 0; i < typ.NumField(); i++ {
 		field := typ.Field(i)
 		tag := field.Tag.Get("json")
-		jsonKey := strings.Split(tag, ",")[0]
+		jsonKey, _, _ := strings.Cut(tag, ",")
 
 		if jsonKey == "" {
 			jsonKey = field.Name

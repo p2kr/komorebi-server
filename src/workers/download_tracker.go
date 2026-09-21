@@ -6,20 +6,23 @@ import (
 	"time"
 	"uuid"
 
+	"komorebi-server/src/db"
+
 	"komorebi-server/src/models"
 
 	"github.com/cavaliergopher/grab/v3"
 	"github.com/cenkalti/rain/v2/torrent"
-	"github.com/rs/zerolog/log"
+	zlog "github.com/rs/zerolog/log"
 )
 
 // JobUpdater is a callback provided by the downloader to safely update a job's state.
-// In the future, this can be replaced by a database repository interface (e.g. db.SaveJob).
+// In the future, this can be replaced by a database repository interface (e.g., db.SaveJob).
 type JobUpdater func(id uuid.UUID, updateFn func(*models.DownloadJob))
 
 func TrackDirectDownload(ctx context.Context, id uuid.UUID, resp *grab.Response, updater JobUpdater) {
 	var isComplete bool
 	var err error
+	var j models.DownloadJob
 
 	updater(id, func(job *models.DownloadJob) {
 		job.Status = models.StatusDownloading
@@ -47,36 +50,54 @@ func TrackDirectDownload(ctx context.Context, id uuid.UUID, resp *grab.Response,
 
 			job.DownloadSpeed = 0
 			job.EtaSec = 0
+
+			j = *job
 		}
 	})
 
 	if isComplete {
-		log.Err(err).Any("id", id).Msg("job completed")
+		zlog.Err(err).Any("id", id).Msg("job completed")
+		db.UpdateDownloadJobs(ctx, j)
 		RemoveJob(id)
 	}
 }
 
 func TrackTorrentDownload(ctx context.Context, id uuid.UUID, t *torrent.Torrent, updater JobUpdater) {
-	var isComplete bool
+	log := zlog.With().Any("id", id).Logger()
+	hasMetadata, isComplete := false, false
+
+	select {
+	case <-t.NotifyMetadata():
+		hasMetadata = true
+		break
+	case <-t.NotifyComplete():
+		hasMetadata = true
+		isComplete = true
+		break
+	case <-t.NotifyStop():
+		hasMetadata = true
+		break
+	default:
+		break
+	}
+
 	var err error
+	var j models.DownloadJob
 
 	updater(id, func(job *models.DownloadJob) {
 		job.Status = models.StatusDownloading
 
-		if time.Until(t.AddedAt()) > 0 {
+		if !hasMetadata {
 			job.Status = models.StatusQueued
 			job.DownloadSpeed = 0
 			job.EtaSec = -1
 			return
 		}
 
-		// TODO: Should this be returned?
-		<-t.NotifyMetadata() // Wait for file size to checked.
-
 		stats := t.Stats()
 
 		job.DownloadSpeed = int64(stats.Speed.Download)
-		job.DownloadedSize = stats.Bytes.Downloaded
+		job.DownloadedSize = stats.Bytes.Completed
 
 		job.TotalSize = stats.Bytes.Total
 
@@ -90,18 +111,23 @@ func TrackTorrentDownload(ctx context.Context, id uuid.UUID, t *torrent.Torrent,
 			job.EtaSec = -1
 		}
 
-		if job.DownloadedSize == job.TotalSize {
-			isComplete = true
+		err = stats.Error
+		if err != nil {
+			job.Status = models.StatusError
+		}
 
+		if isComplete {
 			job.Status = models.StatusCompleted
 			job.Progress = 100
 			job.DownloadSpeed = 0
 			job.EtaSec = 0
 		}
+		j = *job
 	})
 
-	if isComplete {
-		log.Err(err).Any("id", id).Msg("job completed")
+	if isComplete || err != nil {
+		log.Err(err).Msg("job completed")
+		db.UpdateDownloadJobs(ctx, j)
 		RemoveJob(id)
 	}
 }

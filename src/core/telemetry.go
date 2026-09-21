@@ -8,7 +8,7 @@ import (
 	"komorebi-server/configs"
 
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	zlog "github.com/rs/zerolog/log"
 )
 
 func SetupLogger(config *configs.Config) {
@@ -27,12 +27,13 @@ func SetupLogger(config *configs.Config) {
 
 	// Setup logger
 	if config.Logger.Pretty {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+		zlog.Logger = zlog.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	}
+	zlog.Logger = zlog.Logger.With().Caller().Logger()
 
-	zerolog.DefaultContextLogger = &log.Logger
+	zerolog.DefaultContextLogger = &zlog.Logger
 }
 
 func GetSlogLogger() *slog.Logger {
-	return slog.New(zerolog.NewSlogHandler(log.Logger))
+	return slog.New(zerolog.NewSlogHandler(zlog.Logger))
 }

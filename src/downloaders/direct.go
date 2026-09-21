@@ -8,13 +8,15 @@ import (
 	"time"
 	"uuid"
 
+	"komorebi-server/src/db"
+
 	"komorebi-server/src/models"
 
 	"komorebi-server/src/workers"
 
 	"github.com/cavaliergopher/grab/v3"
 	"github.com/go-co-op/gocron/v2"
-	"github.com/rs/zerolog/log"
+	zlog "github.com/rs/zerolog/log"
 	"github.com/samber/lo"
 )
 
@@ -41,7 +43,7 @@ func (d *directDownloader) createUpdater() workers.JobUpdater {
 }
 
 func (d *directDownloader) Submit(ctx context.Context, job *models.DownloadJob) (string, error) {
-	log := log.With().Type("downloader", d).
+	log := zlog.With().Type("downloader", d).
 		Str("job url", lo.Substring(job.Url, 0, 25)+"...").Str("job loc", job.Location).Logger()
 	req, err := grab.NewRequest(job.Location, job.Url)
 	if err != nil {
@@ -63,6 +65,8 @@ func (d *directDownloader) Submit(ctx context.Context, job *models.DownloadJob) 
 	d.ActiveJobs[job.Id] = job
 	d.muJob.Unlock()
 
+	db.UpdateDownloadJobs(ctx, *job)
+
 	log.Debug().Any("response", resp).Msg("Started download")
 
 	workers.AddJobWithId(gocron.DurationJob(time.Second*2),
@@ -72,14 +76,14 @@ func (d *directDownloader) Submit(ctx context.Context, job *models.DownloadJob) 
 }
 
 func (d *directDownloader) Pause(ctx context.Context, job *models.DownloadJob) error {
-	log := log.With().Any("id", job.Id).Type("downloader", d).Logger()
+	log := zlog.With().Any("id", job.Id).Type("downloader", d).Logger()
 
 	d.muItem.RLock()
 	resp := d.ActiveItems[job.Id]
 	d.muItem.RUnlock()
 
 	if resp == nil {
-		msg := "No active download found"
+		msg := "no active download found"
 		log.Error().Msg(msg)
 		return errors.New(msg)
 	}
@@ -96,20 +100,22 @@ func (d *directDownloader) Pause(ctx context.Context, job *models.DownloadJob) e
 		log.Debug().Msg("Download Paused")
 
 		d.muJob.Lock()
-		if activeJob, ok := d.ActiveJobs[job.Id]; ok {
-			activeJob.Status = models.StatusPaused
-		}
+		activeJob := d.ActiveJobs[job.Id]
 		d.muJob.Unlock()
+		if activeJob != nil {
+			activeJob.Status = models.StatusPaused
+			db.UpdateDownloadJobs(ctx, *activeJob)
+		}
 
 		return nil
-	} else {
-		log.Err(err).Msg("Error cancelling download")
-		return err
 	}
+
+	log.Err(err).Msg("Error cancelling download")
+	return err
 }
 
 func (d *directDownloader) Resume(ctx context.Context, job *models.DownloadJob) error {
-	log := log.With().Any("id", job.Id).Type("downloader", d).Logger()
+	log := zlog.With().Any("id", job.Id).Type("downloader", d).Logger()
 
 	d.muItem.RLock()
 	resp := d.ActiveItems[job.Id]
@@ -132,18 +138,26 @@ func (d *directDownloader) Resume(ctx context.Context, job *models.DownloadJob) 
 	workers.AddJobWithId(gocron.DurationJob(time.Second*2),
 		gocron.NewTask(workers.TrackDirectDownload, ctx, job.Id, resp, d.createUpdater()), job.Id)
 
+	d.muJob.RLock()
+	j := d.ActiveJobs[job.Id]
+	d.muJob.RUnlock()
+	if j != nil {
+		j.Status = models.StatusDownloading
+		db.UpdateDownloadJobs(ctx, *j)
+	}
+
 	return nil
 }
 
 func (d *directDownloader) Delete(ctx context.Context, job *models.DownloadJob) error {
-	log := log.With().Any("id", job.Id).Type("downloader", d).Logger()
+	log := zlog.With().Any("id", job.Id).Type("downloader", d).Logger()
 
 	d.muItem.RLock()
 	resp := d.ActiveItems[job.Id]
 	d.muItem.RUnlock()
 
 	if resp == nil {
-		msg := "No active download found"
+		msg := "no active download found"
 		log.Error().Msg(msg)
 		return errors.New(msg)
 	}
@@ -156,6 +170,14 @@ func (d *directDownloader) Delete(ctx context.Context, job *models.DownloadJob) 
 		delete(d.ActiveItems, job.Id)
 		d.muItem.Unlock()
 
+		d.muJob.RLock()
+		j := d.ActiveJobs[job.Id]
+		d.muJob.RUnlock()
+		if j != nil {
+			j.Status = models.StatusDeleted
+			db.UpdateDownloadJobs(ctx, *j)
+		}
+
 		d.muJob.Lock()
 		delete(d.ActiveJobs, job.Id)
 		d.muJob.Unlock()
@@ -167,13 +189,13 @@ func (d *directDownloader) Delete(ctx context.Context, job *models.DownloadJob) 
 		}
 
 		return nil
-	} else {
-		log.Err(err).Msg("Error cancelling download")
-		return err
 	}
+
+	log.Err(err).Msg("Error cancelling download")
+	return err
 }
 
-func (d *directDownloader) Status(ctx context.Context) ([]models.DownloadJob, error) {
+func (d *directDownloader) Status(_ context.Context) ([]models.DownloadJob, error) {
 	d.muJob.RLock()
 	defer d.muJob.RUnlock()
 
@@ -182,4 +204,35 @@ func (d *directDownloader) Status(ctx context.Context) ([]models.DownloadJob, er
 		jobs = append(jobs, *v)
 	}
 	return jobs, nil
+}
+
+func (d *directDownloader) RestoreJob(ctx context.Context, job *models.DownloadJob) {
+	d.muJob.Lock()
+	d.ActiveJobs[job.Id] = job
+	d.muJob.Unlock()
+
+	switch job.Status {
+	case models.StatusPaused, models.StatusError:
+		return // Do nothing. User has to resume manually
+	}
+
+	req, err := grab.NewRequest(job.Location, job.Url)
+	if err != nil {
+		zlog.Err(err).Any("id", job.Id).Msg("failed to recreate grab request on restore")
+		_, err := d.Submit(ctx, job)
+		if err != nil {
+			job.Status = models.StatusError
+			db.UpdateDownloadJobs(ctx, *job)
+		}
+		return
+	}
+	req.WithContext(ctx)
+	resp := DirectClient().Do(req)
+
+	d.muItem.Lock()
+	d.ActiveItems[job.Id] = resp
+	d.muItem.Unlock()
+
+	workers.AddJobWithId(gocron.DurationJob(time.Second*2),
+		gocron.NewTask(workers.TrackDirectDownload, ctx, job.Id, resp, d.createUpdater()), job.Id)
 }

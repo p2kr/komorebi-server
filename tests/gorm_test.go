@@ -31,7 +31,7 @@ func TestGorm(t *testing.T) {
 	db.AutoMigrate(&User{})
 
 	u1 := User{
-		Model:    Model{Id: "1", CreatedAt: time.Now(), UpdatedAt: time.Now()},
+		Id: "1", CreatedAt: time.Now(), UpdatedAt: time.Now(),
 		Username: "test", IsSandbox: false, AccessToken: "t1",
 	}
 	db.Create(&u1)
@@ -40,7 +40,7 @@ func TestGorm(t *testing.T) {
 	time.Sleep(time.Second)
 
 	u2 := User{
-		Model:    Model{Id: "2", CreatedAt: time.Now(), UpdatedAt: time.Now()},
+		Id: "2", CreatedAt: time.Now(), UpdatedAt: time.Now(),
 		Username: "test", IsSandbox: false, AccessToken: "t2",
 	}
 	err = db.Clauses(clause.OnConflict{

@@ -138,7 +138,7 @@ func LoadConfigs() {
 	// -- Layer 5: Environment variables (highest priority) -----------------
 	// Secrets and deployment-specific values always win over any TOML file.
 	// The callback maps exact OS env var names to their koanf key paths.
-	// Returning "" for an unrecognised var causes koanf to skip it entirely.
+	// Returning "" for an unrecognized var causes koanf to skip it entirely.
 	if err := k.Load(env.Provider("", ".", func(s string) string {
 		m := map[string]string{
 			"MAL_CLIENT_ID":            "env.malClientId",

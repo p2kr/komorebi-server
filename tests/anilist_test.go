@@ -186,7 +186,7 @@ func TestAniListMediaWithoutIdOrMediaSkipped(t *testing.T) {
 					},
 					{
 						Media: &anilist.AniListMedia{
-							ID: ptr(int64(7001)),
+							ID: new(int64(7001)),
 						},
 					},
 				},

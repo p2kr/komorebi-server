@@ -8,6 +8,8 @@ import (
 	"time"
 	"uuid"
 
+	"komorebi-server/src/db"
+
 	"komorebi-server/src/models"
 
 	"komorebi-server/configs"
@@ -16,7 +18,7 @@ import (
 	"github.com/cenkalti/backoff/v7"
 	"github.com/cenkalti/rain/v2/torrent"
 	"github.com/go-co-op/gocron/v2"
-	"github.com/rs/zerolog/log"
+	zlog "github.com/rs/zerolog/log"
 	"github.com/samber/lo"
 )
 
@@ -35,7 +37,7 @@ var TorrentClient = sync.OnceValue(func() (cl *torrent.Session) {
 
 	s, err := torrent.NewSession(config)
 	if err != nil {
-		log.Err(err).Msg("Failed to initialize torrent session")
+		zlog.Err(err).Msg("Failed to initialize torrent session")
 		return nil
 	}
 	return s
@@ -52,8 +54,9 @@ func (d *torrentDownloader) createUpdater() workers.JobUpdater {
 }
 
 func (d *torrentDownloader) Submit(ctx context.Context, job *models.DownloadJob) (string, error) {
-	log := log.With().Type("downloader", d).
-		Str("job url", lo.Substring(job.Url, 0, 25)+"...").Str("job loc", job.Location).Logger()
+	log := zlog.With().Type("downloader", d).
+		Str("job url", lo.Substring(job.Url, 0, 25)+"...").
+		Str("job loc", job.Location).Logger()
 
 	t, err := TorrentClient().AddURI(job.Url, &torrent.AddTorrentOptions{
 		ID:                job.Id.String(),
@@ -61,6 +64,8 @@ func (d *torrentDownloader) Submit(ctx context.Context, job *models.DownloadJob)
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to add torrent")
+	} else {
+		log.Info().Str("torrent id", t.ID()).Msg("Added torrent")
 	}
 
 	job.EngineId = t.ID()
@@ -73,16 +78,18 @@ func (d *torrentDownloader) Submit(ctx context.Context, job *models.DownloadJob)
 	d.ActiveJobs[job.Id] = job
 	d.muJob.Unlock()
 
-	_ = t.Start()
+	db.UpdateDownloadJobs(ctx, *job)
 
-	_, _ = workers.AddJobWithId(gocron.DurationJob(time.Second*2),
+	t.Start()
+
+	workers.AddJobWithId(gocron.DurationJob(time.Second*2),
 		gocron.NewTask(workers.TrackTorrentDownload, ctx, job.Id, t, d.createUpdater()), job.Id)
 
 	return job.Id.String(), nil
 }
 
 func (d *torrentDownloader) Pause(ctx context.Context, job *models.DownloadJob) error {
-	log := log.With().Any("id", job.Id).Type("downloader", d).Logger()
+	log := zlog.With().Any("id", job.Id).Type("downloader", d).Logger()
 
 	d.muItem.RLock()
 	t := d.ActiveItems[job.Id]
@@ -94,7 +101,7 @@ func (d *torrentDownloader) Pause(ctx context.Context, job *models.DownloadJob) 
 		return errors.New(msg)
 	}
 
-	_ = t.Stop()
+	t.Stop()
 
 	// Stop the worker
 	err := workers.RemoveJob(job.Id)
@@ -105,16 +112,18 @@ func (d *torrentDownloader) Pause(ctx context.Context, job *models.DownloadJob) 
 	log.Debug().Msg("Download Paused")
 
 	d.muJob.Lock()
-	if activeJob, ok := d.ActiveJobs[job.Id]; ok {
-		activeJob.Status = models.StatusPaused
-	}
+	activeJob := d.ActiveJobs[job.Id]
 	d.muJob.Unlock()
-
+	if activeJob != nil {
+		activeJob.Status = models.StatusPaused
+		db.UpdateDownloadJobs(ctx, *activeJob)
+	}
+	log.Debug().Msg("Download Paused")
 	return nil
 }
 
 func (d *torrentDownloader) Resume(ctx context.Context, job *models.DownloadJob) error {
-	logger := log.With().Any("id", job.Id).Type("downloader", d).Logger()
+	logger := zlog.With().Any("id", job.Id).Type("downloader", d).Logger()
 
 	d.muItem.RLock()
 	t := d.ActiveItems[job.Id]
@@ -127,23 +136,32 @@ func (d *torrentDownloader) Resume(ctx context.Context, job *models.DownloadJob)
 		return err
 	}
 
-	_ = t.Start()
+	t.Start()
 
-	_, _ = workers.AddJobWithId(gocron.DurationJob(time.Second*2),
+	workers.AddJobWithId(gocron.DurationJob(time.Second*2),
 		gocron.NewTask(workers.TrackTorrentDownload, ctx, job.Id, t, d.createUpdater()), job.Id)
 
+	d.muJob.RLock()
+	j := d.ActiveJobs[job.Id]
+	d.muJob.RUnlock()
+	if j != nil {
+		j.Status = models.StatusDownloading
+		db.UpdateDownloadJobs(ctx, *j)
+	}
+
+	logger.Debug().Msg("Resumed download")
 	return nil
 }
 
 func (d *torrentDownloader) Delete(ctx context.Context, job *models.DownloadJob) error {
-	log := log.With().Any("id", job.Id).Type("downloader", d).Logger()
+	log := zlog.With().Any("id", job.Id).Type("downloader", d).Logger()
 
 	d.muItem.RLock()
 	t := d.ActiveItems[job.Id]
 	d.muItem.RUnlock()
 
 	if t == nil {
-		msg := "No active download found"
+		msg := "no active download found"
 		log.Error().Msg(msg)
 		return errors.New(msg)
 	}
@@ -161,16 +179,24 @@ func (d *torrentDownloader) Delete(ctx context.Context, job *models.DownloadJob)
 	delete(d.ActiveItems, job.Id)
 	d.muItem.Unlock()
 
+	d.muJob.RLock()
+	j := d.ActiveJobs[job.Id]
+	d.muJob.RUnlock()
+	if j != nil {
+		j.Status = models.StatusDeleted
+		db.UpdateDownloadJobs(ctx, *j)
+	}
+
 	d.muJob.Lock()
 	delete(d.ActiveJobs, job.Id)
 	d.muJob.Unlock()
 
-	// Remove files asynchronously: TODO: Not working rn
 	loc := job.Location
 	go func(loc string, t *torrent.Torrent) {
 		TorrentClient().RemoveTorrent(t.ID(), false)
 		<-t.NotifyClose()
 
+		// Retrying in case os takes time to release lock
 		_, err := backoff.Retry(ctx, func() (any, error) {
 			return nil, os.RemoveAll(loc)
 		}, backoff.WithMaxTries(5))
@@ -179,10 +205,11 @@ func (d *torrentDownloader) Delete(ctx context.Context, job *models.DownloadJob)
 		}
 	}(loc, t)
 
+	log.Debug().Msg("Removed torrent")
 	return nil
 }
 
-func (d *torrentDownloader) Status(ctx context.Context) ([]models.DownloadJob, error) {
+func (d *torrentDownloader) Status(_ context.Context) ([]models.DownloadJob, error) {
 	d.muJob.RLock()
 	defer d.muJob.RUnlock()
 
@@ -191,4 +218,36 @@ func (d *torrentDownloader) Status(ctx context.Context) ([]models.DownloadJob, e
 		jobs = append(jobs, *v)
 	}
 	return jobs, nil
+}
+
+func (d *torrentDownloader) RestoreJob(ctx context.Context, job *models.DownloadJob) {
+	// rain re-loads torrents by their ID from its own bolt store on session start.
+	t := TorrentClient().GetTorrent(job.EngineId) // look up by ID
+	if t == nil {
+		zlog.Warn().Any("id", job.Id).Msg("torrent not found in rain session — marking error")
+
+		_, err := d.Submit(ctx, job)
+		if err != nil {
+			job.Status = models.StatusError
+		}
+		db.UpdateDownloadJobs(ctx, *job)
+		return
+	}
+
+	d.muItem.Lock()
+	d.ActiveItems[job.Id] = t
+	d.muItem.Unlock()
+
+	d.muJob.Lock()
+	d.ActiveJobs[job.Id] = job
+	d.muJob.Unlock()
+
+	if job.Status == models.StatusPaused || job.Status == models.StatusError {
+		return // don't auto-resume
+	}
+
+	t.Start()
+
+	workers.AddJobWithId(gocron.DurationJob(time.Second*2),
+		gocron.NewTask(workers.TrackTorrentDownload, ctx, job.Id, t, d.createUpdater()), job.Id)
 }
