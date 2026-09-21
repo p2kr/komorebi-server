@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
 	"uuid"
 
 	"komorebi-server/src/dto"
@@ -28,6 +29,23 @@ var IUser = z.Struct(z.Shape{
 	"IsSandbox": z.Bool(),
 })
 
+var IUserOauth = z.Struct(z.Shape{
+	"Username":    z.String().Min(1),
+	"ProviderId":  z.Ptr(z.String().Min(1)),
+	"Provider":    z.StringLike[dto.MediaProvider]().Required(),
+	"IsSandbox":   z.Bool().False(),
+	"AccessToken": z.Ptr(z.String().Min(1)),
+})
+
+var IUserSandbox = z.Struct(z.Shape{
+	"Username":  z.String().Min(1),
+	"Provider":  z.StringLike[dto.MediaProvider]().Required(),
+	"IsSandbox": z.Bool().True(),
+	"AccessToken": z.Ptr(z.CustomFunc(func(ptr *string, _ z.Ctx) bool {
+		return ptr == nil
+	})),
+})
+
 // MarshalJSON Hides [Passcode] and [AccessToken]
 func (u *User) MarshalJSON() ([]byte, error) {
 	type Alias User
@@ -46,8 +64,16 @@ func (u *User) BeforeSave(tx *gorm.DB) error {
 
 	if u.AccessToken == nil || *u.AccessToken == "" {
 		u.IsSandbox = true
+		errs := IUserSandbox.Validate(u)
+		if errs != nil {
+			return fmt.Errorf("invalid user sandbox: %v", z.Issues.Flatten(errs))
+		}
 	} else {
 		u.IsSandbox = false
+		errs := IUserOauth.Validate(u)
+		if errs != nil {
+			return fmt.Errorf("invalid user sandbox: %v", z.Issues.Flatten(errs))
+		}
 	}
 
 	return nil

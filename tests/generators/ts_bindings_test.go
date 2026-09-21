@@ -16,9 +16,9 @@ func TestGenerateTypes(t *testing.T) {
 
 	println("outputting ts types at", outputPath)
 	commonTypeMappings := map[string]string{
-		"time.Time": "string /* RFC3339 */",
-		"uuid.UUID": "string /* uuid */",
-		// "Set[T comparable]": "Array<T>",
+		"time.Time":  "string /* RFC3339 */",
+		"uuid.UUID":  "string /* uuid */",
+		"mapset.Set": "/* mapset.Set */ Array",
 	}
 
 	config := &tygo.Config{
@@ -30,11 +30,9 @@ func TestGenerateTypes(t *testing.T) {
 				EnumStyle:  "enum",
 			},
 			{
-				Path:         "komorebi-server/src/dto",
-				OutputPath:   filepath.Join(outputPath, "dto.ts"),
-				EnumStyle:    "enum",
-				ExcludeFiles: []string{"utils.go"},
-				Frontmatter:  "export type Set<T> = globalThis.Set<T>;\n",
+				Path:       "komorebi-server/src/dto",
+				OutputPath: filepath.Join(outputPath, "dto.ts"),
+				EnumStyle:  "enum",
 			},
 			{
 				Path:       "komorebi-server/src/models",

@@ -9,6 +9,7 @@ import (
 	"komorebi-server/src/models"
 
 	"github.com/rs/zerolog/log"
+	"github.com/tidwall/gjson"
 	"resty.dev/v3"
 )
 
@@ -110,21 +111,18 @@ func (c *MalClient) ValidateNewUser(accessToken string) error {
 		return fmt.Errorf("%w response %s", err, resp.Status())
 	}
 
-	var result struct {
-		name    string
-		id      string
-		picture string
-	}
+	name := gjson.GetBytes(resp.Bytes(), "name")
+	id := gjson.GetBytes(resp.Bytes(), "id")
+	picture := gjson.GetBytes(resp.Bytes(), "picture")
 
-	err = json.Unmarshal(resp.Bytes(), &result)
-	if err != nil {
+	if !name.Exists() {
 		log.Err(err).Str("response", resp.String()).Msg("Failed to unmarshal resp")
 		return err
 	}
 
-	c.user.Username = result.name
-	c.user.ProviderId = &result.id
-	c.user.AvatarUrl = &result.picture
+	c.user.Username = name.String()
+	c.user.ProviderId = new(id.String())
+	c.user.AvatarUrl = new(picture.String())
 	c.user.Provider = dto.MediaProviderMAL
 	c.user.AccessToken = &accessToken
 	c.user.IsSandbox = false
@@ -147,14 +145,11 @@ func (c *MalClient) ExchangeOauthToken(code, codeVerifier string) (string, error
 		return "", err
 	}
 
-	var result struct {
-		access_token string
-	}
-	err = json.Unmarshal(resp.Bytes(), &result)
-	if err != nil {
+	result := gjson.GetBytes(resp.Bytes(), "access_token")
+	if !result.Exists() {
 		log.Err(err).Str("response", resp.String()).Msg("Failed to unmarshal resp")
 		return "", err
 	}
 
-	return result.access_token, nil
+	return result.String(), nil
 }

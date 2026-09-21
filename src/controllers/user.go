@@ -23,6 +23,7 @@ func UserRoutes(g *echo.Group) {
 	r.POST("/add", AddUser)
 	r.Match([]string{"GET", "POST"}, "/all", GetUsers)
 	r.POST("/delete", DeleteUser)
+	r.POST("/oauth/exchange", ExchangeOauthToken)
 }
 
 func AddUser(c *echo.Context) error {
@@ -83,7 +84,7 @@ func DeleteUser(c *echo.Context) error {
 }
 
 func validateUser(user *models.User) error {
-	client := adapters.GetMediaClient(dto.MediaProvider(user.Provider), httpClient, user)
+	client := adapters.GetMediaClient(user.Provider, httpClient, user)
 
 	if user.AccessToken != nil {
 		log.Info().Msg("Fetching username and avatar url for user")
@@ -111,4 +112,23 @@ func validateUser(user *models.User) error {
 	}
 
 	return err
+}
+
+func ExchangeOauthToken(c *echo.Context) error {
+	var params dto.ExchangeOauthParams
+	err := c.Bind(&params)
+	if err != nil {
+		return fail(c, http.StatusBadRequest, err)
+	}
+	errs := dto.IExchangeOauthParams.Validate(&params)
+	if errs != nil {
+		return fail(c, http.StatusBadRequest, fmt.Errorf("%v", zog.Issues.Flatten(errs)))
+	}
+
+	client := adapters.GetMediaClient(params.Provider, httpClient, nil)
+	token, err := client.ExchangeOauthToken(params.Code, params.CodeVerifier)
+	if err != nil {
+		return fail(c, http.StatusBadRequest, err)
+	}
+	return success(c, token)
 }

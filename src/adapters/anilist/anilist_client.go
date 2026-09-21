@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"komorebi-server/configs"
@@ -12,6 +11,7 @@ import (
 	"komorebi-server/src/models"
 
 	"github.com/rs/zerolog/log"
+	"github.com/tidwall/gjson"
 	"resty.dev/v3"
 )
 
@@ -186,28 +186,18 @@ func (c *AnilistClient) ValidateNewUser(accessToken string) error {
 		return fmt.Errorf("%w response %s", err, resp.Status())
 	}
 
-	var result struct {
-		Data struct {
-			Viewer struct {
-				Name   string `json:"name"`
-				Id     int    `json:"id"`
-				Avatar struct {
-					Medium string `json:"medium"`
-				} `json:"avatar"`
-			} `json:"viewer"`
-		} `json:"data"`
-	}
+	name := gjson.GetBytes(resp.Bytes(), "data.Viewer.name")
+	id := gjson.GetBytes(resp.Bytes(), "data.Viewer.id")
+	avatar := gjson.GetBytes(resp.Bytes(), "data.Viewer.avatar.medium")
 
-	err = json.Unmarshal(resp.Bytes(), &result)
-	if err != nil {
+	if !name.Exists() {
 		log.Err(err).Str("response", resp.String()).Msg("Failed to unmarshal resp")
 		return err
 	}
 
-	id := strconv.Itoa(result.Data.Viewer.Id)
-	c.user.Username = result.Data.Viewer.Name
-	c.user.ProviderId = &id
-	c.user.AvatarUrl = &result.Data.Viewer.Avatar.Medium
+	c.user.Username = name.String()
+	c.user.ProviderId = new(id.String())
+	c.user.AvatarUrl = new(avatar.String())
 	c.user.Provider = dto.MediaProviderAnilist
 	c.user.AccessToken = &accessToken
 	c.user.IsSandbox = false

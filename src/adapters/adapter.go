@@ -20,6 +20,8 @@ func GetMediaClient(provider dto.MediaProvider, client *resty.Client, user *mode
 	switch provider {
 	case dto.MediaProviderMAL:
 		return mal.NewMalClient(client, user)
+	case dto.MediaProviderAnilist:
+		return anilist.NewAnilistClient(client, user)
 	default:
 		return anilist.NewAnilistClient(client, user)
 	}
