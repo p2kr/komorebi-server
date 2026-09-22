@@ -9,20 +9,20 @@ import (
 type DownloadStatus string
 
 const (
-	StatusQueued      DownloadStatus = "Queued"
-	StatusDownloading DownloadStatus = "Downloading"
-	StatusPaused      DownloadStatus = "Paused"
-	StatusCompleted   DownloadStatus = "Completed"
-	StatusProcessing  DownloadStatus = "Processing"
-	StatusReady       DownloadStatus = "Ready"
-	StatusPartial     DownloadStatus = "Partial"
-	StatusError       DownloadStatus = "Error"
-	StatusDeleted     DownloadStatus = "Deleted"
+	DownloadStatusQueued      DownloadStatus = "QUEUED"
+	DownloadStatusDownloading DownloadStatus = "DOWNLOADING"
+	DownloadStatusPaused      DownloadStatus = "PAUSED"
+	DownloadStatusCompleted   DownloadStatus = "COMPLETED"
+	DownloadStatusProcessing  DownloadStatus = "PROCESSING"
+	DownloadStatusReady       DownloadStatus = "READY"
+	DownloadStatusPartial     DownloadStatus = "PARTIAL"
+	DownloadStatusError       DownloadStatus = "ERROR"
+	DownloadStatusDeleted     DownloadStatus = "DELETED"
 )
 
 // DownloadJob represents a snapshot of a download's current progress
 type DownloadJob struct {
-	Model
+	Model `tstype:",extends"`
 
 	Name string `json:"name"`
 	// specific id of each engine
@@ -64,7 +64,7 @@ func NewDownloadJob(engineId, location, url, name string) DownloadJob {
 		EngineId: engineId,
 		Location: loc,
 		Url:      url,
-		Status:   StatusQueued,
+		Status:   DownloadStatusQueued,
 		EtaSec:   -1,
 	}
 }

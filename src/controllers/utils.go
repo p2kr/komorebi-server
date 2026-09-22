@@ -23,18 +23,18 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-type SuccessResponse struct {
-	Success bool `json:"success"`
-	Data    any  `json:"data"`
+type SuccessResponse[T any] struct {
+	Success bool `json:"success" tstype:"true"`
+	Data    T    `json:"data"`
 }
 
 type FailureResponse struct {
-	Success bool   `json:"success"`
+	Success bool   `json:"success" tstype:"false | undefined"`
 	Message string `json:"message"`
-	Details []any  `json:"details,omitempty"`
+	Details any    `json:"details,omitempty"`
 }
 
-func success(c *echo.Context, data any, customStatus ...int) error {
+func success[T any](c *echo.Context, data T, customStatus ...int) error {
 	if strings.Contains(c.Request().Header.Get("Accept"), "application/x-msgpack") {
 		return successMsgPack(c, data)
 	}
@@ -42,14 +42,14 @@ func success(c *echo.Context, data any, customStatus ...int) error {
 	if len(customStatus) > 0 {
 		status = customStatus[0]
 	}
-	return c.JSON(status, SuccessResponse{
+	return c.JSON(status, SuccessResponse[T]{
 		Success: true,
 		Data:    data,
 	})
 }
 
-func successMsgPack(c *echo.Context, data any) error {
-	out, err := msgpack.Marshal(SuccessResponse{
+func successMsgPack[T any](c *echo.Context, data T) error {
+	out, err := msgpack.Marshal(SuccessResponse[T]{
 		Success: true,
 		Data:    data,
 	})
@@ -65,7 +65,7 @@ func fail(c *echo.Context, status int, error error, details ...any) error {
 	}
 	return c.JSON(status, FailureResponse{
 		Success: false,
-		Message: error.Error(),
+		Message: fmt.Sprintf("%s", error),
 		Details: details,
 	})
 }

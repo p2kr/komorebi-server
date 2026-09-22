@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -9,6 +10,7 @@ import (
 	"komorebi-server/src/dto"
 	"komorebi-server/src/parsers"
 
+	mapset "github.com/deckarep/golang-set/v3"
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
 )
@@ -21,6 +23,30 @@ func CrawlerRoutes(g *echo.Group) {
 	r := g.Group("/crawler")
 
 	r.POST("/search", SearchQuery)
+	r.POST("/parsed_title", ParsedTitle)
+}
+
+func ParsedTitle(c *echo.Context) error {
+	var params struct {
+		Title string `json:"title,omitempty"`
+	}
+	err := c.Bind(&params)
+	if err != nil {
+		return fail(c, http.StatusBadRequest, err)
+	}
+	if params.Title == "" {
+		return fail(c, http.StatusBadRequest, errors.New("title is required"))
+	}
+
+	parser := parsers.TitleParser{Ctx: c.Request().Context()}
+
+	parsedTitle := parser.Parse(params.Title)
+	if parsedTitle == nil {
+		parsedTitle = &dto.ParsedTitle{Title: mapset.NewSet(params.Title)}
+	} else if parsedTitle.Title.IsEmpty() || parsedTitle.Title.Equal(mapset.NewSet("")) {
+		parsedTitle.Title = mapset.NewSet(params.Title)
+	}
+	return success(c, parsedTitle)
 }
 
 func SearchQuery(c *echo.Context) error {

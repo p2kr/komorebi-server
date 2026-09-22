@@ -1,6 +1,8 @@
 package parsers
 
 import (
+	"strings"
+
 	"komorebi-server/src/dto"
 
 	mapset "github.com/deckarep/golang-set/v3"
@@ -52,10 +54,15 @@ func ToStringSet(value any) mapset.Set[string] {
 	x, ok := value.([]string)
 	if !ok {
 		y, ok := value.(string)
-		if !ok {
+		if !ok || strings.TrimSpace(y) == "" {
 			return nil
 		}
 		return mapset.NewSet(y)
 	}
+
+	if len(x) == 0 || (len(x) == 1 && strings.TrimSpace(x[0]) == "") {
+		return nil
+	}
+
 	return mapset.NewSet(x...)
 }

@@ -9,6 +9,8 @@ import (
 	"time"
 	"uuid"
 
+	"komorebi-server/src/db"
+
 	"komorebi-server/configs"
 
 	"komorebi-server/src/downloaders"
@@ -18,6 +20,7 @@ import (
 	"github.com/labstack/echo/v5"
 	zlog "github.com/rs/zerolog/log"
 	"github.com/samber/lo"
+	"gorm.io/gorm"
 )
 
 func VaultRoutes(g *echo.Group) {
@@ -28,6 +31,7 @@ func VaultRoutes(g *echo.Group) {
 	r.POST("/pause", Pause)
 	r.DELETE("/delete", Delete)
 	r.POST("/resume", Resume)
+	r.GET("/ready", Ready)
 }
 
 type AddPayload struct {
@@ -80,7 +84,7 @@ func Active(c *echo.Context) error {
 	ct := http.NewResponseController(resp)
 	ct.Flush()
 
-	ticker := time.NewTicker(time.Second * 2)
+	ticker := time.NewTicker(time.Second * 1)
 	defer ticker.Stop()
 
 	for {
@@ -179,4 +183,16 @@ func Resume(c *echo.Context) error {
 	log.Info().Msg("Resumed job")
 
 	return success(c, job)
+}
+
+func Ready(c *echo.Context) error {
+	jobs, err := gorm.G[models.DownloadJob](db.GetDb()).
+		Where("status in ?",
+			[]models.DownloadStatus{models.DownloadStatusCompleted, models.DownloadStatusReady}).
+		Find(c.Request().Context())
+	if err != nil {
+		return fail(c, http.StatusInternalServerError, err)
+	}
+	zlog.Debug().Msgf("Found %d ready jobs", len(jobs))
+	return success(c, jobs)
 }

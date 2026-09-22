@@ -46,9 +46,19 @@ var TorrentClient = sync.OnceValue(func() (cl *torrent.Session) {
 func (d *torrentDownloader) createUpdater() workers.JobUpdater {
 	return func(id uuid.UUID, updateFn func(*models.DownloadJob)) {
 		d.muJob.Lock()
-		defer d.muJob.Unlock()
-		if job, ok := d.ActiveJobs[id]; ok {
+		job, ok := d.ActiveJobs[id]
+		if ok {
 			updateFn(job)
+			if job.Status == models.DownloadStatusCompleted {
+				delete(d.ActiveJobs, id)
+			}
+		}
+		d.muJob.Unlock()
+
+		if ok && job.Status == models.DownloadStatusCompleted {
+			d.muItem.Lock()
+			delete(d.ActiveItems, id)
+			d.muItem.Unlock()
 		}
 	}
 }
@@ -115,7 +125,7 @@ func (d *torrentDownloader) Pause(ctx context.Context, job *models.DownloadJob) 
 	activeJob := d.ActiveJobs[job.Id]
 	d.muJob.Unlock()
 	if activeJob != nil {
-		activeJob.Status = models.StatusPaused
+		activeJob.Status = models.DownloadStatusPaused
 		db.UpdateDownloadJobs(ctx, *activeJob)
 	}
 	log.Debug().Msg("Download Paused")
@@ -145,7 +155,7 @@ func (d *torrentDownloader) Resume(ctx context.Context, job *models.DownloadJob)
 	j := d.ActiveJobs[job.Id]
 	d.muJob.RUnlock()
 	if j != nil {
-		j.Status = models.StatusDownloading
+		j.Status = models.DownloadStatusDownloading
 		db.UpdateDownloadJobs(ctx, *j)
 	}
 
@@ -183,7 +193,7 @@ func (d *torrentDownloader) Delete(ctx context.Context, job *models.DownloadJob)
 	j := d.ActiveJobs[job.Id]
 	d.muJob.RUnlock()
 	if j != nil {
-		j.Status = models.StatusDeleted
+		j.Status = models.DownloadStatusDeleted
 		db.UpdateDownloadJobs(ctx, *j)
 	}
 
@@ -193,10 +203,11 @@ func (d *torrentDownloader) Delete(ctx context.Context, job *models.DownloadJob)
 
 	loc := job.Location
 	go func(loc string, t *torrent.Torrent) {
-		TorrentClient().RemoveTorrent(t.ID(), false)
+		<-t.NotifyStop()
+		TorrentClient().RemoveTorrent(t.ID(), true)
 		<-t.NotifyClose()
 
-		// Retrying in case os takes time to release lock
+		// Retrying in case os takes time to release lock (e.g. Windows Defender)
 		_, err := backoff.Retry(ctx, func() (any, error) {
 			return nil, os.RemoveAll(loc)
 		}, backoff.WithMaxTries(5))
@@ -228,7 +239,7 @@ func (d *torrentDownloader) RestoreJob(ctx context.Context, job *models.Download
 
 		_, err := d.Submit(ctx, job)
 		if err != nil {
-			job.Status = models.StatusError
+			job.Status = models.DownloadStatusError
 		}
 		db.UpdateDownloadJobs(ctx, *job)
 		return
@@ -242,7 +253,7 @@ func (d *torrentDownloader) RestoreJob(ctx context.Context, job *models.Download
 	d.ActiveJobs[job.Id] = job
 	d.muJob.Unlock()
 
-	if job.Status == models.StatusPaused || job.Status == models.StatusError {
+	if job.Status == models.DownloadStatusPaused || job.Status == models.DownloadStatusError {
 		return // don't auto-resume
 	}
 

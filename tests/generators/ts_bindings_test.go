@@ -12,7 +12,7 @@ import (
 func TestGenerateTypes(t *testing.T) {
 	outputPath, err := filepath.Abs("../../../komorebi-web/src/lib/models/bindings")
 	// outputPath, err := filepath.Abs("./bindings")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	println("outputting ts types at", outputPath)
 	commonTypeMappings := map[string]string{
@@ -44,5 +44,5 @@ func TestGenerateTypes(t *testing.T) {
 	gen := tygo.New(config)
 	err = gen.Generate()
 
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }

@@ -93,8 +93,8 @@ func GetActiveJobs() []models.DownloadJob {
 func RestoreJobs(ctx context.Context) {
 	jobs, err := gorm.G[models.DownloadJob](db.GetDb()).Where("status not in ?",
 		[]models.DownloadStatus{
-			models.StatusCompleted, models.StatusDeleted,
-			models.StatusReady, models.StatusPartial, models.StatusProcessing,
+			models.DownloadStatusCompleted, models.DownloadStatusDeleted,
+			models.DownloadStatusReady, models.DownloadStatusPartial, models.DownloadStatusProcessing,
 		}).Find(ctx)
 	if err != nil {
 		zlog.Error().Err(err).Msg("Failed to restore jobs")

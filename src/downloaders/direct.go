@@ -35,9 +35,19 @@ var DirectClient = sync.OnceValue(func() *grab.Client {
 func (d *directDownloader) createUpdater() workers.JobUpdater {
 	return func(id uuid.UUID, updateFn func(*models.DownloadJob)) {
 		d.muJob.Lock()
-		defer d.muJob.Unlock()
-		if job, ok := d.ActiveJobs[id]; ok {
+		job, ok := d.ActiveJobs[id]
+		if ok {
 			updateFn(job)
+			if job.Status == models.DownloadStatusCompleted {
+				delete(d.ActiveJobs, id)
+			}
+		}
+		d.muJob.Unlock()
+
+		if ok && job.Status == models.DownloadStatusCompleted {
+			d.muItem.Lock()
+			delete(d.ActiveItems, id)
+			d.muItem.Unlock()
 		}
 	}
 }
@@ -103,7 +113,7 @@ func (d *directDownloader) Pause(ctx context.Context, job *models.DownloadJob) e
 		activeJob := d.ActiveJobs[job.Id]
 		d.muJob.Unlock()
 		if activeJob != nil {
-			activeJob.Status = models.StatusPaused
+			activeJob.Status = models.DownloadStatusPaused
 			db.UpdateDownloadJobs(ctx, *activeJob)
 		}
 
@@ -122,18 +132,24 @@ func (d *directDownloader) Resume(ctx context.Context, job *models.DownloadJob) 
 	d.muItem.RUnlock()
 
 	if resp == nil {
-		// Prevent accidental redownload
-		msg := "not an active job"
-		err := errors.New(msg)
-		log.Err(err).Msg(msg)
-		return err
+		req, err := grab.NewRequest(job.Location, job.Url)
+		if err != nil {
+			log.Err(err).Msg("failed to recreate grab request")
+			return err
+		}
+		req.WithContext(ctx)
+		resp = DirectClient().Do(req)
+
+		d.muItem.Lock()
+		d.ActiveItems[job.Id] = resp
+		d.muItem.Unlock()
+	} else {
+		resp = DirectClient().Do(resp.Request.WithContext(ctx))
+
+		d.muItem.Lock()
+		d.ActiveItems[job.Id] = resp
+		d.muItem.Unlock()
 	}
-
-	resp = DirectClient().Do(resp.Request.WithContext(ctx))
-
-	d.muItem.Lock()
-	d.ActiveItems[job.Id] = resp
-	d.muItem.Unlock()
 
 	workers.AddJobWithId(gocron.DurationJob(time.Second*2),
 		gocron.NewTask(workers.TrackDirectDownload, ctx, job.Id, resp, d.createUpdater()), job.Id)
@@ -142,7 +158,7 @@ func (d *directDownloader) Resume(ctx context.Context, job *models.DownloadJob) 
 	j := d.ActiveJobs[job.Id]
 	d.muJob.RUnlock()
 	if j != nil {
-		j.Status = models.StatusDownloading
+		j.Status = models.DownloadStatusDownloading
 		db.UpdateDownloadJobs(ctx, *j)
 	}
 
@@ -174,7 +190,7 @@ func (d *directDownloader) Delete(ctx context.Context, job *models.DownloadJob) 
 		j := d.ActiveJobs[job.Id]
 		d.muJob.RUnlock()
 		if j != nil {
-			j.Status = models.StatusDeleted
+			j.Status = models.DownloadStatusDeleted
 			db.UpdateDownloadJobs(ctx, *j)
 		}
 
@@ -212,7 +228,7 @@ func (d *directDownloader) RestoreJob(ctx context.Context, job *models.DownloadJ
 	d.muJob.Unlock()
 
 	switch job.Status {
-	case models.StatusPaused, models.StatusError:
+	case models.DownloadStatusPaused, models.DownloadStatusError:
 		return // Do nothing. User has to resume manually
 	}
 
@@ -221,7 +237,7 @@ func (d *directDownloader) RestoreJob(ctx context.Context, job *models.DownloadJ
 		zlog.Err(err).Any("id", job.Id).Msg("failed to recreate grab request on restore")
 		_, err := d.Submit(ctx, job)
 		if err != nil {
-			job.Status = models.StatusError
+			job.Status = models.DownloadStatusError
 			db.UpdateDownloadJobs(ctx, *job)
 		}
 		return

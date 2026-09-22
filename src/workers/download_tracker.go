@@ -25,7 +25,7 @@ func TrackDirectDownload(ctx context.Context, id uuid.UUID, resp *grab.Response,
 	var j models.DownloadJob
 
 	updater(id, func(job *models.DownloadJob) {
-		job.Status = models.StatusDownloading
+		job.Status = models.DownloadStatusDownloading
 		job.DownloadSpeed = int64(resp.BytesPerSecond())
 		job.DownloadedSize = resp.BytesComplete()
 
@@ -40,11 +40,11 @@ func TrackDirectDownload(ctx context.Context, id uuid.UUID, resp *grab.Response,
 			err = resp.Err()
 
 			if errors.Is(err, context.Canceled) {
-				job.Status = models.StatusPaused
+				job.Status = models.DownloadStatusPaused
 			} else if err != nil {
-				job.Status = models.StatusError
+				job.Status = models.DownloadStatusError
 			} else {
-				job.Status = models.StatusCompleted
+				job.Status = models.DownloadStatusCompleted
 				job.Progress = 100
 			}
 
@@ -64,37 +64,27 @@ func TrackDirectDownload(ctx context.Context, id uuid.UUID, resp *grab.Response,
 
 func TrackTorrentDownload(ctx context.Context, id uuid.UUID, t *torrent.Torrent, updater JobUpdater) {
 	log := zlog.With().Any("id", id).Logger()
-	hasMetadata, isComplete := false, false
+	isComplete := false
 
 	select {
-	case <-t.NotifyMetadata():
-		hasMetadata = true
-		break
 	case <-t.NotifyComplete():
-		hasMetadata = true
 		isComplete = true
-		break
-	case <-t.NotifyStop():
-		hasMetadata = true
-		break
 	default:
-		break
 	}
 
 	var err error
 	var j models.DownloadJob
 
 	updater(id, func(job *models.DownloadJob) {
-		job.Status = models.StatusDownloading
+		job.Status = models.DownloadStatusDownloading
+		stats := t.Stats()
 
-		if !hasMetadata {
-			job.Status = models.StatusQueued
+		if stats.Bytes.Total == 0 {
+			job.Status = models.DownloadStatusQueued
 			job.DownloadSpeed = 0
 			job.EtaSec = -1
 			return
 		}
-
-		stats := t.Stats()
 
 		job.DownloadSpeed = int64(stats.Speed.Download)
 		job.DownloadedSize = stats.Bytes.Completed
@@ -113,11 +103,11 @@ func TrackTorrentDownload(ctx context.Context, id uuid.UUID, t *torrent.Torrent,
 
 		err = stats.Error
 		if err != nil {
-			job.Status = models.StatusError
+			job.Status = models.DownloadStatusError
 		}
 
 		if isComplete {
-			job.Status = models.StatusCompleted
+			job.Status = models.DownloadStatusCompleted
 			job.Progress = 100
 			job.DownloadSpeed = 0
 			job.EtaSec = 0
