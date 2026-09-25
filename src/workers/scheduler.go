@@ -2,6 +2,7 @@ package workers
 
 import (
 	"context"
+	"time"
 	"uuid"
 
 	guuid "github.com/google/uuid"
@@ -38,13 +39,26 @@ func CloseScheduler() {
 
 func AddJob(jd gocron.JobDefinition, task gocron.Task, opts ...gocron.JobOption) (gocron.Job, error) {
 	job, err := scheduler.NewJob(jd, task, opts...)
+	if err != nil {
+		log.Err(err).Msg("Failed to add job to scheduler")
+		return nil, err
+	}
 	log.Debug().Err(err).Any("ID", job.ID()).Any("schedule", job.Schedule()).Msg("Job scheduled")
-	return job, err
+	return job, nil
 }
 
 func AddJobWithId(jd gocron.JobDefinition, task gocron.Task, id uuid.UUID, opts ...gocron.JobOption) (gocron.Job, error) {
 	allOpts := append([]gocron.JobOption{gocron.WithIdentifier(guuid.UUID(id))}, opts...)
 	return scheduler.NewJob(jd, task, allOpts...)
+}
+
+func AddPeriodicJobWithId(period time.Duration, id uuid.UUID, task gocron.Task, opts ...gocron.JobOption) (gocron.Job, error) {
+	allOpts := append([]gocron.JobOption{gocron.WithIdentifier(guuid.UUID(id))}, opts...)
+	return AddJob(gocron.DurationJob(period), task, allOpts...)
+}
+
+func AddOneTimeJob(task gocron.Task, opts ...gocron.JobOption) (gocron.Job, error) {
+	return AddJob(gocron.OneTimeJob(gocron.OneTimeJobStartImmediately()), task, opts...)
 }
 
 func RemoveJob(id uuid.UUID) error {

@@ -14,6 +14,7 @@ const (
 	DownloadStatusPaused      DownloadStatus = "PAUSED"
 	DownloadStatusCompleted   DownloadStatus = "COMPLETED"
 	DownloadStatusProcessing  DownloadStatus = "PROCESSING"
+	DownloadStatusProcessed   DownloadStatus = "PROCESSED"
 	DownloadStatusReady       DownloadStatus = "READY"
 	DownloadStatusPartial     DownloadStatus = "PARTIAL"
 	DownloadStatusError       DownloadStatus = "ERROR"
@@ -43,6 +44,8 @@ type DownloadJob struct {
 	DownloadSpeed int64 `json:"download_speed" gorm:"-"`
 	// Eta in sec. Negative mean unknown
 	EtaSec int64 `json:"eta_sec" gorm:"-"`
+
+	VaultItems []VaultItem `json:"vault_items,omitempty" gorm:"constraint:OnDelete:CASCADE;"`
 }
 
 func NewDownloadJob(engineId, location, url, name string) DownloadJob {

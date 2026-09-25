@@ -6,12 +6,15 @@ import (
 	"net/url"
 	"uuid"
 
+	"komorebi-server/src/workers"
+
 	"komorebi-server/src/db"
 
 	"komorebi-server/src/models"
 
 	"github.com/cavaliergopher/grab/v3"
 	"github.com/cenkalti/rain/v2/torrent"
+	"github.com/go-co-op/gocron/v2"
 	zlog "github.com/rs/zerolog/log"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -93,14 +96,19 @@ func GetActiveJobs() []models.DownloadJob {
 func RestoreJobs(ctx context.Context) {
 	jobs, err := gorm.G[models.DownloadJob](db.GetDb()).Where("status not in ?",
 		[]models.DownloadStatus{
-			models.DownloadStatusCompleted, models.DownloadStatusDeleted,
-			models.DownloadStatusReady, models.DownloadStatusPartial, models.DownloadStatusProcessing,
+			models.DownloadStatusDeleted,
+			models.DownloadStatusReady, models.DownloadStatusPartial, models.DownloadStatusProcessed,
 		}).Find(ctx)
 	if err != nil {
 		zlog.Error().Err(err).Msg("Failed to restore jobs")
 	}
 	restored := 0
-	for i := range jobs {
+
+	completedJobs, incompleteJobs := lo.FilterReject(jobs, func(j models.DownloadJob, i int) bool {
+		return j.Status == models.DownloadStatusCompleted || j.Status == models.DownloadStatusProcessing
+	})
+
+	for i := range incompleteJobs {
 		downloader, err := GetDownloader(jobs[i].Url)
 		if err != nil {
 			zlog.Error().Any("id", jobs[i].Id).Err(err).Msg("Failed to restore job")
@@ -109,5 +117,13 @@ func RestoreJobs(ctx context.Context) {
 		restored += 1
 		downloader.RestoreJob(ctx, &jobs[i])
 	}
+
+	// Restore processing jobs
+	workers.AddJob(gocron.OneTimeJob(gocron.OneTimeJobStartImmediately()), gocron.NewTask(
+		func() {
+			workers.PostDownload(completedJobs...)
+		},
+	))
+
 	zlog.Info().Int("total", len(jobs)).Int("restored", restored).Msg("Restored jobs")
 }

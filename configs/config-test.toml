@@ -1,10 +1,28 @@
 [env]
-# Secrets are injected via environment variables (MAL_CLIENT_ID, ANILIST_CLIENT_ID).
-# Do NOT use ${...} placeholders here — koanf does not expand them.
 malClientId = ""
 anilistClientId = ""
 appEnv = "test"
+defaultHostedAuthPage = "https://p2kr.github.io/komorebi-web/auth.html"
+vaultLoc = "vault"
+
+[db]
+path = "assets/main.sqlite?mode=rwc"
+forceCreation = false
+debug = true
 
 [logger]
 logLevel = "debug"
 pretty = true
+printConfig = true
+printCrawling = false
+
+[frontend]
+staticPath = "../komorebi-web/build/"
+
+[httpClient]
+debug = false
+curlCmd = true
+crawlerTimoutSec = "60s"
+
+[torrentClient]
+debug = false

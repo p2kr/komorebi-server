@@ -1,12 +1,9 @@
 package models
 
 import (
-	"uuid"
-
 	"komorebi-server/src/dto"
 
 	"github.com/Oudwins/zog"
-	"gorm.io/gorm"
 )
 
 type CrawlerConfig struct {
@@ -32,11 +29,3 @@ var ICrawlerConfig = zog.Struct(zog.Shape{
 	"RowSelector":  zog.String().Min(1),
 	"LinkSelector": zog.String().Min(1),
 })
-
-func (c *CrawlerConfig) BeforeSave(tx *gorm.DB) error {
-	if c.Id == uuid.Nil() {
-		c.Id = uuid.NewV7()
-	}
-
-	return nil
-}

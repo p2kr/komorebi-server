@@ -5,8 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"komorebi-server/configs"
 	"komorebi-server/src/models"
+
+	"komorebi-server/configs"
 
 	"github.com/glebarez/sqlite"
 	"github.com/rs/zerolog/log"
@@ -62,8 +63,15 @@ func SetupDb() {
 	LoadSeedsInDb(appDb)
 }
 
+var dbModels = []any{
+	&models.User{}, &models.CrawlerConfig{},
+	&models.DownloadJob{}, &models.VaultItem{},
+	&models.VideoChapter{}, &models.VideoSubtitle{},
+	&models.AudioTrack{}, &models.VideoTrack{}, &models.SubtitleFont{},
+}
+
 func MigrateSchema(db *gorm.DB) {
-	err := db.AutoMigrate(&models.User{}, &models.CrawlerConfig{}, &models.DownloadJob{})
+	err := db.AutoMigrate(dbModels...)
 	if err != nil {
 		log.Err(err).Msg("Failed to migrate")
 	} else {
@@ -71,8 +79,10 @@ func MigrateSchema(db *gorm.DB) {
 	}
 }
 
+// DropSchema drops the schema from the database
+// Deprecated: Use only during the first run / dev mode
 func DropSchema(db *gorm.DB) {
-	err := db.Migrator().DropTable(&models.User{}, &models.CrawlerConfig{}, &models.DownloadJob{})
+	err := db.Migrator().DropTable(dbModels...)
 	if err != nil {
 		log.Err(err).Msg("Failed to drop table")
 	} else {

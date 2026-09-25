@@ -12,6 +12,7 @@ import (
 
 	"github.com/cavaliergopher/grab/v3"
 	"github.com/cenkalti/rain/v2/torrent"
+	"github.com/go-co-op/gocron/v2"
 	zlog "github.com/rs/zerolog/log"
 )
 
@@ -59,6 +60,11 @@ func TrackDirectDownload(ctx context.Context, id uuid.UUID, resp *grab.Response,
 		zlog.Err(err).Any("id", id).Msg("job completed")
 		db.UpdateDownloadJobs(ctx, j)
 		RemoveJob(id)
+
+		// Start Postprocess
+		AddJob(gocron.OneTimeJob(
+			gocron.OneTimeJobStartImmediately(),
+		), gocron.NewTask(PostDownload, j))
 	}
 }
 
@@ -119,5 +125,10 @@ func TrackTorrentDownload(ctx context.Context, id uuid.UUID, t *torrent.Torrent,
 		log.Err(err).Msg("job completed")
 		db.UpdateDownloadJobs(ctx, j)
 		RemoveJob(id)
+
+		// Start Postprocess
+		AddJob(gocron.OneTimeJob(
+			gocron.OneTimeJobStartImmediately(),
+		), gocron.NewTask(PostDownload, j))
 	}
 }
