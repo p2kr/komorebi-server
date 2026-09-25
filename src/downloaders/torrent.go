@@ -202,19 +202,17 @@ func (d *torrentDownloader) Delete(ctx context.Context, job *models.DownloadJob)
 	d.muJob.Unlock()
 
 	loc := job.Location
-	go func(loc string, t *torrent.Torrent) {
-		<-t.NotifyStop()
-		TorrentClient().RemoveTorrent(t.ID(), true)
-		<-t.NotifyClose()
+	TorrentClient().RemoveTorrent(t.ID(), true)
 
-		// Retrying in case os takes time to release lock (e.g. Windows Defender)
+	// Retrying in case os takes time to release lock (e.g. Windows Defender)
+	go func(loc string) {
 		_, err := backoff.Retry(ctx, func() (any, error) {
 			return nil, os.RemoveAll(loc)
 		}, backoff.WithMaxTries(5))
 		if err != nil {
 			log.Debug().Err(err).Str("loc", loc).Msg("failed to delete files after retries")
 		}
-	}(loc, t)
+	}(loc)
 
 	log.Debug().Msg("Removed torrent")
 	return nil
@@ -261,4 +259,20 @@ func (d *torrentDownloader) RestoreJob(ctx context.Context, job *models.Download
 
 	workers.AddJobWithId(gocron.DurationJob(time.Second*2),
 		gocron.NewTask(workers.TrackTorrentDownload, ctx, job.Id, t, d.createUpdater()), job.Id)
+}
+
+func (d *torrentDownloader) CleanupOrphans() {
+	d.muJob.RLock()
+	activeIds := make(map[string]bool)
+	for _, job := range d.ActiveJobs {
+		activeIds[job.EngineId] = true
+	}
+	d.muJob.RUnlock()
+
+	for _, t := range TorrentClient().ListTorrents() {
+		if !activeIds[t.ID()] {
+			zlog.Info().Str("id", t.ID()).Msg("Removing orphaned torrent from rain session")
+			TorrentClient().RemoveTorrent(t.ID(), true)
+		}
+	}
 }

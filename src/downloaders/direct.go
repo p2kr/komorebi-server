@@ -252,3 +252,7 @@ func (d *directDownloader) RestoreJob(ctx context.Context, job *models.DownloadJ
 	workers.AddJobWithId(gocron.DurationJob(time.Second*2),
 		gocron.NewTask(workers.TrackDirectDownload, ctx, job.Id, resp, d.createUpdater()), job.Id)
 }
+
+func (d *directDownloader) CleanupOrphans() {
+	// Direct downloader doesn't have an independent state to clean up
+}

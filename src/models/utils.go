@@ -15,9 +15,9 @@ type Model struct {
 
 type VaultModel struct {
 	Model       `tstype:",extends"`
-	VaultItemId uuid.UUID
-	FilePath    string
-	StreamIdx   int64
+	VaultItemId uuid.UUID `json:"vault_item_id,omitempty"`
+	FilePath    string    `json:"file_path,omitempty"`
+	StreamIdx   int64     `json:"stream_idx,omitempty"`
 }
 
 func (v *Model) BeforeSave(tx *gorm.DB) error {

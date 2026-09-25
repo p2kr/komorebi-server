@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"komorebi-server/src/dto"
+
 	"komorebi-server/src/db"
 
 	"komorebi-server/src/models"
@@ -101,6 +103,11 @@ func identifyFile(path string) (models.VaultItem, error) {
 
 	item.SizeInBytes = gjson.Get(probe, "format.size").Int()
 	item.DurationSec = gjson.Get(probe, "format.duration").Float()
+	if item.DurationSec == 0 {
+		return item, nil
+	}
+
+	item.FileType = dto.MediaTypeAnime
 
 	var chapters []models.VideoChapter
 	var videoTracks []models.VideoTrack

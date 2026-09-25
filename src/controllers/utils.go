@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"uuid"
 
 	"komorebi-server/configs"
 	"komorebi-server/src/db"
@@ -16,6 +17,7 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"resty.dev/v3"
 
 	"github.com/maypok86/otter/v2"
@@ -29,9 +31,10 @@ type SuccessResponse[T any] struct {
 }
 
 type FailureResponse struct {
-	Success bool   `json:"success" tstype:"false | undefined"`
-	Message string `json:"message"`
-	Details any    `json:"details,omitempty"`
+	Success    bool   `json:"success" tstype:"false | undefined"`
+	StatusCode int    `json:"status_code"`
+	Message    string `json:"message"`
+	Details    any    `json:"details,omitempty"`
 }
 
 func success[T any](c *echo.Context, data T, customStatus ...int) error {
@@ -64,9 +67,10 @@ func fail(c *echo.Context, status int, error error, details ...any) error {
 		return failMsgPack(c, status, error, details...)
 	}
 	return c.JSON(status, FailureResponse{
-		Success: false,
-		Message: fmt.Sprintf("%s", error),
-		Details: details,
+		Success:    false,
+		StatusCode: status,
+		Message:    fmt.Sprintf("%s", error),
+		Details:    details,
 	})
 }
 
@@ -202,4 +206,27 @@ func validateUrl(u string) error {
 	}
 
 	return nil
+}
+
+var vaultItemsCache = sync.OnceValue(func() *otter.Cache[uuid.UUID, models.VaultItem] {
+	cache, err := otter.New(&otter.Options[uuid.UUID, models.VaultItem]{
+		MaximumSize: 1000,
+	})
+	if err != nil {
+		log.Err(err).Msg("failed to create vault items cache")
+	}
+	return cache
+})
+
+func GetCachedVaultItems(key uuid.UUID) (models.VaultItem, bool) {
+	return vaultItemsCache().ComputeIfAbsent(key, func() (newValue models.VaultItem, cancel bool) {
+		var vaultItem models.VaultItem
+		err := db.GetDb().Preload(clause.Associations).Where("id = ?", key).
+			Find(&vaultItem).Error
+		if err != nil {
+			log.Err(err).Msg("failed to fetch vault items")
+			return models.VaultItem{}, true
+		}
+		return vaultItem, false
+	})
 }

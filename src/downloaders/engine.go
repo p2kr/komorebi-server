@@ -1,9 +1,11 @@
 package downloaders
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/url"
+	"slices"
 	"uuid"
 
 	"komorebi-server/src/workers"
@@ -36,6 +38,9 @@ type Downloader interface {
 
 	// RestoreJob restores a download job from the database
 	RestoreJob(ctx context.Context, job *models.DownloadJob)
+
+	// CleanupOrphans cleans up independent states like orphaned torrents in the client
+	CleanupOrphans()
 }
 
 var (
@@ -90,6 +95,11 @@ func GetActiveJobs() []models.DownloadJob {
 	t, _ := torr.Status(ctx)
 	jobs = append(jobs, t...)
 
+	// Sort jobs according to eta
+	slices.SortFunc(jobs, func(left, right models.DownloadJob) int {
+		return cmp.Compare(left.EtaSec, right.EtaSec)
+	})
+
 	return jobs
 }
 
@@ -108,14 +118,14 @@ func RestoreJobs(ctx context.Context) {
 		return j.Status == models.DownloadStatusCompleted || j.Status == models.DownloadStatusProcessing
 	})
 
-	for i := range incompleteJobs {
-		downloader, err := GetDownloader(jobs[i].Url)
+	for _, job := range incompleteJobs {
+		downloader, err := GetDownloader(job.Url)
 		if err != nil {
-			zlog.Error().Any("id", jobs[i].Id).Err(err).Msg("Failed to restore job")
+			zlog.Error().Any("id", job.Id).Err(err).Msg("Failed to restore job")
 			continue
 		}
 		restored += 1
-		downloader.RestoreJob(ctx, &jobs[i])
+		downloader.RestoreJob(ctx, &job)
 	}
 
 	// Restore processing jobs
@@ -124,6 +134,10 @@ func RestoreJobs(ctx context.Context) {
 			workers.PostDownload(completedJobs...)
 		},
 	))
+
+	// Clean up any independent states (e.g., deleted torrents in rain session)
+	direct.CleanupOrphans()
+	torr.CleanupOrphans()
 
 	zlog.Info().Int("total", len(jobs)).Int("restored", restored).Msg("Restored jobs")
 }

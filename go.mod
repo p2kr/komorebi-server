@@ -20,8 +20,7 @@ require (
 	github.com/knadh/koanf/providers/env v1.1.0
 	github.com/knadh/koanf/providers/file v1.2.1
 	github.com/knadh/koanf/providers/rawbytes v1.0.1
-	github.com/knadh/koanf/v2 v2.3.6
-	github.com/kr/pretty v0.3.1
+	github.com/knadh/koanf/v2 v2.3.7
 	github.com/labstack/echo/v5 v5.3.1
 	github.com/maypok86/otter/v2 v2.3.0
 	github.com/nssteinbrenner/anitogo v1.0.0
@@ -59,7 +58,7 @@ require (
 	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/juju/ratelimit v1.0.2 // indirect
 	github.com/knadh/koanf/maps v0.1.3 // indirect
-	github.com/kr/text v0.2.0 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mattn/go-sqlite3 v1.14.52 // indirect

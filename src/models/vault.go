@@ -5,25 +5,28 @@ import (
 	"strings"
 	"uuid"
 
+	"komorebi-server/src/dto"
+
 	"gorm.io/gorm"
 )
 
 type VaultItem struct {
 	Model `tstype:",extends"`
 
-	DownloadJobId uuid.UUID
+	DownloadJobId uuid.UUID `json:"download_job_id"`
 
-	FileName string
-	FilePath string
+	FileName string        `json:"file_name"`
+	FilePath string        `json:"file_path"`
+	FileType dto.MediaType `json:"file_type,omitempty"`
 
-	DurationSec float64
-	SizeInBytes int64
+	DurationSec float64 `json:"duration_sec,omitempty"`
+	SizeInBytes int64   `json:"size_in_bytes"`
 
-	VideoChapters  []VideoChapter  `gorm:"constraint:OnDelete:CASCADE;"`
-	VideoSubtitles []VideoSubtitle `gorm:"constraint:OnDelete:CASCADE;"`
-	SubtitleFonts  []SubtitleFont  `gorm:"constraint:OnDelete:CASCADE;"`
-	AudioTracks    []AudioTrack    `gorm:"constraint:OnDelete:CASCADE;"`
-	VideoTracks    []VideoTrack    `gorm:"constraint:OnDelete:CASCADE;"`
+	VideoChapters  []VideoChapter  `gorm:"constraint:OnDelete:CASCADE;" json:"video_chapters,omitempty"`
+	VideoSubtitles []VideoSubtitle `gorm:"constraint:OnDelete:CASCADE;" json:"video_subtitles,omitempty"`
+	SubtitleFonts  []SubtitleFont  `gorm:"constraint:OnDelete:CASCADE;" json:"subtitle_fonts,omitempty"`
+	AudioTracks    []AudioTrack    `gorm:"constraint:OnDelete:CASCADE;" json:"audio_tracks,omitempty"`
+	VideoTracks    []VideoTrack    `gorm:"constraint:OnDelete:CASCADE;" json:"video_tracks,omitempty"`
 }
 
 func (v *VaultItem) BeforeSave(tx *gorm.DB) error {
@@ -40,39 +43,39 @@ func (v *VaultItem) BeforeSave(tx *gorm.DB) error {
 
 type VideoChapter struct {
 	VaultModel `tstype:",extends"`
-	ChapterId  int
-	Title      string
-	StartTime  float64
-	EndTime    float64
+	ChapterId  int     `json:"chapter_id,omitempty"`
+	Title      string  `json:"title,omitempty"`
+	StartTime  float64 `json:"start_time,omitempty"`
+	EndTime    float64 `json:"end_time,omitempty"`
 }
 
 type VideoSubtitle struct {
 	VaultModel `tstype:",extends"`
-	Track      int
-	Lang       string
-	Title      string
-	Format     string
-	IsForced   bool
+	Track      int    `json:"track,omitempty"`
+	Lang       string `json:"lang,omitempty"`
+	Title      string `json:"title,omitempty"`
+	Format     string `json:"format,omitempty"`
+	IsForced   bool   `json:"is_forced,omitempty"`
 }
 
 type VideoTrack struct {
 	VaultModel `tstype:",extends"`
-	Codec      string
-	PixFmt     string
-	IsPrimary  bool
+	Codec      string `json:"codec,omitempty"`
+	PixFmt     string `json:"pix_fmt,omitempty"`
+	IsPrimary  bool   `json:"is_primary,omitempty"`
 }
 
 type AudioTrack struct {
 	VaultModel `tstype:",extends"`
-	Lang       string
-	Title      string
-	Channels   int64
-	Codec      string
-	IsDefault  bool
+	Lang       string `json:"lang,omitempty"`
+	Title      string `json:"title,omitempty"`
+	Channels   int64  `json:"channels,omitempty"`
+	Codec      string `json:"codec,omitempty"`
+	IsDefault  bool   `json:"is_default,omitempty"`
 }
 
 type SubtitleFont struct {
 	VaultModel `tstype:",extends"`
-	FontName   string
-	Format     string
+	FontName   string `json:"font_name,omitempty"`
+	Format     string `json:"format,omitempty"`
 }
