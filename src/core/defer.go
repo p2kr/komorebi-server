@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 
 	"komorebi-server/src/db"
 	"komorebi-server/src/downloaders"
@@ -18,4 +20,8 @@ func Defer() {
 	}
 
 	downloaders.TorrentClient().Close()
+
+	// Remove temp dir
+	tempDir := filepath.Join(os.TempDir(), "KOMOREBI")
+	os.RemoveAll(tempDir)
 }

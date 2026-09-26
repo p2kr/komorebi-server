@@ -37,6 +37,8 @@ type FailureResponse struct {
 	Details    any    `json:"details,omitempty"`
 }
 
+const KOMOREBI = "komorebi"
+
 func success[T any](c *echo.Context, data T, customStatus ...int) error {
 	if strings.Contains(c.Request().Header.Get("Accept"), "application/x-msgpack") {
 		return successMsgPack(c, data)

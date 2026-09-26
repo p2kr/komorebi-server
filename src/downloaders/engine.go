@@ -129,11 +129,13 @@ func RestoreJobs(ctx context.Context) {
 	}
 
 	// Restore processing jobs
-	workers.AddJob(gocron.OneTimeJob(gocron.OneTimeJobStartImmediately()), gocron.NewTask(
-		func() {
-			workers.PostDownload(completedJobs...)
-		},
-	))
+	if len(completedJobs) > 0 {
+		workers.AddJob(gocron.OneTimeJob(gocron.OneTimeJobStartImmediately()), gocron.NewTask(
+			func() {
+				workers.PostDownload(completedJobs...)
+			},
+		))
+	}
 
 	// Clean up any independent states (e.g., deleted torrents in rain session)
 	direct.CleanupOrphans()
