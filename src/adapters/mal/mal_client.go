@@ -36,7 +36,7 @@ func (c *MalClient) fetchList(params *dto.MediaClientParams, isManga bool) (dto.
 	var endpoint string
 	var fields string
 	if isManga {
-		endpoint = "managalist"
+		endpoint = "mangalist"
 		fields = MAL_MANGA_FIELDS
 	} else {
 		endpoint = "animelist"

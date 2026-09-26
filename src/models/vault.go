@@ -19,6 +19,7 @@ type VaultItem struct {
 	FilePath string        `json:"file_path"`
 	FileType dto.MediaType `json:"file_type,omitempty"`
 
+	Format      string  `json:"format,omitempty"`
 	DurationSec float64 `json:"duration_sec,omitempty"`
 	SizeInBytes int64   `json:"size_in_bytes"`
 

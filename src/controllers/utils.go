@@ -31,8 +31,8 @@ type SuccessResponse[T any] struct {
 }
 
 type FailureResponse struct {
-	Success    bool   `json:"success" tstype:"false | undefined"`
-	StatusCode int    `json:"status_code"`
+	Success    bool   `json:"success,omitempty" tstype:"false"`
+	StatusCode int    `json:"status_code,omitempty"`
 	Message    string `json:"message"`
 	Details    any    `json:"details,omitempty"`
 }

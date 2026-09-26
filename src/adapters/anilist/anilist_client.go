@@ -24,9 +24,9 @@ func NewAnilistClient(client *resty.Client, user *models.User) *AnilistClient {
 	return &AnilistClient{client: client, user: user}
 }
 
-const ANILIST_GRAPHQL_URL = "https://graphql.anilist.co"
+const GraphqlUrl = "https://graphql.anilist.co"
 
-const MEDIA_LIST_QUERY = `
+const MediaListQuery = `
 query ($userName: String, $type: MediaType, $status: MediaListStatus, $page: Int, $perPage: Int) {
   Page(page: $page, perPage: $perPage) {
     pageInfo {
@@ -77,7 +77,7 @@ query ($userName: String, $type: MediaType, $status: MediaListStatus, $page: Int
   }
 }`
 
-const USER_INFO_QUERY = `
+const UserInfoQuery = `
 query {
   Viewer {
     id
@@ -131,12 +131,12 @@ func (c *AnilistClient) fetchList(params *dto.MediaClientParams, mediaType strin
 	if params != nil && params.Status != nil {
 		status := normalizeAnilistStatus(*params.Status)
 		if status != "" {
-			variables["status"] = status
+			variables["status"] = strings.ToUpper(string(status))
 		}
 	}
 
 	payload := map[string]any{
-		"query":     MEDIA_LIST_QUERY,
+		"query":     MediaListQuery,
 		"variables": variables,
 	}
 
@@ -150,7 +150,7 @@ func (c *AnilistClient) fetchList(params *dto.MediaClientParams, mediaType strin
 
 	req.SetQueryParam("client_id", configs.GetConfig().Env.AnilistClientId)
 
-	resp, err := req.Post(ANILIST_GRAPHQL_URL)
+	resp, err := req.Post(GraphqlUrl)
 	if err != nil || resp.StatusCode() != 200 {
 		log.Err(err).Str("request", req.CurlCmd()).Msg("Failed to get anilist list")
 		return dto.PaginatedResponse{}, fmt.Errorf("%w response %s", err, resp.Status())
@@ -176,11 +176,11 @@ func (c *AnilistClient) GetMangaList(params dto.MediaClientParams) (dto.Paginate
 
 func (c *AnilistClient) ValidateNewUser(accessToken string) error {
 	req := c.client.R().SetBody(map[string]any{
-		"query":     USER_INFO_QUERY,
+		"query":     UserInfoQuery,
 		"client_id": configs.GetConfig().Env.AnilistClientId,
 	}).SetAuthToken(accessToken).SetHeader("Content-Type", "application/json")
 
-	resp, err := req.Post(ANILIST_GRAPHQL_URL)
+	resp, err := req.Post(GraphqlUrl)
 	if err != nil || resp.StatusCode() != 200 {
 		log.Err(err).Str("request", req.CurlCmd()).Msg("Failed to get anilist validation")
 		return fmt.Errorf("%w response %s", err, resp.Status())
