@@ -220,15 +220,53 @@ var vaultItemsCache = sync.OnceValue(func() *otter.Cache[uuid.UUID, models.Vault
 	return cache
 })
 
-func GetCachedVaultItems(key uuid.UUID) (models.VaultItem, bool) {
-	return vaultItemsCache().ComputeIfAbsent(key, func() (newValue models.VaultItem, cancel bool) {
-		var vaultItem models.VaultItem
-		err := db.GetDb().Preload(clause.Associations).Where("id = ?", key).
-			Find(&vaultItem).Error
-		if err != nil {
-			log.Err(err).Msg("failed to fetch vault items")
-			return models.VaultItem{}, true
+func GetCachedVaultItem(key uuid.UUID) (models.VaultItem, bool) {
+	if item, ok := vaultItemsCache().GetIfPresent(key); ok {
+		return item, true
+	}
+
+	var vaultItem models.VaultItem
+	err := db.GetDb().Preload(clause.Associations).Where("id = ?", key).First(&vaultItem).Error
+	if err != nil {
+		log.Err(err).Msg("failed to fetch vault items")
+		return models.VaultItem{}, false
+	}
+
+	if vaultItem.Status == models.DownloadStatusReady {
+		vaultItemsCache().Set(key, vaultItem)
+	}
+
+	return vaultItem, true
+}
+
+func GetCachedVaultItemsBulk(keys []uuid.UUID) map[uuid.UUID]models.VaultItem {
+	result := make(map[uuid.UUID]models.VaultItem)
+	var missingKeys []uuid.UUID
+
+	// 1. Try cache first
+	for _, key := range keys {
+		if item, ok := vaultItemsCache().GetIfPresent(key); ok {
+			result[key] = item
+		} else {
+			missingKeys = append(missingKeys, key)
 		}
-		return vaultItem, false
-	})
+	}
+
+	if len(missingKeys) == 0 {
+		return result
+	}
+
+	// 2. Fetch all missing from DB in one query
+	var missingItems []models.VaultItem
+	db.GetDb().Preload(clause.Associations).Where("id IN ?", missingKeys).Find(&missingItems)
+
+	// 3. Populate result and cache
+	for _, item := range missingItems {
+		result[item.Id] = item
+		if item.Status == models.DownloadStatusReady {
+			vaultItemsCache().Set(item.Id, item)
+		}
+	}
+
+	return result
 }

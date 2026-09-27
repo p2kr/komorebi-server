@@ -33,5 +33,8 @@ func Init() {
 	// Restore jobs
 	downloaders.RestoreJobs(ctx)
 
+	// Post Process pending vault items
+	workers.ScheduleRemuxJob()
+
 	log.Info().Msg("Initialized App")
 }

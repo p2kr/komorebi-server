@@ -19,9 +19,10 @@ type VaultItem struct {
 	FilePath string        `json:"file_path"`
 	FileType dto.MediaType `json:"file_type,omitempty"`
 
-	Format      string  `json:"format,omitempty"`
-	DurationSec float64 `json:"duration_sec,omitempty"`
-	SizeInBytes int64   `json:"size_in_bytes"`
+	Format      string         `json:"format,omitempty"`
+	DurationSec float64        `json:"duration_sec,omitempty"`
+	SizeInBytes int64          `json:"size_in_bytes"`
+	Status      DownloadStatus `json:"status,omitempty"`
 
 	VideoChapters  []VideoChapter  `gorm:"constraint:OnDelete:CASCADE;" json:"video_chapters,omitempty"`
 	VideoSubtitles []VideoSubtitle `gorm:"constraint:OnDelete:CASCADE;" json:"video_subtitles,omitempty"`
@@ -32,7 +33,7 @@ type VaultItem struct {
 
 func (v *VaultItem) BeforeSave(tx *gorm.DB) error {
 	if v.Id == uuid.Nil() {
-		v.Id = uuid.New()
+		v.Id = uuid.NewV7()
 	}
 
 	if strings.TrimSpace(v.FileName) == "" {

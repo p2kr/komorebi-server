@@ -19,7 +19,6 @@ import (
 	"komorebi-server/src/models"
 
 	"github.com/cenkalti/backoff/v7"
-	mapset "github.com/deckarep/golang-set/v3"
 	"github.com/labstack/echo/v5"
 	zlog "github.com/rs/zerolog/log"
 	"github.com/samber/lo"
@@ -234,19 +233,23 @@ func AllVaultItems(c *echo.Context) error {
 			}
 			zlog.Debug().Msgf("Found %d vault items", len(vaultItems))
 
-			validVaultIds := mapset.NewSetWithSize[uuid.UUID](0)
-
-			// Fetch remaining from cache
+			// Fetch remaining from cache in bulk
+			var ids []uuid.UUID
 			for i := range len(vaultItems) {
-				item, ok := GetCachedVaultItems(vaultItems[i].Id)
-				if ok {
-					vaultItems[i] = item
-					validVaultIds.Add(vaultItems[i].Id)
+				ids = append(ids, vaultItems[i].Id)
+			}
+
+			bulkItems := GetCachedVaultItemsBulk(ids)
+
+			var finalItems []models.VaultItem
+			for _, id := range ids {
+				if item, ok := bulkItems[id]; ok {
+					finalItems = append(finalItems, item)
 				}
 			}
 
 			// Send to stream
-			out, err := json.Marshal(vaultItems)
+			out, err := json.Marshal(finalItems)
 			if err != nil {
 				return err
 			}

@@ -2,10 +2,20 @@ package workers
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/sync/errgroup"
+
+	"github.com/cenkalti/backoff/v7"
+
+	"komorebi-server/src/processors"
+
+	"github.com/go-co-op/gocron/v2"
 
 	"komorebi-server/src/dto"
 
@@ -39,6 +49,9 @@ func PostDownload(jobs ...models.DownloadJob) {
 	ctx := context.Background()
 	// Save to db
 	db.SaveVaultItems(ctx, vaultItems...)
+
+	// Remux them in a background job
+	ScheduleRemuxJob(vaultItems...)
 }
 
 func postDownloadOne(job *models.DownloadJob) []models.VaultItem {
@@ -90,6 +103,7 @@ func identifyFile(path string) (models.VaultItem, error) {
 	item := models.VaultItem{
 		FileName: name,
 		FilePath: path,
+		Status:   models.DownloadStatusProcessing,
 	}
 
 	//  Invoke ffprobe
@@ -186,4 +200,60 @@ func identifyFile(path string) (models.VaultItem, error) {
 	item.SubtitleFonts = fonts
 
 	return item, nil
+}
+
+func ScheduleRemuxJob(items ...models.VaultItem) {
+	task := gocron.NewTask(func(givenItems []models.VaultItem) {
+		// Tie context to application lifecycle so ffmpeg dies on graceful shutdown (Ctrl+C)
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer cancel()
+
+		// Delete original files that failed to delete previously in a background goroutine
+		go func() {
+			var readyItems []models.VaultItem
+			db.GetDb().Where("status = ?", models.DownloadStatusReady).Find(&readyItems)
+			for _, rItem := range readyItems {
+				if _, err := os.Stat(rItem.FilePath); err == nil {
+					_, _ = backoff.Retry(context.Background(), func() (any, error) {
+						err := os.Remove(rItem.FilePath)
+						if err != nil && !errors.Is(err, os.ErrNotExist) {
+							return nil, err
+						}
+						return nil, nil
+					}, backoff.WithMaxTries(5))
+				}
+			}
+		}()
+
+		var targets []models.VaultItem
+
+		if len(givenItems) > 0 {
+			targets = givenItems
+		} else {
+			db.GetDb().Preload("VideoTracks").Preload("AudioTracks").Preload("VideoSubtitles").
+				Where("status != ?", models.DownloadStatusReady).Find(&targets)
+		}
+		zlog.Debug().Int("target size", len(targets)).Msg("post processing")
+
+		if len(targets) == 0 {
+			return
+		}
+
+		eg, egCtx := errgroup.WithContext(ctx)
+		eg.SetLimit(2) // Max 2 concurrent FFmpeg jobs
+		for i := range targets {
+			i := i
+			eg.Go(func() error {
+				processors.PostProcessor.ProcessOne(egCtx, &targets[i])
+				return nil
+			})
+		}
+		eg.Wait()
+		db.SaveVaultItems(ctx, targets...)
+	}, items)
+
+	_, err := AddOneTimeJob(task)
+	if err != nil {
+		zlog.Err(err).Msg("Failed to enqueue remux job")
+	}
 }
