@@ -14,7 +14,7 @@ import (
 
 type remux struct{}
 
-func (r *remux) Process(ctx context.Context, item models.VaultItem, outputDir string, startSegment int) error {
+func (r *remux) Process(ctx context.Context, item models.VaultItem, outputDir string) error {
 	input := item.FilePath
 	maps := []string{"0:v:0"}
 
@@ -29,15 +29,9 @@ func (r *remux) Process(ctx context.Context, item models.VaultItem, outputDir st
 				lang = fmt.Sprintf("Audio_%d", audioMapped+1)
 			}
 		}
-
-		defaultFlag := "no"
-		if a.IsDefault {
-			defaultFlag = "yes"
-		}
-
 		maps = append(maps, fmt.Sprintf("0:a:%d", i))
 		audioMaps = append(audioMaps,
-			fmt.Sprintf("a:%d,agroup:a,language:%s,default:%s", audioMapped, lang, defaultFlag))
+			fmt.Sprintf("a:%d,agroup:a,language:%s", audioMapped, lang))
 		audioMapped++
 	}
 
@@ -50,31 +44,21 @@ func (r *remux) Process(ctx context.Context, item models.VaultItem, outputDir st
 		varStreamMap.WriteString(" " + am)
 	}
 
-	outputKwargs := ffmpeg.KwArgs{
-		"f":                    "hls",
-		"hls_time":             "10",
-		"hls_playlist_type":    "vod",
-		"hls_segment_type":     "fmp4",
-		"master_pl_name":       "master.m3u8",
-		"hls_segment_filename": "stream_%v_%d.m4s",
-		"var_stream_map":       varStreamMap.String(),
-		"hls_flags":            "temp_file",
-		"map":                  maps,
-		"c:v":                  "copy",
-		"c:a":                  "copy",
-	}
-
-	if startSegment > 0 {
-		outputKwargs["start_number"] = startSegment
-	}
-
-	inputKwArgs := ffmpeg.KwArgs{}
-	if startSegment > 0 {
-		inputKwArgs["ss"] = startSegment * 10
+	kwargs := ffmpeg.KwArgs{
+		"f":                 "hls",
+		"hls_time":          "10",
+		"hls_playlist_type": "vod",
+		"hls_segment_type":  "fmp4",
+		"master_pl_name":    "master.m3u8",
+		"var_stream_map":    varStreamMap.String(),
+		"hls_flags":         "temp_file",
+		"map":               maps,
+		"c:v":               "copy",
+		"c:a":               "copy",
 	}
 
 	output := "stream_%v.m3u8"
-	stream := ffmpeg.Input(input, inputKwArgs).Output(output, outputKwargs)
+	stream := ffmpeg.Input(input, ffmpeg.KwArgs{}).Output(output, kwargs)
 	stream.Context = ctx
 
 	var stderr bytes.Buffer

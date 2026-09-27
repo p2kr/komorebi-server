@@ -104,7 +104,6 @@ func identifyFile(path string) (models.VaultItem, error) {
 	item.Format = gjson.Get(probe, "format.format_name").String()
 	item.SizeInBytes = gjson.Get(probe, "format.size").Int()
 	item.DurationSec = gjson.Get(probe, "format.duration").Float()
-	item.BitRate = gjson.Get(probe, "format.bit_rate").Int()
 	if item.DurationSec == 0 {
 		return item, nil
 	}

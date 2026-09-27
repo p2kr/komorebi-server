@@ -22,7 +22,6 @@ type VaultItem struct {
 	Format      string  `json:"format,omitempty"`
 	DurationSec float64 `json:"duration_sec,omitempty"`
 	SizeInBytes int64   `json:"size_in_bytes"`
-	BitRate     int64   `json:"bit_rate"`
 
 	VideoChapters  []VideoChapter  `gorm:"constraint:OnDelete:CASCADE;" json:"video_chapters,omitempty"`
 	VideoSubtitles []VideoSubtitle `gorm:"constraint:OnDelete:CASCADE;" json:"video_subtitles,omitempty"`
@@ -53,6 +52,7 @@ type VideoChapter struct {
 
 type VideoSubtitle struct {
 	VaultModel `tstype:",extends"`
+	Track      int    `json:"track,omitempty"`
 	Lang       string `json:"lang,omitempty"`
 	Title      string `json:"title,omitempty"`
 	Format     string `json:"format,omitempty"`
