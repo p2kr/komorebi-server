@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -60,12 +61,57 @@ func Stream(c *echo.Context) error {
 		Str("temp dir", tempDir).
 		Str("input file", inputFile).Msg("streaming vault item")
 
-	// Only start FFmpeg if they are requesting the main playlist, and it's not yet generating
-	if strings.HasSuffix(requestedFile, ".m3u8") {
-		if _, err := os.Stat(filepath.Join(tempDir, "master.m3u8")); os.IsNotExist(err) {
+	// 1. Dynamic Master Playlist
+	if requestedFile == "master.m3u8" {
+		c.Response().Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+		return c.String(http.StatusOK, processors.BuildMasterPlaylist(item))
+	}
+
+	// 2. Dynamic Segment Playlists
+	if strings.HasPrefix(requestedFile, "stream_") && strings.HasSuffix(requestedFile, ".m3u8") {
+		c.Response().Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+		return c.String(http.StatusOK, processors.BuildVODPlaylist(item, requestedFile))
+	}
+
+	// 3. Serve Segments and manage FFmpeg Lifecycle
+	segmentNum := 0
+	if before, ok := strings.CutSuffix(requestedFile, ".m4s"); ok {
+		parts := strings.Split(before, "_")
+		if len(parts) >= 3 {
+			fmt.Sscanf(parts[len(parts)-1], "%d", &segmentNum)
+		}
+	}
+
+	processors.TouchSession(item.Id)
+
+	// Check if file exists. If it doesn't, ensure FFmpeg is running from this segment
+	if _, err := os.Stat(filepath.Join(tempDir, requestedFile)); os.IsNotExist(err) {
+
+		// HEURISTIC: Check if this is a "far seek" jump
+		isSeek := false
+		if segmentNum > 1 {
+			// If we want segment 60, check if segment 59 exists.
+			// If 59 doesn't exist, FFmpeg isn't currently generating this area.
+			prevSegment := strings.Replace(
+				requestedFile,
+				fmt.Sprintf("_%d.m4s", segmentNum),
+				fmt.Sprintf("_%d.m4s", segmentNum-1),
+				1,
+			)
+			if _, err := os.Stat(filepath.Join(tempDir, prevSegment)); os.IsNotExist(err) {
+				isSeek = true
+			}
+		}
+
+		// If jumping ahead, kill the old session so GetOrCreateSession spins up a new one
+		if isSeek {
+			processors.RemoveSession(item.Id)
+		}
+
+		if ctx, isNew := processors.GetOrCreateSession(item.Id); isNew {
 			go func() {
-				err = processors.ProcessVideo(c.Request().Context(), item, tempDir)
-				//err = processors.RemuxProcessor.Process(c.Request().Context(), item, tempDir)
+				defer processors.RemoveSession(item.Id)
+				err = processors.ProcessVideo(ctx, item, tempDir, segmentNum)
 				if err != nil {
 					zlog.Err(err).Str("file", inputFile).Msg("processing failed")
 				}
