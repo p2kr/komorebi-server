@@ -245,15 +245,6 @@ func AllVaultItems(c *echo.Context) error {
 				}
 			}
 
-			go func() {
-				// Evict from the cache - sync or async?
-				for key := range vaultItemsCache().Keys() {
-					if !validVaultIds.Contains(key) {
-						vaultItemsCache().Invalidate(key)
-					}
-				}
-			}()
-
 			// Send to stream
 			out, err := json.Marshal(vaultItems)
 			if err != nil {
