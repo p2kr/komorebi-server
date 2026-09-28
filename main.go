@@ -7,12 +7,15 @@ import (
 	"syscall"
 	"time"
 
+	"komorebi-server/configs"
+
 	"komorebi-server/src/core"
 
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
 )
 
+//go:generate go install github.com/swaggo/swag/v2/cmd/swag@latest
 //go:generate swag fmt -d ./,./src/controllers
 //go:generate swag init --v3.1 -d ./,./src/controllers
 //go:generate go test -v ./tools -run "^TestGenerateTypes$"
@@ -35,8 +38,15 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	port := configs.GetConfig().Env.Port
+	if port == "" {
+		port = os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+	}
 	st := echo.StartConfig{
-		Address:         ":8080",
+		Address:         ":" + port,
 		GracefulTimeout: 5 * time.Second,
 	}
 

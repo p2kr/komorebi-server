@@ -3,7 +3,9 @@ package downloaders
 import (
 	"context"
 	"errors"
+	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 	"uuid"
@@ -34,7 +36,15 @@ var TorrentClient = sync.OnceValue(func() (cl *torrent.Session) {
 
 	config.DataDir = configs.GetConfig().Env.VaultLoc
 	config.CustomLogHandler = customTorrentLogger{}
-
+	config.Database = filepath.Join(configs.GetConfig().Env.VaultLoc, "torrents.db")
+	l, err := net.Listen("tcp", ":0")
+	if err == nil {
+		port := uint16(l.Addr().(*net.TCPAddr).Port)
+		l.Close()
+		config.PortBegin = port
+		config.PortEnd = 65535 // Ensure PortEnd > PortBegin to avoid 'invalid port range' error
+		config.DHTPort = port
+	}
 	s, err := torrent.NewSession(config)
 	if err != nil {
 		zlog.Err(err).Msg("Failed to initialize torrent session")

@@ -50,7 +50,8 @@ type Config struct {
 		AnilistClientId       string `koanf:"anilistClientId"`
 		AppEnv                string `koanf:"appEnv"`
 		DefaultHostedAuthPage string `koanf:"defaultHostedAuthPage"`
-		VaultLoc              string `koanf:"vaultLoc"`
+		VaultLoc              string
+		Port                  string `koanf:"port"`
 	} `koanf:"env"`
 	Db struct {
 		Path          string `koanf:"path"`
@@ -93,6 +94,7 @@ func LoadConfigs() {
 		"env.appEnv":                   "dev",
 		"env.defaultHostedAuthPage":    "https://p2kr.github.io/komorebi-web/auth.html",
 		"env.vaultLoc":                 "vault",
+		"env.port":                     "8080",
 		"db.path":                      "assets/main.sqlite",
 		"logger.logLevel":              "debug",
 		"logger.pretty":                false,
