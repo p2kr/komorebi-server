@@ -26,10 +26,23 @@ func CrawlerRoutes(g *echo.Group) {
 	r.POST("/parsed_title", ParsedTitle)
 }
 
+type ParsedTitleRequest struct {
+	Title string `json:"title"`
+}
+
+// ParsedTitle godoc
+//
+//	@Summary		Parse a title
+//	@Description	Parse a title and return the parsed components
+//	@Tags			crawler
+//	@Accept			json
+//	@Produce		json
+//	@Param			params	body		ParsedTitleRequest	true	"Title to parse"
+//	@Success		200		{object}	SuccessResponse[any]
+//	@Failure		400		{object}	FailureResponse
+//	@Router			/crawler/parsed_title [post]
 func ParsedTitle(c *echo.Context) error {
-	var params struct {
-		Title string `json:"title,omitempty"`
-	}
+	var params ParsedTitleRequest
 	err := c.Bind(&params)
 	if err != nil {
 		return fail(c, http.StatusBadRequest, err)
@@ -45,11 +58,26 @@ func ParsedTitle(c *echo.Context) error {
 	return success(c, parsedTitle)
 }
 
+type SearchQueryRequest struct {
+	MediaType dto.MediaType `json:"media_type"`
+	Query     string        `json:"query"`
+}
+
+// SearchQuery godoc
+//
+//	@Summary		Search for media
+//	@Description	Search crawlers for a specific query
+//	@Tags			crawler
+//	@Accept			json
+//	@Produce		json
+//	@Param			params	body		SearchQueryRequest	true	"Search parameters"
+//	@Success		200		{object}	SuccessResponse[any]
+//	@Failure		400		{object}	FailureResponse
+//	@Failure		404		{object}	FailureResponse
+//	@Failure		500		{object}	FailureResponse
+//	@Router			/crawler/search [post]
 func SearchQuery(c *echo.Context) error {
-	var params struct {
-		MediaType dto.MediaType
-		Query     string
-	}
+	var params SearchQueryRequest
 
 	err := c.Bind(&params)
 	if err != nil {

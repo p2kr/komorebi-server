@@ -1,4 +1,4 @@
-package generators
+package tools
 
 import (
 	"path/filepath"
@@ -8,9 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-//go:generate go test -v .
 func TestGenerateTypes(t *testing.T) {
-	outputPath, err := filepath.Abs("../../../komorebi-web/src/lib/models/bindings")
+	outputPath, err := filepath.Abs("../../komorebi-web/src/lib/models/bindings")
 	// outputPath, err := filepath.Abs("./bindings")
 	assert.NoError(t, err)
 

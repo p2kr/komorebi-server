@@ -20,6 +20,19 @@ func StreamRoutes(g *echo.Group) {
 	r.GET("/video/:vault_item_id/:file", Stream)
 }
 
+// Stream godoc
+//
+//	@Summary		Stream a video file
+//	@Description	Stream a video or associated static file from a downloaded vault item
+//	@Tags			stream
+//	@Produce		application/octet-stream, video/mp4, video/webm, image/jpeg, image/png
+//	@Param			vault_item_id	path		string	true	"Vault Item ID (UUID)"
+//	@Param			file			path		string	true	"Requested file name"
+//	@Success		200				{file}		file	"The requested file"
+//	@Failure		400				{object}	FailureResponse
+//	@Failure		404				{object}	FailureResponse
+//	@Failure		503				{object}	FailureResponse
+//	@Router			/stream/video/{vault_item_id}/{file} [get]
 func Stream(c *echo.Context) error {
 	vaultItemId := c.Param("vault_item_id")
 	requestedFile := c.Param("file")

@@ -43,6 +43,19 @@ type VaultAddPayload struct {
 	ShouldDownload bool              `json:"should_download"`
 }
 
+// Add godoc
+//
+//	@Summary		Add to vault
+//	@Description	Submit a crawler result to be downloaded to the vault
+//	@Tags			vault
+//	@Accept			json
+//	@Produce		json
+//	@Param			params	body		VaultAddPayload	true	"Vault Add Payload"
+//	@Success		202		{object}	SuccessResponse[models.DownloadJob]
+//	@Failure		400		{object}	FailureResponse
+//	@Failure		409		{object}	FailureResponse
+//	@Failure		500		{object}	FailureResponse
+//	@Router			/vault/add [post]
 func Add(c *echo.Context) error {
 	var params VaultAddPayload
 	if err := c.Bind(&params); err != nil {
@@ -92,7 +105,14 @@ func Add(c *echo.Context) error {
 	return success(c, job, http.StatusAccepted)
 }
 
-// Active Gets active download jobs
+// Active godoc
+//
+//	@Summary		Get active jobs
+//	@Description	SSE endpoint to stream active download jobs
+//	@Tags			vault
+//	@Produce		text/event-stream
+//	@Success		200	{string}	string	"Event stream"
+//	@Router			/vault/active [get]
 func Active(c *echo.Context) error {
 	resp := c.Response()
 	resp.Header().Set("Content-Type", "text/event-stream")
@@ -128,6 +148,19 @@ func Active(c *echo.Context) error {
 	}
 }
 
+// Delete godoc
+//
+//	@Summary		Delete a download job
+//	@Description	Delete a download job by ID
+//	@Tags			vault
+//	@Accept			json
+//	@Produce		json
+//	@Param			params	body		models.DownloadJob	true	"Job with ID"
+//	@Success		202		{object}	SuccessResponse[models.DownloadJob]
+//	@Failure		400		{object}	FailureResponse
+//	@Failure		404		{object}	FailureResponse
+//	@Failure		500		{object}	FailureResponse
+//	@Router			/vault/delete [delete]
 func Delete(c *echo.Context) error {
 	// expects job id
 	var j models.DownloadJob
@@ -154,6 +187,19 @@ func Delete(c *echo.Context) error {
 	return success(c, job, http.StatusAccepted)
 }
 
+// Pause godoc
+//
+//	@Summary		Pause a download job
+//	@Description	Pause a download job by ID
+//	@Tags			vault
+//	@Accept			json
+//	@Produce		json
+//	@Param			params	body		models.DownloadJob	true	"Job with ID"
+//	@Success		200		{object}	SuccessResponse[models.DownloadJob]
+//	@Failure		400		{object}	FailureResponse
+//	@Failure		404		{object}	FailureResponse
+//	@Failure		500		{object}	FailureResponse
+//	@Router			/vault/pause [post]
 func Pause(c *echo.Context) error {
 	// expects job id
 	var j models.DownloadJob
@@ -180,6 +226,19 @@ func Pause(c *echo.Context) error {
 	return success(c, job)
 }
 
+// Resume godoc
+//
+//	@Summary		Resume a download job
+//	@Description	Resume a download job by ID
+//	@Tags			vault
+//	@Accept			json
+//	@Produce		json
+//	@Param			params	body		models.DownloadJob	true	"Job with ID"
+//	@Success		200		{object}	SuccessResponse[models.DownloadJob]
+//	@Failure		400		{object}	FailureResponse
+//	@Failure		404		{object}	FailureResponse
+//	@Failure		500		{object}	FailureResponse
+//	@Router			/vault/resume [post]
 func Resume(c *echo.Context) error {
 	// expects job id
 	var j models.DownloadJob
@@ -206,6 +265,15 @@ func Resume(c *echo.Context) error {
 	return success(c, job)
 }
 
+// AllVaultItems godoc
+//
+//	@Summary		Get all vault items
+//	@Description	SSE endpoint to stream all vault items
+//	@Tags			vault
+//	@Produce		text/event-stream
+//	@Success		200	{string}	string	"Event stream"
+//	@Failure		500	{object}	FailureResponse
+//	@Router			/vault/all [get]
 func AllVaultItems(c *echo.Context) error {
 	resp := c.Response()
 	resp.Header().Set("Content-Type", "text/event-stream")
@@ -265,6 +333,19 @@ func AllVaultItems(c *echo.Context) error {
 	}
 }
 
+// DeleteVaultItem godoc
+//
+//	@Summary		Delete a vault item
+//	@Description	Delete a vault item by ID
+//	@Tags			vault
+//	@Accept			json
+//	@Produce		json
+//	@Param			params	body		models.VaultItem	true	"Vault Item with ID"
+//	@Success		200		{object}	SuccessResponse[models.VaultItem]
+//	@Failure		400		{object}	FailureResponse
+//	@Failure		404		{object}	FailureResponse
+//	@Failure		500		{object}	FailureResponse
+//	@Router			/vault/delete_vault_item [delete]
 func DeleteVaultItem(c *echo.Context) error {
 	var vaultItem models.VaultItem
 	var err error

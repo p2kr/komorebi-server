@@ -26,6 +26,19 @@ func UserRoutes(g *echo.Group) {
 	r.POST("/oauth/exchange", ExchangeOauthToken)
 }
 
+// AddUser godoc
+//
+//	@Summary		Add a new user
+//	@Description	Add a new user and validate them
+//	@Tags			user
+//	@Accept			json
+//	@Produce		json
+//	@Param			user	body		models.User	true	"User Data"
+//	@Success		200		{object}	SuccessResponse[models.User]
+//	@Failure		400		{object}	FailureResponse
+//	@Failure		406		{object}	FailureResponse
+//	@Failure		500		{object}	FailureResponse
+//	@Router			/user/add [post]
 func AddUser(c *echo.Context) error {
 	var user models.User
 	if err := c.Bind(&user); err != nil {
@@ -51,6 +64,16 @@ func AddUser(c *echo.Context) error {
 	return success(c, user)
 }
 
+// GetUsers godoc
+//
+//	@Summary		Get all users
+//	@Description	Get a list of all users
+//	@Tags			user
+//	@Produce		json
+//	@Success		200	{object}	SuccessResponse[[]models.User]
+//	@Failure		404	{object}	FailureResponse
+//	@Router			/user/all [get]
+//	@Router			/user/all [post]
 func GetUsers(c *echo.Context) error {
 	ctx := context.Background()
 	users, err := gorm.G[models.User](db.GetDb()).Find(ctx)
@@ -60,6 +83,19 @@ func GetUsers(c *echo.Context) error {
 	return success(c, users)
 }
 
+// DeleteUser godoc
+//
+//	@Summary		Delete a user
+//	@Description	Delete a user by their ID
+//	@Tags			user
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		map[string]string	true	"User ID"
+//	@Success		200		{object}	SuccessResponse[string]
+//	@Failure		400		{object}	FailureResponse
+//	@Failure		404		{object}	FailureResponse
+//	@Failure		500		{object}	FailureResponse
+//	@Router			/user/delete [post]
 func DeleteUser(c *echo.Context) error {
 	ctx := context.Background()
 
@@ -114,6 +150,17 @@ func validateUser(user *models.User) error {
 	return err
 }
 
+// ExchangeOauthToken godoc
+//
+//	@Summary		Exchange OAuth token
+//	@Description	Exchange OAuth token for a user
+//	@Tags			user
+//	@Accept			json
+//	@Produce		json
+//	@Param			params	body		dto.ExchangeOauthParams	true	"OAuth Exchange Params"
+//	@Success		200		{object}	SuccessResponse[any]
+//	@Failure		400		{object}	FailureResponse
+//	@Router			/user/oauth/exchange [post]
 func ExchangeOauthToken(c *echo.Context) error {
 	var params dto.ExchangeOauthParams
 	err := c.Bind(&params)

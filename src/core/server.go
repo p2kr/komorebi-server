@@ -11,6 +11,9 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/rs/zerolog/log"
+	echoSwagger "github.com/swaggo/echo-swagger/v2"
+
+	_ "komorebi-server/docs"
 )
 
 func GetServer() *echo.Echo {
@@ -54,6 +57,9 @@ func GetServer() *echo.Echo {
 
 	// Map Routers
 	g := e.Group("/api/v1")
+
+	// Swagger route
+	g.GET("/swagger/*", echoSwagger.WrapHandlerV3)
 
 	controllers.UserRoutes(g)
 	controllers.CrawlerRoutes(g)

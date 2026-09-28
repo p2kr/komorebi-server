@@ -21,6 +21,18 @@ func DashboardRoutes(g *echo.Group) {
 	r.POST("/:media_type", GetMedia)
 }
 
+// GetMedia godoc
+//
+//	@Summary		Get user media list
+//	@Description	Get a paginated list of anime or manga for a user
+//	@Tags			dashboard
+//	@Accept			json
+//	@Produce		json
+//	@Param			media_type	path		string					true	"Media Type (anime or manga)"
+//	@Param			params		body		dto.MediaClientParams	true	"Pagination and user params"
+//	@Success		200			{object}	SuccessResponse[dto.PaginatedResponse]
+//	@Failure		400			{object}	FailureResponse
+//	@Router			/dashboard/{media_type} [post]
 func GetMedia(c *echo.Context) error {
 	var params dto.MediaClientParams
 	err := c.Bind(&params)
