@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/text/language"
+	"golang.org/x/text/language/display"
 
 	"github.com/cenkalti/backoff/v7"
 
@@ -95,6 +97,19 @@ func postDownloadOne(job *models.DownloadJob) []models.VaultItem {
 	return vaultItems
 }
 
+func resolveLanguage(langCode string) string {
+	if langCode == "" {
+		return ""
+	}
+	tag, err := language.Parse(langCode)
+	if err == nil {
+		if parsedName := display.English.Tags().Name(tag); parsedName != "" {
+			return parsedName
+		}
+	}
+	return langCode
+}
+
 func identifyFile(path string) (models.VaultItem, error) {
 	log := zlog.With().Str("path", lo.Substring(path, 0, 25)).Logger()
 
@@ -158,27 +173,45 @@ func identifyFile(path string) (models.VaultItem, error) {
 
 		// Identify audio stream
 		if result.Get("codec_type").String() == "audio" {
+			lang := result.Get("tags.language").String()
+			title := result.Get("tags.title").String()
+			if title == "" {
+				title = resolveLanguage(lang)
+			}
+
 			audioTracks = append(audioTracks, models.AudioTrack{
 				StreamIdx: index,
 				IsDefault: result.Get("disposition.default").Bool(),
 				Codec:     result.Get("codec_name").String(),
 				Channels:  result.Get("channels").Int(),
-				Lang:      result.Get("tags.language").String(),
-				Title:     result.Get("tags.title").String(),
+				Lang:      lang,
+				Title:     title,
 			})
 			continue
 		}
 
 		// Identify Subtitles
 		if result.Get("codec_type").String() == "subtitle" {
-			subtitles = append(subtitles, models.VideoSubtitle{
-				StreamIdx: index,
-				IsForced: result.Get("disposition.default").Bool() ||
-					result.Get("disposition.forced").Bool(),
-				Format: result.Get("codec_name").String(),
-				Lang:   result.Get("tags.language").String(),
-				Title:  result.Get("tags.title").String(),
-			})
+			codec := strings.ToLower(result.Get("codec_name").String())
+			ext := processors.AllowedSubtitles[codec]
+			if ext != "" {
+				lang := result.Get("tags.language").String()
+				title := result.Get("tags.title").String()
+				if title == "" {
+					title = resolveLanguage(lang)
+				}
+
+				subtitles = append(subtitles, models.VideoSubtitle{
+					StreamIdx: index,
+					IsForced: result.Get("disposition.default").Bool() ||
+						result.Get("disposition.forced").Bool(),
+					Format: ext,
+					Lang:   lang,
+					Title:  title,
+				})
+			} else {
+				log.Debug().Str("codec_name", codec).Msg("Skipping subtitle")
+			}
 			continue
 		}
 
@@ -242,7 +275,6 @@ func ScheduleRemuxJob(items ...models.VaultItem) {
 		eg, egCtx := errgroup.WithContext(ctx)
 		eg.SetLimit(2) // Max 2 concurrent FFmpeg jobs
 		for i := range targets {
-			i := i
 			eg.Go(func() error {
 				processors.PostProcessor.ProcessOne(egCtx, &targets[i])
 				return nil

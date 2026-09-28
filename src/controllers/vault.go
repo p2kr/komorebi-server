@@ -231,7 +231,9 @@ func AllVaultItems(c *echo.Context) error {
 			if err != nil {
 				return fail(c, http.StatusInternalServerError, err)
 			}
-			zlog.Debug().Msgf("Found %d vault items", len(vaultItems))
+			if configs.GetConfig().Db.Debug {
+				zlog.Debug().Msgf("Found %d vault items", len(vaultItems))
+			}
 
 			// Fetch remaining from cache in bulk
 			var ids []uuid.UUID
