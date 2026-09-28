@@ -38,12 +38,8 @@ func ParsedTitle(c *echo.Context) error {
 		return fail(c, http.StatusBadRequest, errors.New("title is required"))
 	}
 
-	parser := parsers.TitleParser{Ctx: c.Request().Context()}
-
-	parsedTitle := parser.Parse(params.Title)
-	if parsedTitle == nil {
-		parsedTitle = &dto.ParsedTitle{Title: mapset.NewSet(params.Title)}
-	} else if parsedTitle.Title.IsEmpty() || parsedTitle.Title.Equal(mapset.NewSet("")) {
+	parsedTitle := parsers.Parse(params.Title)
+	if parsedTitle.Title.IsEmpty() || parsedTitle.Title.Equal(mapset.NewSet("")) {
 		parsedTitle.Title = mapset.NewSet(params.Title)
 	}
 	return success(c, parsedTitle)
@@ -80,8 +76,6 @@ func SearchQuery(c *echo.Context) error {
 		log.Err(err).Msg("Failed to crawl")
 		return fail(c, http.StatusInternalServerError, err)
 	}
-	tp := parsers.TitleParser{Ctx: ctx}
-	tp.ParseMany(res)
 
 	return success(c, res)
 }

@@ -60,6 +60,7 @@ require (
 	github.com/juju/ratelimit v1.0.2 // indirect
 	github.com/knadh/koanf/maps v0.1.3 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
+	github.com/lithammer/fuzzysearch v1.1.8 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mattn/go-sqlite3 v1.14.52 // indirect

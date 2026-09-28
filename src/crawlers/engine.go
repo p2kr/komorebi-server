@@ -6,12 +6,14 @@ import (
 	"sync"
 	"time"
 
+	"komorebi-server/src/parsers"
+
 	"komorebi-server/configs"
 	"komorebi-server/src/dto"
 	"komorebi-server/src/models"
 
 	mapset "github.com/deckarep/golang-set/v3"
-	"github.com/rs/zerolog/log"
+	zlog "github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"resty.dev/v3"
 )
@@ -28,7 +30,7 @@ type CrawlerEngine struct {
 	Ctx       context.Context
 }
 
-var crawlers = []Crawler{&gjsonCrawler{}, &jsonPathCrawler{}, &htmlCrawler{}}
+var crawlers = []Crawler{&jsonPathCrawler{}, &htmlCrawler{}}
 
 func (c *CrawlerEngine) Crawl() ([]dto.CrawlerResult, error) {
 	results := make([][]dto.CrawlerResult, len(c.Configs))
@@ -90,11 +92,14 @@ func (c *CrawlerEngine) Crawl() ([]dto.CrawlerResult, error) {
 		}
 	}
 
-	log.Debug().Err(err).Int("duplicates", discarded).Msg("crawler engine completed")
+	zlog.Debug().Err(err).Int("duplicates", discarded).Msg("crawler engine completed")
 
 	if len(dtos) == 0 && err != nil {
 		return dtos, err
 	}
+
+	parsers.ParseMany(c.Ctx, dtos)
+	RankCrawlerResults(c.Query, dtos)
 
 	return dtos, nil
 }
@@ -104,17 +109,17 @@ func (c *CrawlerEngine) fetchHtml(ctx context.Context, config *models.CrawlerCon
 		"{query}": c.Query,
 	})
 	if err != nil {
-		log.Err(err).Str("base url", config.Url).Str("query", c.Query).Msg("Invalid URL")
+		zlog.Err(err).Str("base url", config.Url).Str("query", c.Query).Msg("Invalid URL")
 		return nil, err
 	}
 
 	resp, err := c.Client.R().SetContext(ctx).Get(u)
 	if err != nil {
-		log.Err(err).Str("url", truncate(u)).Str("config", truncate(config.Key)).Msg("Failed to get [url]")
+		zlog.Err(err).Str("url", truncate(u)).Str("config", truncate(config.Key)).Msg("Failed to get [url]")
 		return nil, err
 	}
 	if resp.StatusCode() != 200 {
-		log.Error().Str("url", truncate(u)).Str("config", truncate(config.Key)).Int("status_code", resp.StatusCode()).Str("status", truncate(resp.Status())).Msg("Failed to get [url]")
+		zlog.Error().Str("url", truncate(u)).Str("config", truncate(config.Key)).Int("status_code", resp.StatusCode()).Str("status", truncate(resp.Status())).Msg("Failed to get [url]")
 		return nil, errors.New("response status " + resp.Status())
 	}
 
@@ -128,7 +133,7 @@ func (c *CrawlerEngine) CrawlConfig(
 	start := time.Now()
 	var result []dto.CrawlerResult
 
-	logger := log.With().
+	logger := zlog.With().
 		Str("query", truncate(c.Query)).
 		Str("config", truncate(config.Key)).
 		Logger()

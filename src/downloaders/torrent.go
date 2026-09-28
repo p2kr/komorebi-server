@@ -204,7 +204,7 @@ func (d *torrentDownloader) Delete(ctx context.Context, job *models.DownloadJob)
 	loc := job.Location
 	TorrentClient().RemoveTorrent(t.ID(), true)
 
-	// Retrying in case os takes time to release lock (e.g. Windows Defender)
+	// Retrying in case os takes time to release lock (e.g., Windows Defender)
 	go func(loc string) {
 		_, err := backoff.Retry(ctx, func() (any, error) {
 			return nil, os.RemoveAll(loc)

@@ -75,7 +75,7 @@ func (c *htmlCrawler) Crawl(content []byte, config *models.CrawlerConfig) ([]dto
 			return
 		}
 
-		dto := dto.CrawlerResult{
+		crawlerResult := dto.CrawlerResult{
 			Title:    title,
 			Link:     link,
 			Source:   config.Key,
@@ -83,10 +83,10 @@ func (c *htmlCrawler) Crawl(content []byte, config *models.CrawlerConfig) ([]dto
 		}
 
 		if popularity != "" {
-			dto.Popularity = &popularity
+			crawlerResult.Popularity = &popularity
 		}
 		if size != "" {
-			dto.Size = &size
+			crawlerResult.Size = &size
 		}
 
 		if printCrawling {
@@ -100,7 +100,7 @@ func (c *htmlCrawler) Crawl(content []byte, config *models.CrawlerConfig) ([]dto
 				Msg("Found result")
 		}
 
-		dtos = append(dtos, dto)
+		dtos = append(dtos, crawlerResult)
 	})
 
 	logger.Debug().Int("results", len(dtos)).Msg("Crawling Ended")

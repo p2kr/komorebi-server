@@ -212,10 +212,5 @@ func (c *AnilistClient) ExchangeOauthToken(code, codeVerifier string) (string, e
 		log.Error().Msg(msg)
 		return "", errors.New(msg)
 	}
-
-	if code != "" {
-		return code, nil
-	}
-
-	return codeVerifier, nil
+	return code, nil
 }

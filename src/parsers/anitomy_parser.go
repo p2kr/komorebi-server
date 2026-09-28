@@ -22,32 +22,32 @@ func (p *anitomyParser) Parse(content string) dto.ParsedTitle {
 }
 
 func ToParsedTitle(p *anitogo.Elements) dto.ParsedTitle {
-	var dto dto.ParsedTitle
+	var parsedTitle dto.ParsedTitle
 
-	dto.Season = ToStringSet(p.AnimeSeason)
-	dto.Title = ToStringSet(p.AnimeTitle)
-	dto.Kind = ToStringSet(p.AnimeType)
-	dto.Year = ToStringSet(p.AnimeYear)
-	dto.AudioTerm = ToStringSet(p.AudioTerm)
-	dto.Device = ToStringSet(p.DeviceCompatibility)
-	dto.Episode = ToStringSet(p.EpisodeNumber)
-	dto.EpisodeAlt = ToStringSet(p.EpisodeNumberAlt)
-	dto.EpisodeTitle = ToStringSet(p.EpisodeTitle)
-	dto.FileChecksum = ToStringSet(p.FileChecksum)
-	dto.FileExtension = ToStringSet(p.FileExtension)
-	dto.Language = ToStringSet(p.Language)
-	dto.Other = ToStringSet(p.Other)
-	dto.ReleaseGroup = ToStringSet(p.ReleaseGroup)
-	dto.ReleaseInformation = ToStringSet(p.ReleaseInformation)
-	dto.ReleaseVersion = ToStringSet(p.ReleaseVersion)
-	dto.Source = ToStringSet(p.Source)
-	dto.Subtitles = ToStringSet(p.Subtitles)
-	dto.VideoResolution = ToStringSet(p.VideoResolution)
-	dto.VideoTerm = ToStringSet(p.VideoTerm)
-	dto.Volume = ToStringSet(p.VolumeNumber)
-	dto.Unknown = ToStringSet(p.Unknown)
+	parsedTitle.Season = ToStringSet(p.AnimeSeason)
+	parsedTitle.Title = ToStringSet(p.AnimeTitle)
+	parsedTitle.Kind = ToStringSet(p.AnimeType)
+	parsedTitle.Year = ToStringSet(p.AnimeYear)
+	parsedTitle.AudioTerm = ToStringSet(p.AudioTerm)
+	parsedTitle.Device = ToStringSet(p.DeviceCompatibility)
+	parsedTitle.Episode = ToStringSet(p.EpisodeNumber)
+	parsedTitle.EpisodeAlt = ToStringSet(p.EpisodeNumberAlt)
+	parsedTitle.EpisodeTitle = ToStringSet(p.EpisodeTitle)
+	parsedTitle.FileChecksum = ToStringSet(p.FileChecksum)
+	parsedTitle.FileExtension = ToStringSet(p.FileExtension)
+	parsedTitle.Language = ToStringSet(p.Language)
+	parsedTitle.Other = ToStringSet(p.Other)
+	parsedTitle.ReleaseGroup = ToStringSet(p.ReleaseGroup)
+	parsedTitle.ReleaseInformation = ToStringSet(p.ReleaseInformation)
+	parsedTitle.ReleaseVersion = ToStringSet(p.ReleaseVersion)
+	parsedTitle.Source = ToStringSet(p.Source)
+	parsedTitle.Subtitles = ToStringSet(p.Subtitles)
+	parsedTitle.VideoResolution = ToStringSet(p.VideoResolution)
+	parsedTitle.VideoTerm = ToStringSet(p.VideoTerm)
+	parsedTitle.Volume = ToStringSet(p.VolumeNumber)
+	parsedTitle.Unknown = ToStringSet(p.Unknown)
 
-	return dto
+	return parsedTitle
 }
 
 func ToStringSet(value any) mapset.Set[string] {

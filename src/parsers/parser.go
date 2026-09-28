@@ -16,13 +16,9 @@ type Parser interface {
 	Parse(content string) dto.ParsedTitle
 }
 
-type TitleParser struct {
-	Ctx context.Context
-}
-
 var titleParsers = []Parser{&anitomyParser{}}
 
-func (p *TitleParser) Parse(content string) *dto.ParsedTitle {
+func Parse(content string) dto.ParsedTitle {
 	v, _ := Cache().ComputeIfAbsent(content, func() (dto.ParsedTitle, bool) {
 		for _, parser := range titleParsers {
 			if parser.CanParse(content) {
@@ -32,21 +28,21 @@ func (p *TitleParser) Parse(content string) *dto.ParsedTitle {
 		}
 		return dto.ParsedTitle{}, true
 	})
-	return &v
+	return v
 }
 
-func (p *TitleParser) ParseMany(contents []dto.CrawlerResult) {
+func ParseMany(ctx context.Context, contents []dto.CrawlerResult) {
 	start := time.Now()
 
-	if p.Ctx == nil {
-		p.Ctx = context.Background()
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	g := errgroup.Group{}
 	g.SetLimit(100)
 	for i, title := range contents {
 		g.Go(func() error {
 			// Mutex not required as each index is isolated
-			contents[i].ParsedTitle = p.Parse(title.Title)
+			contents[i].ParsedTitle = new(Parse(title.Title))
 			return nil
 		})
 	}

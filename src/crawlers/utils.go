@@ -74,13 +74,13 @@ func (invalidMatcher) MatchAll(n *html.Node) []*html.Node  { return nil }
 func (invalidMatcher) Filter(ns []*html.Node) []*html.Node { return nil }
 
 func truncate(s string, limit ...int) string {
-	max := 15
+	maxLength := 15
 	if len(limit) > 0 {
-		max = limit[0]
+		maxLength = limit[0]
 	}
 	i := 0
 	for pos := range s {
-		if i == max {
+		if i == maxLength {
 			return s[:pos] + "..."
 		}
 		i++
